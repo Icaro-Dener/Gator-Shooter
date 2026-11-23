@@ -7,10 +7,25 @@
 <style>
   html, body { margin: 0; height: 100%; background: #10170f; overflow: hidden; }
   canvas { display: block; image-rendering: pixelated; cursor: none; }
+  #dev {
+    position: fixed; top: 12px; right: 12px; width: 270px; max-height: calc(100% - 24px); overflow-y: auto;
+    background: rgba(12,18,12,.92); border: 2px solid #e9c46a; color: #f4f1de; font: 12px monospace;
+    padding: 10px 12px; cursor: default; display: none; z-index: 10; box-shadow: 4px 5px 0 rgba(0,0,0,.5);
+  }
+  #dev h3 { margin: 0 0 6px; font-size: 14px; color: #e9c46a; display: flex; justify-content: space-between; }
+  #dev h4 { margin: 10px 0 4px; font-size: 11px; color: #a9b8a0; letter-spacing: 1px; }
+  #dev .row { display: flex; align-items: center; justify-content: space-between; margin: 2px 0; }
+  #dev .row span.v { color: #e9c46a; min-width: 22px; text-align: center; }
+  #dev button { font: bold 12px monospace; background: #1c281d; color: #f4f1de; border: 1px solid #f4f1de;
+    padding: 3px 7px; cursor: pointer; }
+  #dev button:hover { background: #f4f1de; color: #10170f; }
+  #dev .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  #dev label { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="dev"></div>
 <script>
 // =====================================================================
 // Config
@@ -78,7 +93,7 @@ const UPGRADES = [
   { id: 'meleeCd',   title: 'Lâmina Ágil',     desc: '-10% de recarga da faca',              cat: 'faca'    },
   { id: 'meleeDmg',  title: 'Fio Afiado',      desc: '+10 de dano da faca',                  cat: 'faca'    },
   { id: 'bulletSz',  title: 'Calibre Maior',   desc: 'balas da escopeta 10% maiores',        cat: 'shotgun' },
-  { id: 'pellets',   title: 'Cartucho Cheio',  desc: '+3 projéteis por tiro',                cat: 'shotgun' },
+  { id: 'pellets',   title: 'Cartucho Cheio',  desc: '+2 projéteis por tiro',                cat: 'shotgun' },
   { id: 'meleeKb',   title: 'Golpe Pesado',    desc: '+15% de empurrão da faca',             cat: 'faca'    },
   { id: 'meleeRng',  title: 'Braço Longo',     desc: '+5% de alcance da faca',               cat: 'faca'    },
 ];
@@ -95,7 +110,7 @@ const houseMax      = () => HOUSE_HP * (1 + 0.15 * lv.houseHp);
 const meleeCooldown = () => MELEE_COOLDOWN * Math.pow(0.9, lv.meleeCd);
 const meleeDamage   = () => MELEE_DAMAGE + 10 * lv.meleeDmg;
 const bulletMul     = () => 1 + 0.1 * lv.bulletSz;
-const pelletCount   = () => SHOT.pellets + 3 * lv.pellets;
+const pelletCount   = () => SHOT.pellets + 2 * lv.pellets;
 const meleeKnock    = () => MELEE_KNOCKBACK * (1 + 0.15 * lv.meleeKb);
 const meleeRangeMul = () => 1 + 0.05 * lv.meleeRng;
 const meleeRange    = () => MELEE_RANGE * meleeRangeMul();
@@ -103,7 +118,8 @@ const meleeRange    = () => MELEE_RANGE * meleeRangeMul();
 // Munição (HUD no canto inferior direito)
 const AMMO_MAX = 6;          // cartuchos na escopeta
 const RESERVE_START = 12;    // cartuchos de reserva no início
-const RESERVE_MAX = 30;      // limite da reserva
+const RESERVE_MAX = 30;      // limite da reserva (no modo horda cresce +5 por wave, para a caixa da wave caber)
+const reserveMax = () => mode === 'rogue' ? Math.min(150, RESERVE_MAX + 5 * run.wave) : RESERVE_MAX;
 const RELOAD_SHELL = 0.25;   // segundos por cartucho (2 frames de 125 ms) — 6 cartuchos = 1,5 s
 const AMMO_SCALE = 3;     // gauges 9x16 ampliadas
 const AMMO_GAP = 4;       // espaço entre gauges (px de tela)
@@ -150,6 +166,7 @@ function waveConfig(n) {
     interval: Math.max(0.35, 1.4 * Math.pow(0.9, n - 1)),     // chegam cada vez mais seguidos
     group: 1 + Math.floor((n - 1) / 2),                       // wave 3: duplas, 5: trios, 7: grupos de 4...
     tanks: n >= 5 ? 1 + Math.floor((n - 5) / 2) : 0,          // wave 5-6: 1 tank, 7-8: 2, 9-10: 3...
+    ranges: n >= 10 ? Math.min(RANGE.maxPerWave, 3 + (n - 10)) : 0,   // wave 10: 3, 11: 4, 12+: 5 (teto)
   };
 }
 
@@ -223,6 +240,27 @@ const tankBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAXC
 const tankLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAOUlEQVR4nGNgIAEwInP0WVn/w9jqfHxw8VVv34LVMSErvvj7N1wzTAEyQFFMCKAoRnZGmLAwnA0DAPtjDAjTPs6EAAAAAElFTkSuQmCC'),    // pernas juntas (tank-pernas.gif quadro 2)
                      img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAO0lEQVR4nGNgIAEwggh9Vtb/MIGLv3+DxUAgTFgYLr7q7VtGJnQFyACkAJkPVkwsACtGdgYyQHYGiA8AgZAQCECjU/oAAAAASUVORK5CYII=')];   // pernas abertas (quadro 1)
 
+// Range: gavial com revólver. Olho fechado por padrão; abre para espiar e ao mirar.
+const rangeBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAATCAYAAACUef2IAAAA/UlEQVR4nGNkIAAO1Yn/F9cQALNf3vjAYNf0kpGBGHBzmfp/GEaTAvFh4nA2yCJizGUEKT679DGDcbQsUQ4h1uUsf8wdGKSYXzD8MZHAqejtwg0MsOAAAQj7JX4XX72bDveatvJMrK44sNL/P9PVE3DDQS4GAXyuJioirkItZzl5AC6mHnUTr14mYg1FdikIEIpEFgYC4PWZF3C2JFI4E4o8gi4WNZGA41EXM9A8jJEBoVRB0GBt5ZmMoJQBwsiRRwgwEaXo6gkMFxMCxBWBOIKA6CKUgQQAsgBfOBMVFNjAP20LMI1ejoMsA4lR5BVYqQcCoJIPFLkgGlRAAQA1U4pzy7yONQAAAABJRU5ErkJggg=='); // olho fechado (range-corpo-2.png)
+const rangePeekImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAATCAYAAACUef2IAAABA0lEQVR4nGNgIAAO1Yn/Z2BgAGMomyjAdHOZ+n8YRpMDGyauIQDmnL79hwHEJtZwRpCBZ5c+ZjCOliXWMQwvb3xgsGt6yYhPDcsfcwcGKeYXDH9MJHAqertwA9i1MABhv8Tv4qt30+Fe01aeidUVB1b6/2e6egJuOMjFIIDP1Xi9AwMwy1lOHoCLqUfdxKuXiVhDkV0KAoQikYWBAHh95gWcLYkUzoQij6CLRU0k4HjUxQw0D2NkQChVEDRYW3kmIyhlgDBy5BECTEQpunoCw8WEAFE5D1cQEApnssChOnG85TNRQYEN/NO2ANPo5TjIMpAYRV6BlXogACr5QJELokEFFACE6IYWvK5wzwAAAABJRU5ErkJggg=='); // olho aberto (range-corpo-1.png)
+const rangeShotgunImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAECAYAAACHtL/sAAAAhklEQVR4nGNkQALuorz/RXjYwWz9zDIGdnZ2hp8/fyIrAQOQOAiA5FiQNcHAmy8/GR7dv8/ALyTE8PHdO4b3O1Yz1LUKg+Waqt8yKESlg9kgOUZkA0AaJ02UYnh54wODXdNLRmRDby5T/49NnAWmcefrz2CJlzc+/MdwMwMDg3rUTRSNMAAA+2g3LFu0RHgAAAAASUVORK5CYII='); // range-escopeta.png (16x4, cano para a DIREITA, mãos do gavial)
+const rangeLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAECAYAAABCxiV9AAAAOklEQVR4nGNkgIJl3lz/ZYx5GcQ1BMB89aibjEwwSRB4cvYzw8sbH5CFEACkG0TfXKYOpuE60SVAYgD8PRKZPr83YgAAAABJRU5ErkJggg=='),   // pernas juntas
+                      img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAECAYAAABCxiV9AAAAQElEQVR4nGNkYGBgWObN9R9EyxjzMohrCICYDOpRNxmZYBJRW78x2jW9ZHx54wNYEg5gCpDBzWXq/+E60SVAfAAIoxWfcfNEyAAAAABJRU5ErkJggg==')];  // pernas abertas
+const revolverImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAFCAYAAAB8ZH1oAAAAZklEQVQImWNctGHff3UtXQZcwFxNlHHRhn3/GdElTt56/f/mtcsMDAwMDOpaugw3r11miAtwYmTBZgIDAwPDoTrx/wLfBBjMoeJMuKy0a3rJ+PLGB5xOQgHuorz/oxVF/jMwMDAAAAs8HIDyVciKAAAAAElFTkSuQmCC');       // 10x5, cano para a ESQUERDA
+const RANGE = {
+  damage: 10,              // dano de cada bala do revólver na casa
+  fireEvery: [1.5, 2.5],   // segundos entre tiros
+  aimTime: 0.45,           // para e abre o olho antes de atirar
+  bulletSpeed: 560,        // px/s
+  bulletScale: 9,          // bala branca grande (maior que a da escopeta do jogador, que é 6)
+  orbitX: 0.36, orbitY: 0.33,   // círculo onde ele fica rondando (fração da tela, em volta da casa)
+  dualChance: 0.15,        // 15%: dois revólveres (atira duas vezes seguidas)
+  shotgunChance: 0.05,     // 5%: escopeta
+  shotgun: { pellets: 5, spread: 0.35, damage: 6, scale: 6 },
+  maxPerWave: 5,           // teto de ranges por wave
+  inaccuracy: [0.34, 0.08],   // erro da mira (rad): começa grande e cai 0,02 por wave depois da 10, até o mínimo
+};
+
 // tipos de inimigo. Vida e velocidade são FIXAS; as waves só mudam a quantidade.
 const ENEMY_TYPES = {
   basic: { id: 'basic', name: 'JACARÉ', sc: SCALE, w: 18, h: 19, hitbox: { w: 12, h: 17 }, legOffset: { x: 5, y: 13 },
@@ -230,10 +268,14 @@ const ENEMY_TYPES = {
   // tank: sc 5 = desenhado 25% maior que o básico (escala inteira, pixel art nítido)
   tank:  { id: 'tank', name: 'TANK', desc: 'muita vida  ·  lento', sc: 5, w: 22, h: 23, hitbox: { w: 16, h: 21 }, legOffset: { x: 4, y: 17 },
            stepLen: 11, knockMul: 0.3, body: tankBodyImg, blink: null, legs: tankLegImgs,
-           hp: 300, speed: 35, bite: 20 },   // 10x a vida do básico; quase metade da velocidade; mordida 4x; empurrões fazem 30% do efeito
+           hp: 300, speed: 35, bite: 20 },
+  range: { id: 'range', name: 'RANGE', sc: SCALE, w: 22, h: 19, hitbox: { w: 10, h: 15 }, legOffset: { x: 8, y: 15 },
+           stepLen: 15, knockMul: 1, body: rangeBodyImg, blink: rangePeekImg, legs: rangeLegImgs,
+           blinkEvery: [2, 5], blinkDur: 0.45,   // aqui o "piscar" é abrir o olho para espiar
+           hp: 90, speed: 60, ranged: true },    // 3x o básico (30), bem menos que o tank (300); atira de longe   // 10x a vida do básico; quase metade da velocidade; mordida 4x; empurrões fazem 30% do efeito
 };
 // a cada 5 waves entra um inimigo novo
-const NEW_ENEMY_AT = { 5: 'tank' };
+const NEW_ENEMY_AT = { 5: 'tank', 10: 'range' };
 const ENEMY_BLINK = { every: [3, 8], dur: 0.12 };
 
 // quadros (w x h+1, 1 px de folga em cima): 'stand'/'step' = pernas abertas, 'pass' = juntas com o corpo 1 px acima
@@ -439,6 +481,15 @@ const sfx = (() => {
       tone({ dur: 1.2, peak: 0.5, wave: 'sawtooth', f0: 70, f1: 40, delay: 0.35 });
       noise({ dur: 1.0, peak: 0.5, type: 'lowpass', f0: 600, f1: 90, delay: 0.35, attack: 0.08 });
       for (let i = 0; i < 3; i++) tone({ dur: 0.22, peak: 0.18, wave: 'square', f0: 880, f1: 660, delay: 0.45 + i * 0.3 });
+    },
+    revolver() {      // tiro do Range
+      if (!ok('revolver', 0.05)) return;
+      noise({ dur: 0.08, peak: 0.45, type: 'highpass', f0: 2200, f1: 800 });
+      tone({ dur: 0.1, peak: 0.2, wave: 'square', f0: 520, f1: 160 });
+    },
+    houseHit() {      // bala acertando a casa
+      if (!ok('houseHit', 0.05)) return;
+      noise({ dur: 0.08, peak: 0.35, type: 'bandpass', f0: rand(900, 1300), q: 2 });
     },
     crit() {          // crítico
       if (!ok('crit', 0.05)) return;
@@ -913,7 +964,7 @@ function updateTrainingAmmo(dt) {
 function canCollect(b) {
   if (gameOver) return false;
   if (b.kind === 'heal') return house.active && house.hp < houseMax();
-  return player.reserve < RESERVE_MAX;
+  return player.reserve < reserveMax();
 }
 
 function collectHeal(b) {
@@ -933,7 +984,7 @@ function collectHeal(b) {
 
 function collectPickup(b) {
   if (b.kind === 'heal') return collectHeal(b);
-  const gained = Math.min(b.amount, RESERVE_MAX - player.reserve);
+  const gained = Math.min(b.amount, reserveMax() - player.reserve);
   player.reserve += gained;
   reservePop = 1;
   sfx.reload();
@@ -1097,7 +1148,135 @@ function spawnEdgeEnemy(cfg, type = 'basic') {
   else if (side === 2) { x = rand(0, WORLD_W); y = WORLD_H + m; }
   else                 { x = -m; y = rand(0, WORLD_H); }
   const T = ENEMY_TYPES[type];
-  enemies.push(makeEnemy(x, y, T.hp || ROGUE.enemyHp, T.speed || ROGUE.enemySpeed, null, type));
+  const e = makeEnemy(x, y, T.hp || ROGUE.enemyHp, T.speed || ROGUE.enemySpeed, null, type);
+  if (T.ranged) {
+    const r = Math.random();
+    e.weapon = r < RANGE.shotgunChance ? 'shotgun' : r < RANGE.shotgunChance + RANGE.dualChance ? 'dual' : 'revolver';
+  }
+  enemies.push(e);
+}
+
+// Range: chega até a borda da clareira, fica rondando num círculo em volta da casa e atira de longe
+function updateRanged(e, dt) {
+  if (e.orbitDir === undefined) {
+    e.orbitDir = Math.random() < 0.5 ? -1 : 1; e.turnT = rand(2, 5); e.radJ = rand(-0.06, 0.06);
+    e.fireT = rand(1.0, 2.0); e.ang = Math.atan2(e.y - house.y, e.x - house.x);
+  }
+  if (e.burstT > 0 && (e.burstT -= dt) <= 0) rangedShoot(e, true);   // segundo tiro do par de revólveres
+  const rx = WORLD_W * (RANGE.orbitX + e.radJ), ry = WORLD_H * (RANGE.orbitY + e.radJ);
+  const dx = e.x - house.x, dy = e.y - house.y;
+  const onRing = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);   // 1 = em cima do círculo
+  const toHouse = Math.atan2(house.y - e.y, house.x - e.x);
+  e.aimAng = toHouse;
+  e.facing = Math.cos(toHouse) < 0 ? -1 : 1;    // sempre olhando para a casa (anda de lado)
+  // de vez em quando muda de direção / distância (andar aleatório)
+  if ((e.turnT -= dt) <= 0) {
+    if (Math.random() < 0.45) e.orbitDir *= -1;
+    e.radJ = rand(-0.06, 0.06); e.turnT = rand(2, 5);
+  }
+  // tiro: só quando já chegou perto do círculo
+  if (onRing < 1.6) e.fireT -= dt;
+  if (e.fireT <= RANGE.aimTime) {
+    e.attacking = true;                         // parado, mirando
+    e.blinkT = Math.max(e.blinkT, 0.1);         // abre o olho para mirar
+    if (e.fireT <= 0) {
+      rangedShoot(e, false);
+      if (e.weapon === 'dual') e.burstT = 0.14;
+      e.fireT = rand(...RANGE.fireEvery) * (e.weapon === 'shotgun' ? 1.4 : 1);
+    }
+    return;
+  }
+  e.attacking = false;
+  // alvo: um ponto um pouco à frente no círculo (ou o ponto do círculo mais próximo, se ainda está longe)
+  e.ang = Math.atan2(dy, dx);
+  const ahead = onRing < 1.3 ? 0.35 * e.orbitDir : 0;
+  const tx = house.x + Math.cos(e.ang + ahead) * rx, ty = house.y + Math.sin(e.ang + ahead) * ry;
+  const mx = tx - e.x, my = ty - e.y, md = Math.hypot(mx, my) || 1;
+  const step = Math.min(md, e.speed * dt);
+  e.x += mx / md * step; e.y += my / md * step;
+  e.walk += step;
+  e.dirX = mx / md; e.dirY = my / md;
+}
+
+// posição da mão (onde fica o revólver) em coordenadas do mundo
+function rangedHand(e, back = false) {
+  const T = e.T, sc = T.sc, flip = e.facing === -1 ? 1 : -1;
+  const lx = back ? 12.5 : 7.5, ly = back ? 9.5 : 8.5;       // mão da frente no queixo; segunda na barriga, 5 px atrás e 1 px abaixo
+  return { x: e.x + flip * (-T.w * sc / 2 + lx * sc), y: e.y - T.h * sc / 2 + ly * sc };
+}
+
+const enemyBullets = [];
+function rangedShoot(e, back = false) {
+  const h = rangedHand(e, back), shotgun = e.weapon === 'shotgun';
+  const a = Math.atan2(house.y - h.y, house.x - h.x);
+  const reach = (shotgun ? 13 : 9) * e.T.sc;
+  const mx = h.x + Math.cos(a) * reach, my = h.y + Math.sin(a) * reach;
+  if (shotgun) {
+    const G = RANGE.shotgun;
+    for (let i = 0; i < G.pellets; i++) {
+      const t = i / (G.pellets - 1) - 0.5, pa = a + t * G.spread + rand(-0.04, 0.04), sp = RANGE.bulletSpeed * rand(0.9, 1.05);
+      enemyBullets.push({ x: mx, y: my, px: mx, py: my, vx: Math.cos(pa) * sp, vy: Math.sin(pa) * sp, age: 0, dmg: G.damage, scale: G.scale });
+    }
+  } else {
+    const err = mode === 'rogue' ? Math.max(RANGE.inaccuracy[1], RANGE.inaccuracy[0] - 0.02 * Math.max(0, run.wave - 10)) : RANGE.inaccuracy[0];
+    const pa = a + rand(-err, err);                       // erra às vezes (a casa é larga, mas baixa)
+    enemyBullets.push({ x: mx, y: my, px: mx, py: my, vx: Math.cos(pa) * RANGE.bulletSpeed, vy: Math.sin(pa) * RANGE.bulletSpeed,
+      age: 0, dmg: RANGE.damage, scale: RANGE.bulletScale });
+  }
+  if (back) e.recoilB = 1; else e.recoil = 1;
+  // clarão do cano
+  for (let i = 0; i < (shotgun ? 9 : 5); i++)
+    particles.push({ x: mx, y: my, vx: Math.cos(a + rand(-0.6, 0.6)) * rand(80, 260), vy: Math.sin(a + rand(-0.6, 0.6)) * rand(80, 260),
+      life: rand(0.08, 0.16), age: 0, size: rand(2, 4), color: Math.random() < .5 ? '#ffe08a' : '#ff9f3b', drag: 8 });
+  particles.push({ x: mx, y: my, vx: rand(-20, 20), vy: -25, life: 0.4, age: 0, size: shotgun ? 8 : 5, grow: 14, color: 'smoke', drag: 3 });
+  // cápsula ejetada (cai e quica): latão pequeno no revólver, cartucho vermelho na escopeta
+  const side = Math.cos(a) < 0 ? 1 : -1;
+  particles.push({ x: h.x, y: h.y - 6, vx: -Math.cos(a) * rand(50, 110) + side * rand(10, 40), vy: rand(-280, -200),
+    life: 1.2, age: 0, size: 0, color: shotgun ? 'shell' : 'cap', gravity: 1100, floor: e.y + e.T.h * e.T.sc / 2 - 6,
+    rot: 0, vr: rand(-20, 20), drag: 0.5 });
+  shotgun ? sfx.shot() : sfx.revolver();
+}
+
+function updateEnemyBullets(dt) {
+  for (let i = enemyBullets.length - 1; i >= 0; i--) {
+    const b = enemyBullets[i];
+    b.age += dt; b.px = b.x; b.py = b.y; b.x += b.vx * dt; b.y += b.vy * dt;
+    const R = houseRect();
+    if (house.active && b.x > R.l && b.x < R.r && b.y > R.t - 30 && b.y < R.b) { hitHouseRanged(b); enemyBullets.splice(i, 1); continue; }
+    if (b.age > 4 || b.x < -20 || b.y < -20 || b.x > WORLD_W + 20 || b.y > WORLD_H + 20) enemyBullets.splice(i, 1);
+  }
+}
+
+function hitHouseRanged(b) {
+  if (gameOver) return;
+  house.hp = Math.max(0, house.hp - (b.dmg || RANGE.damage));
+  house.flash = 0.06; house.shake = Math.max(house.shake, 0.6); house.pop = 1;
+  sfx.houseHit();
+  const a = Math.atan2(b.vy, b.vx);
+  for (let i = 0; i < 5; i++) {
+    const pa = a + Math.PI + rand(-0.8, 0.8), sp = rand(80, 220);
+    particles.push({ x: b.x, y: b.y, vx: Math.cos(pa) * sp, vy: Math.sin(pa) * sp, life: rand(0.2, 0.4), age: 0,
+      size: rand(3, 5), color: Math.random() < .5 ? '#7a3b2e' : '#ffe08a', drag: 6 });
+  }
+  if (house.hp <= 0) destroyHouse();
+}
+
+function drawEnemyBullets() {
+  ctx.lineCap = 'round';
+  for (const b of enemyBullets) {
+    const s = b.scale || RANGE.bulletScale, a = Math.atan2(b.vy, b.vx);
+    ctx.strokeStyle = 'rgba(255,255,255,.35)';
+    ctx.lineWidth = s * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(b.x - (b.x - (b.px ?? b.x)) * 2.5, b.y - (b.y - (b.py ?? b.y)) * 2.5);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(b.x, b.y); ctx.rotate(a);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-1.5 * s, -0.5 * s, 3 * s, s);
+    ctx.restore();
+  }
 }
 
 function damageHouse(e) {
@@ -1161,6 +1340,7 @@ function hurtPlayer(src) {
 function startMode(m) {
   mode = m;
   paused = false;
+  if (m !== 'test' && typeof dev !== 'undefined' && dev.on) { dev.on = false; devRender(); }
   resetStats();
   cards.list = [];
   sfx.select();
@@ -1170,9 +1350,10 @@ function startMode(m) {
   // roguelike: casa de verdade (vida, alvo dos jacarés). Campo de treino: só cosmética.
   Object.assign(house, { hp: houseMax(), flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test' });
   if (m === 'rogue' || m === 'test') player.y = houseRect().b + player.h / 2 + 24;   // nasce na frente da porta
-  Object.assign(run, { time: 0, kills: 0, spawnTimer: 0, wave: 0, phase: 'break', phaseT: ROGUE.firstBreak,
+  const startWaveParam = parseInt(new URLSearchParams(location.search).get('wave')) || 1;   // teste: ?wave=10
+  Object.assign(run, { time: 0, kills: 0, spawnTimer: 0, wave: Math.max(0, startWaveParam - 1), phase: 'break', phaseT: ROGUE.firstBreak,
     toSpawn: 0, cfg: null, banner: null });
-  bullets.length = 0; particles.length = 0; enemies.length = 0; pickups.length = 0;
+  bullets.length = 0; particles.length = 0; enemies.length = 0; pickups.length = 0; enemyBullets.length = 0;
   ammoPop.fill(0); mouse.down = false;
   if (m === 'test') {
     for (const pos of ENEMY_POSITIONS)
@@ -1229,6 +1410,84 @@ function pauseAction(id) {
   else if (id === 'menu') startMode('menu');
 }
 
+// =====================================================================
+// Dev mode: digite 0806 no campo de treino para abrir o painel de testes
+// =====================================================================
+const DEV_CODE = '0806';
+const dev = { on: false, typed: '', infAmmo: false, godHouse: false };
+const devEl = document.getElementById('dev');
+function devSpawn(type, n = 1, weapon = null) {
+  if (!house.active) { house.active = true; house.hp = houseMax(); }   // a casa do treino vira alvo de verdade
+  for (let i = 0; i < n; i++) { spawnEdgeEnemy({}, type); if (weapon) enemies[enemies.length - 1].weapon = weapon; }
+  devRender();
+}
+function devRender() {
+  if (!dev.on) { devEl.style.display = 'none'; return; }
+  devEl.style.display = 'block';
+  const alive = enemies.filter(e => e.alive && !e.homeRel).length;
+  devEl.innerHTML = `
+    <h3><span>DEV MODE</span><button data-a="close">×</button></h3>
+    <h4>UPGRADES</h4>
+    ${UPGRADES.map(u => `<div class="row"><span title="${u.desc}">${u.title}</span><span>
+      <button data-a="lv" data-id="${u.id}" data-d="-1">−</button>
+      <span class="v">${lv[u.id]}</span>
+      <button data-a="lv" data-id="${u.id}" data-d="1">+</button></span></div>`).join('')}
+    <div class="row"><button data-a="resetlv">zerar upgrades</button></div>
+    <h4>INIMIGOS (vivos: ${alive})</h4>
+    <div class="grid">
+      <button data-a="spawn" data-t="basic" data-n="1">+1 jacaré</button>
+      <button data-a="spawn" data-t="basic" data-n="5">+5 jacarés</button>
+      <button data-a="spawn" data-t="tank" data-n="1">+1 tank</button>
+      <button data-a="spawn" data-t="range" data-n="1">+1 range</button>
+      <button data-a="spawn" data-t="range" data-n="1" data-w="dual">+1 range 2 rev.</button>
+      <button data-a="spawn" data-t="range" data-n="1" data-w="shotgun">+1 range escop.</button>
+      <button data-a="spawn" data-t="basic" data-n="20">+20 jacarés</button>
+      <button data-a="clear">limpar</button>
+    </div>
+    <h4>TRAPAÇAS</h4>
+    <label><input type="checkbox" data-a="inf" ${dev.infAmmo ? 'checked' : ''}> munição infinita</label>
+    <label><input type="checkbox" data-a="god" ${dev.godHouse ? 'checked' : ''}> casa invencível</label>
+    <div class="grid">
+      <button data-a="ammo">encher munição</button>
+      <button data-a="heal">curar casa</button>
+    </div>`;
+}
+devEl.addEventListener('mousedown', e => e.stopPropagation());
+devEl.addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const a = b.dataset.a;
+  if (a === 'close') { dev.on = false; }
+  if (a === 'lv') {
+    const id = b.dataset.id, oldMax = houseMax();
+    lv[id] = Math.max(0, lv[id] + +b.dataset.d);
+    if (id === 'houseHp') house.hp = Math.max(1, Math.min(houseMax(), house.hp + houseMax() - oldMax));
+    statFlash[id] = 1;
+  }
+  if (a === 'resetlv') { resetStats(); house.hp = Math.min(house.hp, houseMax()); }
+  if (a === 'spawn') devSpawn(b.dataset.t, +b.dataset.n, b.dataset.w || null);
+  if (a === 'clear') { for (const en of enemies) if (!en.homeRel) en.alive = false; enemyBullets.length = 0; }
+  if (a === 'inf') dev.infAmmo = b.checked;
+  if (a === 'god') dev.godHouse = b.checked;
+  if (a === 'ammo') { player.ammo = AMMO_MAX; player.reserve = reserveMax(); }
+  if (a === 'heal') house.hp = houseMax();
+  sfx.hover();
+  devRender();
+});
+function devKey(k) {
+  if (mode !== 'test' || !/^[0-9]$/.test(k)) return;
+  dev.typed = (dev.typed + k).slice(-DEV_CODE.length);
+  if (dev.typed === DEV_CODE) { dev.on = !dev.on; dev.typed = ''; sfx.upgrade(); devRender(); }
+}
+function updateDev() {
+  if (dev.infAmmo) { player.ammo = AMMO_MAX; player.reserve = reserveMax(); }
+  if (dev.godHouse && house.active) house.hp = houseMax();
+  // atualiza o contador de vivos de vez em quando
+  if (dev.on && (devEl._t = (devEl._t || 0) + 1) % 30 === 0) {
+    const n = enemies.filter(e => e.alive && !e.homeRel).length;
+    const h4 = devEl.querySelectorAll('h4')[1]; if (h4) h4.textContent = `INIMIGOS (vivos: ${n})`;
+  }
+}
+
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (mode === 'menu') { if (k === '1') startMode('test'); if (k === '2') startMode('rogue'); return; }
@@ -1238,6 +1497,7 @@ window.addEventListener('keydown', e => {
     if (k === 'escape') startMode('menu');
     return;
   }
+  devKey(k);
   if (k === 'control') { toggleStats(); return; }
   if (mode === 'rogue' && run.phase === 'cards' && !paused && ['1', '2', '3'].includes(k)) { pickCard(+k - 1); return; }
   if (k === 'escape' || k === 'p') { setPaused(!paused); return; }
@@ -1290,6 +1550,7 @@ function startWave() {
   run.cfg = waveConfig(run.wave);
   run.toSpawn = run.cfg.count;
   run.tanksLeft = Math.min(run.cfg.tanks, run.cfg.count);
+  run.rangesLeft = Math.min(run.cfg.ranges, run.cfg.count - run.tanksLeft);
   run.spawnTimer = 0.3;
   run.phase = 'fight';
   const novo = NEW_ENEMY_AT[run.wave];
@@ -1324,10 +1585,14 @@ function updateWaves(dt) {
     const alive = enemies.filter(e => e.alive).length;
     const n = Math.min(run.cfg.group, run.toSpawn, ROGUE.maxEnemies - alive);
     for (let i = 0; i < n; i++) {
-      // os tanks da wave saem misturados no meio dos básicos
-      const tank = run.tanksLeft > 0 && Math.random() < run.tanksLeft / (run.toSpawn - i);
-      if (tank) run.tanksLeft--;
-      spawnEdgeEnemy(run.cfg, tank ? 'tank' : 'basic');
+      // inimigos especiais saem misturados no meio dos básicos
+      const special = run.tanksLeft + run.rangesLeft;
+      let type = 'basic';
+      if (special > 0 && Math.random() < special / (run.toSpawn - i)) {
+        type = Math.random() < run.tanksLeft / special ? 'tank' : 'range';
+        if (type === 'tank') run.tanksLeft--; else run.rangesLeft--;
+      }
+      spawnEdgeEnemy(run.cfg, type);
     }
     run.toSpawn -= n;
     run.spawnTimer = run.cfg.interval;
@@ -1395,7 +1660,8 @@ function meleeStrike() {
     if (dist < reach && (Math.abs(diff) < MELEE_ARC / 2 || dist < e.T.hitbox.w * e.T.sc)) {
       hits++;
       const ang = Math.atan2(dy, dx);
-      if (!e.homeRel) { e.x += Math.cos(ang) * meleeKnock() * e.T.knockMul; e.y += Math.sin(ang) * meleeKnock() * e.T.knockMul; }
+      const kb = meleeKnock() * Math.min(1, e.T.knockMul * 2);   // a faca empurra pesados o dobro que o tiro (tank: 60%)
+      if (!e.homeRel) { e.x += Math.cos(ang) * kb; e.y += Math.sin(ang) * kb; }
       hitEnemy(e, { x: e.x - Math.cos(ang) * 20, y: e.y - Math.sin(ang) * 20 }, ang, meleeDamage());
     }
   }
@@ -1508,10 +1774,12 @@ function update(dt) {
   updateTufts(dt);
   updateTrees(dt);
   updateTrainingAmmo(dt);
+  updateDev();
   reservePop *= Math.exp(-6 * dt);
 
   // roguelike: waves
   if (mode === 'rogue') updateWaves(dt);
+  updateEnemyBullets(dt);
   house.heal = Math.max(0, (house.heal || 0) - dt * 1.5);
 
   // inimigos: perseguem (speed > 0) ou ficam parados; dano por contato
@@ -1522,7 +1790,7 @@ function update(dt) {
     // piscar de vez em quando (só quem tem sprite de olho fechado)
     if (e.T.blink) {
       if (e.blinkT > 0) e.blinkT -= dt;
-      else if ((e.blinkNext -= dt) <= 0) { e.blinkT = ENEMY_BLINK.dur; e.blinkNext = rand(...ENEMY_BLINK.every); }
+      else if ((e.blinkNext -= dt) <= 0) { e.blinkT = e.T.blinkDur || ENEMY_BLINK.dur; e.blinkNext = rand(...(e.T.blinkEvery || ENEMY_BLINK.every)); }
     }
     e.jiggle *= Math.exp(-12 * dt);
     e.hpShow -= dt;
@@ -1534,6 +1802,9 @@ function update(dt) {
       continue;
     }
     e.lunge *= Math.exp(-10 * dt);
+    e.recoil = (e.recoil || 0) * Math.exp(-12 * dt);
+    e.recoilB = (e.recoilB || 0) * Math.exp(-12 * dt);
+    if (e.T.ranged && house.active) { if (!gameOver) updateRanged(e, dt); continue; }
     if (e.speed > 0 && !gameOver) {
       // alvo: o ponto mais próximo da casa (roguelike) ou o jogador
       let tx = player.x, ty = player.y;
@@ -2043,7 +2314,13 @@ function drawBullets() {
 function drawParticles() {
   for (const p of particles) {
     const k = 1 - p.age / p.life;
-    if (p.color === 'shell') {
+    if (p.color === 'cap') {                          // cápsula de latão do revólver
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.min(1, k * 3);
+      ctx.fillStyle = '#df9b26'; ctx.fillRect(-3, -2, 6, 4);
+      ctx.fillStyle = '#ffe08a'; ctx.fillRect(-3, -2, 6, 1);
+      ctx.restore();
+    } else if (p.color === 'shell') {
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.globalAlpha = Math.min(1, k * 3);
       ctx.fillStyle = '#ac3232'; ctx.fillRect(-4, -2, 6, 4);   // corpo vermelho
@@ -2094,6 +2371,25 @@ function drawCrosshair() {
   ctx.fillRect(x - 1, y - 1, 2, 2);
 }
 
+// arma do Range, sempre mirando na casa. Desenhada no espaço do sprite (já espelhado conforme o lado).
+function drawRangedWeapon(e, w, h, frameName, back) {
+  const T = e.T, sc = T.sc, shotgun = e.weapon === 'shotgun';
+  const img = shotgun ? rangeShotgunImg : revolverImg;
+  if (!img.complete) return;
+  const flipX = e.facing === -1 ? 1 : -1;
+  const lt = Math.atan2(Math.sin(e.aimAng || 0), Math.cos(e.aimAng || 0) * flipX);   // ângulo no espaço do sprite
+  let rot = Math.atan2(Math.sin(lt - Math.PI), Math.cos(lt - Math.PI));            // o sprite aponta para a esquerda
+  rot = Math.max(-1.2, Math.min(1.2, rot)) + (back ? e.recoilB || 0 : e.recoil || 0) * 0.5;
+  const up = frameName === 'pass' ? sc : 0;
+  const hx = back ? 12.5 : 7.5, hy = back ? 9.5 : 8.5;
+  ctx.save();
+  ctx.translate(-w / 2 + hx * sc, -h + hy * sc - up);
+  ctx.rotate(rot);
+  if (shotgun) { ctx.scale(-1, 1); ctx.drawImage(img, -3 * sc, -2 * sc, 16 * sc, 4 * sc); }   // escopeta: cano para a direita, espelha
+  else ctx.drawImage(img, -7.5 * sc, -1.5 * sc, 10 * sc, 5 * sc);
+  ctx.restore();
+}
+
 function drawEnemy(e) {
   if (!e.alive) return;
   const T = e.T, w = T.w * T.sc, h = T.h * T.sc;
@@ -2118,6 +2414,8 @@ function drawEnemy(e) {
   ctx.rotate(tilt);
   ctx.scale(sq * (e.facing === -1 ? 1 : -1), 1 / sq);   // sprite olha para a esquerda
   ctx.drawImage(e.flash > 0 ? whiteOf(fr) : fr, -w / 2, -h - T.sc, w, h + T.sc);
+  if (T.ranged && e.weapon === 'dual') drawRangedWeapon(e, w, h, frameName, true);   // segundo revólver, mais baixo, à mostra
+  if (T.ranged) drawRangedWeapon(e, w, h, frameName, false);   // arma da mão da frente (por cima do corpo)
   ctx.restore();
 
   // barra de vida (aparece depois de tomar dano)
@@ -2552,7 +2850,7 @@ function drawGameOver() {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#e63946';
   ctx.font = 'bold 48px monospace';
-  ctx.fillText(mode === 'rogue' ? 'A CASA CAIU' : 'VOCÊ MORREU', canvas.width / 2, canvas.height / 2);
+  ctx.fillText(house.active && house.hp <= 0 ? 'A CASA CAIU' : 'VOCÊ MORREU', canvas.width / 2, canvas.height / 2);
   ctx.fillStyle = '#f4f1de';
   ctx.font = '18px monospace';
   let y = canvas.height / 2 + 36;
@@ -2668,6 +2966,7 @@ function render() {
   drawLeaves(false);                   // folhas caindo, por cima de tudo
   drawLighting();                      // sombra da mata + sol da clareira
   drawBullets();                       // tiros e clarão brilham por cima da sombra
+  drawEnemyBullets();
   drawMuzzleFlash();
   drawFireflies();
   if (mode !== 'menu') drawReloadHint();
@@ -2677,7 +2976,7 @@ function render() {
     drawMenu();
   } else {
     drawAmmo();
-    if (mode === 'rogue') drawHouseBar(); else drawHearts();
+    if (house.active) drawHouseBar(); else drawHearts();
     drawStats();
     drawRunHud();
     drawCards();
