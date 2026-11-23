@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dino</title>
+<title>Gator Shooter</title>
 <style>
   html, body { margin: 0; height: 100%; background: #10170f; overflow: hidden; }
   canvas { display: block; image-rendering: pixelated; cursor: none; }
   #hud {
-    position: fixed; bottom: 10px; left: 12px;
+    position: fixed; bottom: 10px; left: 12px; max-width: calc(100% - 360px);
     font: 14px monospace; color: #f4f1de; opacity: .85; pointer-events: none;
     text-shadow: 1px 1px 0 #000;
   }
@@ -16,7 +16,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="hud" style="display:none">WASD mover · mouse mirar · clique atirar · botão direito faca · R recarregar · M som · ESC menu</div>
+<div id="hud" style="display:none">WASD mover · mouse mirar · clique atirar · botão direito faca · R recarregar · M som · ESC pausa</div>
 <script>
 // =====================================================================
 // Config
@@ -57,7 +57,7 @@ const MELEE_GRIP = { x: 3, y: 9 };   // mão no sprite (pivô)
 const MELEE_SCALE = 9;              // tamanho da faca na tela (o resto do jogo usa 4)
 const MELEE_FRAME = 0.1;             // segundos por frame
 const MELEE_HIT_AT = 0.1;            // o golpe acerta no início do frame 2
-const MELEE_COOLDOWN = 3;            // segundos
+const MELEE_COOLDOWN = 1;            // segundos
 const MELEE_DAMAGE = 2;              // um projétil tira 1; um tiro de perto até 8
 const MELEE_RANGE = 190;             // alcance a partir da mão (px de tela)
 const MELEE_ARC = 2.2;               // abertura do golpe em radianos (~125°)
@@ -75,7 +75,7 @@ const AMMO_MARGIN = 20;   // distância das bordas da tela
 // Caixa de munição (17x13)
 const BOX_W = 17, BOX_H = 13;
 const BOX_RADIUS = 50;                 // distância para pegar (px de tela)
-const DROP_LIFE = 14;                  // segundos até sumir (pisca nos últimos 3)
+const DROP_LIFE = 5;                   // segundos até qualquer drop sumir (pisca nos últimos 2)
 // drop ao matar um inimigo: um único sorteio (sobra 72% = nada)
 const DROP_TABLE = [
   { amount: 12, chance: 0.02, scale: 4.2 },
@@ -87,23 +87,36 @@ const BOX_SHINE_TIME = 0.45;           // duração da passada do brilho (s)
 
 // Inimigo (18x19, olha para a ESQUERDA)
 const ENEMY_W = 18, ENEMY_H = 19;
-const ENEMY_POS = { x: 0.72, y: 0.5 };   // posição relativa à tela (0..1)
-const ENEMY_HP = 16;                     // vida no modo teste (cada projétil tira 1; tiro de perto = 8)
+const ENEMY_POSITIONS = [                // campo de treino: em coluna à direita (0..1 da tela)
+  { x: 0.86, y: 0.20 },
+  { x: 0.86, y: 0.44 },
+  { x: 0.86, y: 0.68 },
+];
+const ENEMY_HP = 16;                     // vida no campo de treino (cada projétil tira 1; tiro de perto = 8)
 const ENEMY_RESPAWN = 2.5;               // segundos até reaparecer depois de morrer
 const ENEMY_HITBOX = { w: 12, h: 17 };   // hitbox em px do sprite (centralizada)
 
-// Modo roguelike
+// Modo roguelike — sistema de waves
 const ROGUE = {
-  enemyHp: 6,            // um tiro bem dado mata
-  speedMin: 95,          // velocidade dos inimigos (px/s)
-  speedMax: 150,
-  firstInterval: 2.0,    // segundos entre spawns no início
-  minInterval: 0.28,     // intervalo mínimo (frequência máxima)
-  rampTime: 50,          // quanto menor, mais rápido a frequência sobe
-  maxEnemies: 60,
+  enemyHp: 6,            // vida base dos jacarés (um tiro bem dado mata)
+  speedMin: 78,          // velocidade base dos inimigos (px/s)
+  speedMax: 124,
+  maxEnemies: 60,        // limite de jacarés vivos ao mesmo tempo
+  firstBreak: 1.5,       // segundos antes da wave 1
+  breakTime: 4,          // pausa entre waves (para pegar as recompensas)
+  rewardAmmo: 12,        // caixa de munição ao fim de cada wave
+  rewardHeal: 0.2,       // curativo: recupera 20% da vida máxima da casa
 };
-// intervalo entre spawns: cai exponencialmente com o tempo de partida
-const spawnInterval = t => Math.max(ROGUE.minInterval, ROGUE.firstInterval * Math.exp(-t / ROGUE.rampTime));
+// dificuldade de cada wave (n = 1, 2, 3...)
+function waveConfig(n) {
+  return {
+    count: 6 + (n - 1) * 4,                                   // 6, 10, 14, 18...
+    interval: Math.max(0.3, 1.6 * Math.pow(0.86, n - 1)),     // spawns mais rápidos
+    group: 1 + Math.floor((n - 1) / 3),                       // a partir da wave 4 vêm em duplas, 7 em trios...
+    speedMul: Math.min(1.7, 1 + 0.07 * (n - 1)),              // +7% de velocidade por wave
+    hp: ROGUE.enemyHp + Math.floor((n - 1) / 3) * 2,          // +2 de vida a cada 3 waves
+  };
+}
 
 // Casa (modo roguelike) — sprite 72x40
 const HOUSE_W = 72, HOUSE_H = 40;
@@ -140,8 +153,21 @@ meleeImgs[1] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAA
 meleeImgs[2] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAeElEQVR4nGNgGDLg6tWr/weXQUPYBeiuYGFAAg3HzOESDVYnGRmIACwwhqmx8f+tuX+I0YMCwLaANIPo02fPMoaGhoLZkZGRDOrq6gw3b94EKwwKCsLqIqyCIAMXLFrEoK2tzbhu3TqUUAcZCgIgOZKcCgs49GgEALdCL7fd9tO2AAAAAElFTkSuQmCC'); // melee.gif
 const enemyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABIklEQVQ4jZ2UrW7DMBSFP1dNo5RaY1Zh0V6gcH6HhIz1LUoGQvYIYXuAPUQGiysFVRqZyqbQWUMeaJ16q52fHZLI9v18dc5NBBGVSlmAl+8vALbpkqfTScTOC1cQkoOki4RHkXTrIeAMoDEmCNqmS9JFEtz7qznAfZZFD/id9GkGcLfZEHpOkajyPOoRwOd+f7MW8iiaAsBOawuQHY+DoHkIUEhpH7S+dsU1kJifQRDAR9t27/EoIqBCys6vlZQAvNX1CMzIjiaDXtu2M7G6dLfSOpjcvzqa7JEv5xGcUxtS7xyVSlmzXp+78mapMeaXDXD5RGJqjOH9cOC5rm8u9BMeBPnyp9kNayGl7fsN9d7sCnda2yrP7ShYIaX1QaVS0aIfLPtlq/rW0sIAAAAASUVORK5CYII='); // inimigo.png
 const boxImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAANCAYAAABPeYUaAAAAuElEQVQokaWTMQrCQBBF/19ShYC94CKk0IPkHB7EWjyI58gpUmkRkAgWAUUhSSWMRVxxNxjW9Td/YeY/ZgaWACAigkCRJA1gsVr+DDjs9j1IRGSWacTTGN258waY/lNeIXKL22iO8t4gnSRfff04WhnlAnzk9g0mQQagAqBHPLcjygWUVYNUJ6OOzIZYk2yKun/cOj//hLR1O9jKRyanAOBaXIIgJqdIMojwEkm+bxK6EgAQ+P/vPAHyqFpEdVYUZwAAAABJRU5ErkJggg=='); // caixa-municao.png
-const sandImg   = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAv0lEQVQ4jZ2SMRbCIBBEJzw7eupoqwfwKJ7AQ+QAeV4ivafQS2gL1KlNHRtIILssPqfLCzP8WbZ5DdcZANr9Af9ISWbvbNHonYV3Foo1awNowwZ39zfSS5vP4zYTc9Q0yvwIFRbcipmrtAREpG545uZQB9qgPZ1JAK2QKiUqkCl6QjAzKgf8qHyINU0jOZcPUXqF8L3djbWCNssNhEbYh10NuaaVIEHkVrg0I8UiB8W9j8HbQO+s/Iz95Vj8FwO/gYBP80k5sV8AAAAASUVORK5CYII=');  // areia.png
-const grassImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA2klEQVQ4jY1TMRICIQxcGW/uaqCw8EN+xF/4Rxsb6yuuOK1hKLTQZSAmzqVjQ9jsJuzOl9ML31jmFYdj5BEhejzWJwAgp4JxGiqWUwEAOF7OqXTFMsZpUDGn3MUyrwBQ2UP0PxgfdGxFY5AyJA4A+3EaOn2yE2KWPNeyt0w0tDVRk+cIMtEGi6wI0X8eaNvjy7JlSiROQnUK0ljNG8pzLLBMCtHjdr2bMroOQvQI0Vdm6YuUl1PZPoW/HVhTkDuQU+n8qKu8ZQoyr07BWhZilNruR/0LFqOV5/kNRImUf82DvQAAAAAASUVORK5CYII=');  // grama.png
+// tilesets 24x24: tile 16x16 em (4,4) + franjas de 2 px em cada lado, para invadir o tile vizinho
+const grassSet  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAXCAYAAAARIY8tAAACkklEQVRIibVVsWrjQBB9WiMkjL2NZQxCEJfuVYbU+QO7OQRXXB3IhxykdmEQaXR/kDqkdO/SBiMwkhvFGAkj+QppRru2UxxHplqNdt+8eTO7A3yzGV/9mIXBGQCQVoieX41ZGJyRVpCeidVHjPeXN/ZFz68GnYmCUMO8CjALg7O0O8i2J0jPBABkeYl4uYPrjyDtDrK85P3xcofJvQsAHPj/8/4H42iU3uz3jzOz2yQYDPqwejaKQ47hpF+zTyvAESDJ1IwIg2QTBB4vd7ypOOSAI+DeDdvvS0urK1exPvL615+fZw4QBaFxCVasj7ze7z9hjbvMXnom4k2C4pAjy8saOK1g9ewa3REcqF01TmvcZZc17raHGtbSM5GsPrW9Vs/mhgDqws+nC10iaXe0NK1xF9LuQHomXH9UH9wkDEg+TaqG5OTe1SUicDpMzLLtSWPl3g2RbU9aTSioWmgAegZZXl6BaUWn4jkCxSFvZST2DXMimuUlHp4e2wxUJmr3wBHI8hJWz8Zg0OcMyaRn8l6VEAD2C2LCmt4y6oqm/6Xd0dizfI1M8XLHZ4TGvgEpDjkH5KL3bAZffcRfk1HYc4D3lzeDu4g0TitIu4PhpM9sNRka+ZBWNaDS+9IzuR4CaG8dAAaHI7jfKUvXH+nd0mR766bTPgHULUVpF+sj4k2CeLnTLxnaLnH9EZMYTvpaQAKnZ5szUIusrrPtSe8shTkAJKv6GdHkUy6fuHRqrB3BXcJpN+D7/SeK9fEqS6CWkwYWS6SBQu8E1U9vDj3jt/a7/giXk+3b7CrKw9PjWR2Baj1oXKrjEwCPV7W4ZAIX5vojzKcLYz5d8IyIgtDgIja3PgpCI9ue6ro4AvPpwrgly1/6vH1i+2VaXgAAAABJRU5ErkJggg=='); // tileset-grama.png
+const sandSet   = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABg0lEQVRIicVVsW6DMBB9oC4RmZnTrmVP5nxF90h8Q5QPqPgGJPZ+BV3LTtaEmRnE6A7mrLN9Jm3UKm/C3Pnu/O6dDTwKbZUr+h7qQvE192mrXA11odw9hMj9MdSF6q4XAEDZTHh/ewWSVBvHHp4N0PbZlh1KL+a/wmRrq1xlhzKiY26eX+4KuN4fo6Eu1Hp/jAAgJgMPGApO9IRsZOd+MVW/GDxJgSQVbaePs7evbCZQ42NjpEZKwRdgGs2S5NsVPIpcdNeLHXzsZR8Bm2xnvmNAN6Zrv2ynuZpT9WkHn+lCklqBQjAnKJvJt469RcEtuhYT5NvVsudvgo+9EY5R0b26l8AnOgagF06FS5rnlUp+nO6gijzpuiqa19LJOd3BBPwC86oUJGsVl+3MoD3RT1emIm4ElhAD+or2ZMookGhY7BHrjRk04k2kZAbdO5TYTcj3WSqSNkiwhs4B3/8jBf4VvOfNDN2sIkBTQxRa8h17z0a3aBA04vTQhx57kiHf8xB8A4Ov2yLKfp55AAAAAElFTkSuQmCC'); // tileset-areia.png
+const tuftSmallImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAGCAYAAAAL+1RLAAAATElEQVR4nGNgYGBgELPW+G+cbvsfxEYBIAkYmwnG4BXhgCtgAamQ1RFleHzlNVhA2d/gP8urozcYGRgYwBIg+u7GC4xw7R9efIZrBwBdbhUj6YhovQAAAABJRU5ErkJggg=='); // tufo-pequeno.png (de grama-tufo-v3.png)
+const tuftBigImg   = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAOCAYAAAD0f5bSAAAA5UlEQVR4nGNgIAACmkL+o4sx4dOg7G/w//HTlwwkadI1VmH48OIzhjgLNudcPnuH4e7GC4zotoBsBhmEoenx05dgGxgYGP5j0wCSZ8TmLON02/8gZwlI8MKdB2KDwNmZhxlZQApkpcUZQE4CAZCzsBkEMwTsJ5BOhnTb/yABkGYBCV64sx5fec3AK8KBYiMIMKK7W0CCF6zYyl2H4djOK2Aa5A+QJpgr8Aa5rI4oVnEUTSCTQE5EVwwSQ/Yrhk0b6tYwgpwCcxIIgJyJ0yYY+PzmB5yNLRlhBC8oMGAaQSGHzIY5EQDIxXArOqxCYQAAAABJRU5ErkJggg=='); // tufo-grande.png
+const TUFT = {
+  scale: 4,          // tamanho na tela
+  density: 0.65,     // chance de um tile de grama ganhar tufo
+  bigChance: 0.4,    // fração de tufos grandes
+  windAmp: 2.2,      // balanço do vento (px de tela no topo do tufo)
+  pushRadius: 34,    // distância em que um corpo dobra o tufo
+  pushForce: 9,      // dobra máxima ao ser empurrado (px de tela)
+};
+const tufts = [];
+const SAND_RADIUS = 0.36;      // raio do círculo de terra, em fração do lado menor da tela
 
 // =====================================================================
 // Setup
@@ -259,6 +285,22 @@ const sfx = (() => {
       tone({ dur: 0.08, peak: 0.08, wave: 'triangle', f0: 1568 });
       tone({ dur: 0.12, peak: 0.08, wave: 'triangle', f0: 2093, delay: 0.06 });
     },
+    waveStart() {     // começo de wave: tambor + nota grave
+      if (!ok('waveStart', 1)) return;
+      tone({ dur: 0.35, peak: 0.35, wave: 'sawtooth', f0: 110, f1: 82 });
+      noise({ dur: 0.2, peak: 0.4, type: 'lowpass', f0: 600, f1: 80 });
+      tone({ dur: 0.35, peak: 0.3, wave: 'sawtooth', f0: 110, f1: 82, delay: 0.3 });
+      noise({ dur: 0.2, peak: 0.4, type: 'lowpass', f0: 600, f1: 80, delay: 0.3 });
+    },
+    waveClear() {     // fim de wave: fanfarra curta
+      if (!ok('waveClear', 1)) return;
+      [523, 659, 784, 1047, 784, 1047].forEach((f, i) =>
+        tone({ dur: i < 5 ? 0.1 : 0.3, peak: 0.14, wave: 'square', f0: f, delay: i * 0.09 }));
+    },
+    heal() {          // curativo
+      if (!ok('heal', 0.2)) return;
+      [392, 523, 659, 784].forEach((f, i) => tone({ dur: 0.14, peak: 0.12, wave: 'triangle', f0: f, f1: f * 1.02, delay: i * 0.06 }));
+    },
     hit() {           // impacto no inimigo
       if (!ok('hit', 0.025)) return;
       tone({ dur: 0.07, peak: 0.22, wave: 'square', f0: rand(320, 380), f1: 120 });
@@ -314,7 +356,10 @@ canvas.addEventListener('mousedown', e => {
 });
 window.addEventListener('mouseup',   e => { if (e.button === 0) mouse.down = false; });
 window.addEventListener('contextmenu', e => e.preventDefault());
-window.addEventListener('blur', () => { keys.clear(); mouse.down = false; });
+window.addEventListener('blur', () => {
+  keys.clear(); mouse.down = false;
+  if (typeof mode !== 'undefined' && mode !== 'menu' && !gameOver) setPaused(true);   // pausa ao sair da janela
+});
 
 // =====================================================================
 // Mapa: grama com clareiras/trilhas de areia (gerado com seed fixa)
@@ -334,45 +379,74 @@ function buildMap() {
   let seed = 1337;
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
 
-  // value noise suave
-  const G = 8, gw = Math.ceil(MAP_W / G) + 2, gh = Math.ceil(MAP_H / G) + 2;
-  const grid = Array.from({ length: gw * gh }, rnd);
-  const smooth = t => t * t * (3 - 2 * t);
-  function noise(x, y) {
-    const gx = x / G, gy = y / G, ix = Math.floor(gx), iy = Math.floor(gy);
-    const fx = smooth(gx - ix), fy = smooth(gy - iy);
-    const v = (i, j) => grid[(iy + j) * gw + (ix + i)];
-    const a = v(0, 0) + (v(1, 0) - v(0, 0)) * fx;
-    const b = v(0, 1) + (v(1, 1) - v(0, 1)) * fx;
-    return a + (b - a) * fy;
-  }
-
-  const cx = MAP_W / 2, cy = MAP_H / 2;
-  map.tiles = [];
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      // clareira central + manchas do noise + trilha em cruz levemente ondulada
-      const d = Math.hypot((x - cx) / (MAP_W * 0.18), (y - cy) / (MAP_H * 0.2));
-      const path = Math.abs(y - cy - Math.sin(x * 0.35) * 2) < 1.6 ||
-                   Math.abs(x - cx - Math.sin(y * 0.4) * 2) < 1.4;
-      const sand = d < 1 || path || noise(x, y) > 0.72;
-      map.tiles.push(sand ? 1 : 0);
-    }
-  }
-
-  // pré-renderiza em resolução nativa (16px por tile), com rotação aleatória para quebrar repetição
+  // terra só num círculo no meio, desenhado pixel a pixel (resolução nativa: 16 px por tile)
   const c = map.canvas; c.width = MAP_W * T; c.height = MAP_H * T;
   const m = c.getContext('2d');
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const tile = map.tiles[y * MAP_W + x] ? sandImg : grassImg;
-      m.save();
-      m.translate(x * T + T / 2, y * T + T / 2);
-      m.rotate(Math.floor(rnd() * 4) * Math.PI / 2);
-      m.drawImage(tile, -T / 2, -T / 2);
-      m.restore();
+  const ccx = WORLD_W / 2 / SCALE, ccy = WORLD_H / 2 / SCALE;            // centro = centro da tela
+  const R = SAND_RADIUS * Math.min(WORLD_W, WORLD_H) / SCALE;
+  const edge = (px, py) => {                                              // >0 fora (grama), <0 dentro (terra)
+    const a = Math.atan2(py - ccy, px - ccx);
+    const wob = Math.sin(a * 5 + 1.3) * 1.3 + Math.sin(a * 9 + 0.4) * 0.8 + Math.sin(a * 17) * 0.5;
+    return Math.hypot(px - ccx, py - ccy) - (R + wob);
+  };
+
+  // tiles (para saber onde pode nascer tufo): terra se o centro do tile está perto do círculo
+  map.tiles = [];
+  for (let y = 0; y < MAP_H; y++)
+    for (let x = 0; x < MAP_W; x++) map.tiles.push(edge(x * T + T / 2, y * T + T / 2) < T * 0.8 ? 1 : 0);
+  const at = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? -1 : map.tiles[y * MAP_W + x];
+
+  // camadas completas de grama e de terra, com rotação aleatória para quebrar repetição
+  const layer = set => {
+    const L = document.createElement('canvas'); L.width = c.width; L.height = c.height;
+    const g = L.getContext('2d');
+    for (let y = 0; y < MAP_H; y++)
+      for (let x = 0; x < MAP_W; x++) {
+        g.save(); g.translate(x * T + T / 2, y * T + T / 2);
+        g.rotate(Math.floor(rnd() * 4) * Math.PI / 2);
+        g.drawImage(set, 4, 4, T, T, -T / 2, -T / 2, T, T);
+        g.restore();
+      }
+    return g.getImageData(0, 0, L.width, L.height).data;
+  };
+  const grassD = layer(grassSet), sandD = layer(sandSet);
+
+  // cores da franja da grama (linha de borda do tileset), para a borda serrilhada
+  const fc = document.createElement('canvas'); fc.width = 24; fc.height = 24;
+  const fg = fc.getContext('2d'); fg.drawImage(grassSet, 0, 0);
+  const fd = fg.getImageData(4, 2, 16, 1).data, fringe = [];
+  for (let k = 0; k < 16; k++) fringe.push([fd[k * 4], fd[k * 4 + 1], fd[k * 4 + 2]]);
+
+  // composição: dentro = terra; faixa de 2 px na borda = franja da grama (linha cheia + linha serrilhada)
+  const out = m.createImageData(c.width, c.height), o = out.data;
+  for (let py = 0; py < c.height; py++) {
+    for (let px = 0; px < c.width; px++) {
+      const i = (py * c.width + px) * 4, e = edge(px + 0.5, py + 0.5);
+      let src = grassD, col = null;
+      if (e < -2) src = sandD;
+      else if (e < -1) { if (rnd() < 0.5) src = sandD; else col = fringe[(px * 7 + py * 3) % 16]; }
+      else if (e < 0) col = fringe[(px * 5 + py * 11) % 16];
+      if (col) { o[i] = col[0]; o[i + 1] = col[1]; o[i + 2] = col[2]; }
+      else { o[i] = src[i]; o[i + 1] = src[i + 1]; o[i + 2] = src[i + 2]; }
+      o[i + 3] = 255;
     }
   }
+  m.putImageData(out, 0, 0);
+
+  // tufos de grama: só em tiles de grama com grama dos 4 lados (longe das bordas) e fora da casa
+  tufts.length = 0;
+  const HR = houseRect();
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (rnd() > TUFT.density) continue;
+      if (at(x, y) !== 0 || at(x - 1, y) === 1 || at(x + 1, y) === 1 || at(x, y - 1) === 1 || at(x, y + 1) === 1) continue;
+      const tx = (x + 0.2 + rnd() * 0.6) * TILE, ty = (y + 0.35 + rnd() * 0.55) * TILE;
+      if (tx > HR.l - 40 && tx < HR.r + 40 && ty > HR.t - 70 && ty < HR.b + 30) continue;
+      tufts.push({ x: tx, y: ty, big: rnd() < TUFT.bigChance, flip: rnd() < 0.5, phase: rnd() * Math.PI * 2,
+        bend: 0, vel: 0, touched: false });
+    }
+  }
+
   // borda escura do mundo
   m.strokeStyle = 'rgba(0,0,0,.45)'; m.lineWidth = 2;
   m.strokeRect(1, 1, c.width - 2, c.height - 2);
@@ -417,8 +491,9 @@ let reservePop = 0;                          // pulso do contador de reserva
 
 let heartPop = 0;
 let gameOver = false;
+let paused = false;               // pausa (ESC / P) — só dentro de uma partida
 let mode = 'menu';                 // 'menu' | 'test' | 'rogue'
-const run = { time: 0, kills: 0, spawnTimer: 0 };
+const run = { time: 0, kills: 0, spawnTimer: 0, wave: 0, phase: 'break', phaseT: 0, toSpawn: 0, cfg: null, banner: null };
 
 const enemies = [];
 
@@ -431,7 +506,7 @@ function houseRect() {
 }
 // empurra um corpo (centro x,y; meia-largura hw, meia-altura hh) para fora da casa
 function pushOutOfHouse(o, hw, hh) {
-  if (!house.active) return false;
+  if (!house.active && !house.decor) return false;   // decorativa também é sólida
   const R = houseRect();
   const l = R.l - hw, r = R.r + hw, t = R.t - hh, b = R.b + hh;
   if (o.x <= l || o.x >= r || o.y <= t || o.y >= b) return false;
@@ -440,7 +515,7 @@ function pushOutOfHouse(o, hw, hh) {
   if (m === pen[0]) o.x = l; else if (m === pen[1]) o.x = r; else if (m === pen[2]) o.y = t; else o.y = b;
   return true;
 }
-// homeRel: posição fixa relativa à tela (inimigo do modo teste, que reaparece). speed 0 = estático.
+// homeRel: posição fixa relativa à tela (inimigo do campo de treino, que reaparece). speed 0 = estático.
 function makeEnemy(x, y, hp, speed, homeRel = null) {
   return { x, y, hp, maxHp: hp, speed, homeRel, alive: true, respawn: 0,
     flash: 0, jiggle: 0, hpShow: 0, facing: -1, walk: rand(0, 10), bite: rand(0.3, BITE_EVERY), lunge: 0, attacking: false };
@@ -462,10 +537,32 @@ function whiteOf(image) {
 }
 
 let clock = 0;                                     // relógio global para animações
+
+// curativo em pixel art (13x11), gerado em código
+const MEDKIT = [
+  '...#######...',
+  '..#.......#..',
+  '.###########.',
+  '#wwwwwwwwwww#',
+  '#wwwwwrwwwww#',
+  '#wwwwrrrwwww#',
+  '#wwwrrrrrwww#',
+  '#wwwwrrrwwww#',
+  '#wwwwwrwwwww#',
+  '#ggggggggggg#',
+  '.###########.',
+];
+const medkitImg = (() => {
+  const c = document.createElement('canvas'); c.width = MEDKIT[0].length; c.height = MEDKIT.length;
+  const g = c.getContext('2d');
+  const col = { '#': '#3a2a2a', w: '#f4f1de', r: '#e63946', g: '#c9c2a8' };
+  MEDKIT.forEach((row, y) => [...row].forEach((ch, x) => { if (col[ch]) { g.fillStyle = col[ch]; g.fillRect(x, y, 1, 1); } }));
+  c.complete = true;
+  return c;
+})();
+const pickupBuf = document.createElement('canvas');
+const pickupCtx = pickupBuf.getContext('2d');
 const pickups = [];                                // caixas de munição dropadas
-const boxBuf = document.createElement('canvas');   // buffer em resolução nativa p/ o brilho
-boxBuf.width = BOX_W; boxBuf.height = BOX_H;
-const boxCtx = boxBuf.getContext('2d');
 
 const mouseWorld = () => ({ x: mouse.x + cam.x, y: mouse.y + cam.y });
 const hand = () => ({ x: player.x + GUN_HAND.x * SCALE, y: player.y + GUN_HAND.y * SCALE });
@@ -541,8 +638,8 @@ function rollDrop(x, y) {
   let r = Math.random();
   for (const d of DROP_TABLE) {
     if (r < d.chance) {
-      pickups.push({ x, y, amount: d.amount, scale: d.scale, t: rand(0, 6), age: 0,
-        shine: 0, nextShine: rand(...BOX_SHINE_EVERY), pop: 1 });
+      pickups.push({ kind: 'ammo', x, y, amount: d.amount, scale: d.scale, t: rand(0, 6), age: 0,
+        shine: 0, nextShine: rand(...BOX_SHINE_EVERY), pop: 1, life: DROP_LIFE });
       return;
     }
     r -= d.chance;
@@ -552,7 +649,51 @@ function rollDrop(x, y) {
 const pickupFloat = b => Math.sin(b.t * 2.6) * 5;
 const pickupCenterY = b => b.y - 14 + pickupFloat(b) - b.pop * 30;   // nasce com um pulinho
 
+// recompensa de fim de wave (some em DROP_LIFE, como os outros drops)
+function spawnReward(kind, x, y) {
+  pickups.push({ kind, x, y, amount: kind === 'ammo' ? ROGUE.rewardAmmo : 0, scale: kind === 'ammo' ? 4.2 : 4,
+    t: rand(0, 6), age: 0, shine: 0, nextShine: 0.5, pop: 1, life: DROP_LIFE, reward: true });
+  particles.push({ x, y: y - 20, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
+}
+
+// campo de treino: sem nenhuma munição, aparece uma caixa ao lado da casa (não some)
+const TRAINING_AMMO = 12;
+let trainingAmmoT = 0;
+function updateTrainingAmmo(dt) {
+  const empty = mode === 'test' && player.ammo === 0 && player.reserve === 0 && !pickups.some(p => p.kind === 'ammo');
+  if (!empty) { trainingAmmoT = 0; return; }
+  if ((trainingAmmoT += dt) < 0.6) return;              // pequena pausa antes de aparecer
+  trainingAmmoT = 0;
+  const R = houseRect();
+  pickups.push({ kind: 'ammo', x: Math.min(WORLD_W - 40, R.r + 56), y: R.b - 10, amount: TRAINING_AMMO, scale: 4.2,
+    t: 0, age: 0, shine: 0, nextShine: 0.5, pop: 1, life: Infinity, reward: true });
+  particles.push({ x: R.r + 56, y: R.b - 30, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
+  sfx.select();
+}
+
+function canCollect(b) {
+  if (gameOver) return false;
+  if (b.kind === 'heal') return house.active && house.hp < HOUSE_HP;
+  return player.reserve < RESERVE_MAX;
+}
+
+function collectHeal(b) {
+  const gained = Math.min(Math.round(HOUSE_HP * ROGUE.rewardHeal), HOUSE_HP - house.hp);
+  house.hp += gained;
+  house.heal = 1;
+  sfx.heal();
+  const cy = pickupCenterY(b);
+  for (let i = 0; i < 14; i++) {   // cruzinhas verdes subindo da casa
+    const R = houseRect();
+    particles.push({ x: rand(R.l, R.r), y: rand(R.t, R.b), vx: rand(-20, 20), vy: rand(-120, -50),
+      life: rand(0.6, 1.1), age: 0, size: rand(3, 5), color: Math.random() < .6 ? '#7bd04a' : '#ffffff', drag: 1 });
+  }
+  particles.push({ x: b.x, y: cy, vx: 0, vy: 0, life: 0.35, age: 0, size: 10, grow: 260, color: 'ring', drag: 0 });
+  particles.push({ x: house.x, y: houseRect().t - 30, vx: 0, vy: -50, life: 1.1, age: 0, size: 0, color: 'text', text: `+${gained} CASA`, tint: '#7bd04a', drag: 1.5 });
+}
+
 function collectPickup(b) {
+  if (b.kind === 'heal') return collectHeal(b);
   const gained = Math.min(b.amount, RESERVE_MAX - player.reserve);
   player.reserve += gained;
   reservePop = 1;
@@ -581,8 +722,9 @@ function updatePickups(dt) {
       sparkle(b.x + rand(-BOX_W, BOX_W) * b.scale * 0.4, pickupCenterY(b) + rand(-BOX_H, BOX_H) * b.scale * 0.3);
     }
     const near = Math.hypot(player.x - b.x, player.y - b.y) < BOX_RADIUS + b.scale * 4;
-    if (near && player.reserve < RESERVE_MAX && !gameOver) { collectPickup(b); pickups.splice(i, 1); continue; }
-    if (b.age > DROP_LIFE) {
+    if (near && canCollect(b)) { collectPickup(b); pickups.splice(i, 1); continue; }
+    const healUseless = b.kind === 'heal' && house.hp >= HOUSE_HP && b.pop < 0.2;   // casa 100%: a cura some
+    if (b.age > b.life || healUseless) {
       particles.push({ x: b.x, y: pickupCenterY(b), vx: 0, vy: -15, life: 0.4, age: 0, size: 10, grow: 25, color: 'dust', drag: 2 });
       pickups.splice(i, 1);
     }
@@ -590,11 +732,13 @@ function updatePickups(dt) {
 }
 
 function drawPickup(b) {
-  if (!boxImg.complete) return;
+  const spr = b.kind === 'heal' ? medkitImg : boxImg;
+  if (!spr.complete) return;
   // pisca nos últimos 3 segundos
-  const left = DROP_LIFE - b.age;
-  if (left < 3 && Math.floor(left * (left < 1 ? 16 : 8)) % 2 === 0) return;
-  const w = BOX_W * b.scale, h = BOX_H * b.scale;
+  const left = b.life - b.age;
+  if (left < 2 && Math.floor(left * (left < 0.8 ? 16 : 8)) % 2 === 0) return;
+  const SW = spr.width, SH = spr.height;
+  const w = SW * b.scale, h = SH * b.scale;
   const lift = pickupFloat(b) - b.pop * 30;
 
   // sombra no chão: menor quando a caixa sobe
@@ -604,31 +748,39 @@ function drawPickup(b) {
   ctx.ellipse(b.x, b.y + h / 2 - 2, w * 0.38 * sk, 5 * sk, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // sprite + faixa de brilho diagonal recortada pelo formato da caixa
-  boxCtx.clearRect(0, 0, BOX_W, BOX_H);
-  boxCtx.globalCompositeOperation = 'source-over';
-  boxCtx.drawImage(boxImg, 0, 0);
+  // sprite + faixa de brilho diagonal recortada pelo formato do sprite
+  if (pickupBuf.width !== SW || pickupBuf.height !== SH) { pickupBuf.width = SW; pickupBuf.height = SH; }
+  pickupCtx.clearRect(0, 0, SW, SH);
+  pickupCtx.globalCompositeOperation = 'source-over';
+  pickupCtx.drawImage(spr, 0, 0);
   if (b.shine >= 0) {
-    const sx = -8 + b.shine * (BOX_W + 16);
-    boxCtx.globalCompositeOperation = 'source-atop';
-    boxCtx.fillStyle = 'rgba(255,255,255,.85)';
-    boxCtx.beginPath();
-    boxCtx.moveTo(sx, 0); boxCtx.lineTo(sx + 3, 0); boxCtx.lineTo(sx + 3 - BOX_H, BOX_H); boxCtx.lineTo(sx - BOX_H, BOX_H);
-    boxCtx.fill();
-    boxCtx.fillStyle = 'rgba(255,255,255,.45)';
-    boxCtx.beginPath();
-    boxCtx.moveTo(sx + 5, 0); boxCtx.lineTo(sx + 6, 0); boxCtx.lineTo(sx + 6 - BOX_H, BOX_H); boxCtx.lineTo(sx + 5 - BOX_H, BOX_H);
-    boxCtx.fill();
+    const sx = -8 + b.shine * (SW + 16);
+    pickupCtx.globalCompositeOperation = 'source-atop';
+    pickupCtx.fillStyle = 'rgba(255,255,255,.85)';
+    pickupCtx.beginPath();
+    pickupCtx.moveTo(sx, 0); pickupCtx.lineTo(sx + 3, 0); pickupCtx.lineTo(sx + 3 - SH, SH); pickupCtx.lineTo(sx - SH, SH);
+    pickupCtx.fill();
+    pickupCtx.fillStyle = 'rgba(255,255,255,.45)';
+    pickupCtx.beginPath();
+    pickupCtx.moveTo(sx + 5, 0); pickupCtx.lineTo(sx + 6, 0); pickupCtx.lineTo(sx + 6 - SH, SH); pickupCtx.lineTo(sx + 5 - SH, SH);
+    pickupCtx.fill();
   }
   const cy = Math.round(pickupCenterY(b));
-  ctx.drawImage(boxBuf, Math.round(b.x - w / 2), Math.round(cy - h / 2), w, h);
+  // recompensa de wave: aura pulsante
+  if (b.reward) {
+    ctx.fillStyle = b.kind === 'heal' ? 'rgba(123,208,74,.22)' : 'rgba(255,224,138,.22)';
+    ctx.beginPath(); ctx.arc(b.x, cy, w * 0.62 + Math.sin(b.t * 5) * 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.drawImage(pickupBuf, Math.round(b.x - w / 2), Math.round(cy - h / 2), w, h);
 
-  // quantidade
+  // rótulo
   ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
-  const label = `+${b.amount}`, ly = Math.round(cy - h / 2 - 6);
+  const label = b.kind === 'heal' ? `+${Math.round(ROGUE.rewardHeal * 100)}% CASA` : `+${b.amount}`;
+  const ly = Math.round(cy - h / 2 - 6);
   ctx.fillStyle = '#000'; ctx.fillText(label, b.x + 1, ly + 1);
-  ctx.fillStyle = b.amount >= DROP_TABLE[0].amount ? '#ffe08a' : '#f4f1de'; ctx.fillText(label, b.x, ly);
+  ctx.fillStyle = b.kind === 'heal' ? '#7bd04a' : b.amount >= DROP_TABLE[0].amount ? '#ffe08a' : '#f4f1de';
+  ctx.fillText(label, b.x, ly);
   ctx.textAlign = 'left';
 }
 
@@ -682,14 +834,14 @@ function killEnemy(e) {
 }
 
 // nasce fora da tela, numa borda aleatória, e caminha até o jogador
-function spawnEdgeEnemy() {
+function spawnEdgeEnemy(cfg) {
   const m = 50, side = Math.floor(Math.random() * 4);
   let x, y;
   if (side === 0)      { x = rand(0, WORLD_W); y = -m; }
   else if (side === 1) { x = WORLD_W + m; y = rand(0, WORLD_H); }
   else if (side === 2) { x = rand(0, WORLD_W); y = WORLD_H + m; }
   else                 { x = -m; y = rand(0, WORLD_H); }
-  enemies.push(makeEnemy(x, y, ROGUE.enemyHp, rand(ROGUE.speedMin, ROGUE.speedMax)));
+  enemies.push(makeEnemy(x, y, cfg.hp, rand(ROGUE.speedMin, ROGUE.speedMax) * cfg.speedMul));
 }
 
 function damageHouse(e) {
@@ -751,17 +903,21 @@ function hurtPlayer(src) {
 // =====================================================================
 function startMode(m) {
   mode = m;
+  paused = false;
   sfx.select();
   gameOver = false;
   Object.assign(player, { hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
     x: WORLD_W / 2, y: WORLD_H / 2 });
-  Object.assign(house, { hp: HOUSE_HP, flash: 0, shake: 0, pop: 0, active: m === 'rogue' });
-  if (m === 'rogue') player.y = houseRect().b + player.h / 2 + 24;   // nasce na frente da porta
-  Object.assign(run, { time: 0, kills: 0, spawnTimer: 1.0 });
+  // roguelike: casa de verdade (vida, alvo dos jacarés). Campo de treino: só cosmética.
+  Object.assign(house, { hp: HOUSE_HP, flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test' });
+  if (m === 'rogue' || m === 'test') player.y = houseRect().b + player.h / 2 + 24;   // nasce na frente da porta
+  Object.assign(run, { time: 0, kills: 0, spawnTimer: 0, wave: 0, phase: 'break', phaseT: ROGUE.firstBreak,
+    toSpawn: 0, cfg: null, banner: null });
   bullets.length = 0; particles.length = 0; enemies.length = 0; pickups.length = 0;
   ammoPop.fill(0); mouse.down = false;
   if (m === 'test') {
-    enemies.push(makeEnemy(Math.round(WORLD_W * ENEMY_POS.x), Math.round(WORLD_H * ENEMY_POS.y), ENEMY_HP, 0, ENEMY_POS));
+    for (const pos of ENEMY_POSITIONS)
+      enemies.push(makeEnemy(Math.round(WORLD_W * pos.x), Math.round(WORLD_H * pos.y), ENEMY_HP, 0, pos));
   }
   document.getElementById('hud').style.display = m === 'menu' ? 'none' : '';
 }
@@ -770,22 +926,54 @@ function startMode(m) {
 function menuButtons() {
   const w = Math.min(340, canvas.width - 40), h = 64, x = (canvas.width - w) / 2, cy = canvas.height / 2;
   return [
-    { id: 'test',  label: '1  ·  CAMPO DE TESTE', sub: 'inimigo parado para testar', x, y: cy - 10, w, h },
-    { id: 'rogue', label: '2  ·  ROGUELIKE',       sub: 'defenda a casa das ondas de jacarés',     x, y: cy + h + 6, w, h },
+    { id: 'test',  label: '1  ·  CAMPO DE TREINO', sub: '3 jacarés parados para treinar', x, y: cy - 10, w, h },
+    { id: 'rogue', label: '2  ·  ROGUELIKE',       sub: 'defenda a casa wave após wave',     x, y: cy + h + 6, w, h },
   ];
 }
-const hoveredButton = () => menuButtons().find(b => mouse.x >= b.x && mouse.x <= b.x + b.w && mouse.y >= b.y && mouse.y <= b.y + b.h);
+// botões da pausa
+function pauseButtons() {
+  const w = Math.min(300, canvas.width - 40), h = 52, x = (canvas.width - w) / 2, y0 = canvas.height / 2 - 40;
+  return [
+    { id: 'resume',  label: 'CONTINUAR',      sub: 'ESC / P', x, y: y0, w, h },
+    { id: 'restart', label: 'RECOMEÇAR',      sub: 'R',       x, y: y0 + h + 10, w, h },
+    { id: 'menu',    label: 'MENU PRINCIPAL', sub: 'Q',       x, y: y0 + (h + 10) * 2, w, h },
+  ];
+}
+const hoveredIn = list => list.find(b => mouse.x >= b.x && mouse.x <= b.x + b.w && mouse.y >= b.y && mouse.y <= b.y + b.h);
+const hoveredButton = () => hoveredIn(menuButtons());
+
+function setPaused(v) {
+  if (paused === v) return;
+  paused = v;
+  mouse.down = false; mouse.pressed = false; mouse.rightPressed = false;
+  keys.clear();
+  sfx.select();
+}
+function pauseAction(id) {
+  if (id === 'resume') setPaused(false);
+  else if (id === 'restart') startMode(mode);
+  else if (id === 'menu') startMode('menu');
+}
 
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (k === 'escape') { startMode('menu'); return; }
   if (mode === 'menu') { if (k === '1') startMode('test'); if (k === '2') startMode('rogue'); return; }
-  if (gameOver && k === 'r') { startMode(mode); return; }
+  if (gameOver) {                         // tela de game over: R recomeça, ESC volta ao menu
+    if (k === 'r') startMode(mode);
+    if (k === 'escape') startMode('menu');
+    return;
+  }
+  if (k === 'escape' || k === 'p') { setPaused(!paused); return; }
+  if (paused) {
+    if (k === 'r') pauseAction('restart');
+    if (k === 'q') pauseAction('menu');
+    return;
+  }
   if (k === 'r' && !e.repeat && mode !== 'menu') startReload();
 });
 
 // =====================================================================
-// Recarga: 1 cartucho por RELOAD_SHELL. Toque no R = 1 cartucho; segurar = continua.
+// Recarga: 1 cartucho por RELOAD_SHELL. Um toque no R recarrega até encher (ou acabar a reserva).
 // =====================================================================
 function canReload() { return player.ammo < AMMO_MAX && player.reserve > 0 && !gameOver; }
 function startReload() {
@@ -808,9 +996,55 @@ function updateReload(dt) {
       particles.push({ x: h.x + player.facing * 14, y: h.y - 10, vx: rand(-60, 60), vy: rand(-140, -60), life: 0.25, age: 0,
         size: 3, color: '#ffe08a', drag: 5 });
     player.reloadT = Math.max(0, player.reloadT - RELOAD_SHELL);   // mantém o resto do tempo
-    // segurando R continua; senão para depois de 1 cartucho
-    if (!(keys.has('r') && canReload())) { player.reloading = false; player.reloadT = 0; }
+    // continua sozinho até encher a escopeta ou acabar a reserva
+    if (!canReload()) { player.reloading = false; player.reloadT = 0; }
   }
+}
+
+// =====================================================================
+// Waves
+// =====================================================================
+function banner(text, sub, color = '#f4f1de', dur = 2.4) { run.banner = { text, sub, color, t: 0, dur }; }
+
+function startWave() {
+  run.wave++;
+  run.cfg = waveConfig(run.wave);
+  run.toSpawn = run.cfg.count;
+  run.spawnTimer = 0.3;
+  run.phase = 'fight';
+  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés`, '#e9c46a');
+  sfx.waveStart();
+}
+
+function finishWave() {
+  run.phase = 'break';
+  run.phaseT = ROGUE.breakTime;
+  const full = house.hp >= HOUSE_HP;
+  banner(`WAVE ${run.wave} COMPLETA`, full ? '+ munição' : '+ munição   + curativo da casa', '#7bd04a', 2.2);
+  sfx.waveClear();
+  // recompensas na frente da porta
+  const R = houseRect(), y = Math.min(WORLD_H - 40, R.b + 70);
+  spawnReward('ammo', house.x - 60, y);
+  if (!full) spawnReward('heal', house.x + 60, y);
+}
+
+function updateWaves(dt) {
+  if (run.banner && (run.banner.t += dt) > run.banner.dur) run.banner = null;
+  if (gameOver) return;
+  run.time += dt;
+  if (run.phase === 'break') {
+    if ((run.phaseT -= dt) <= 0) startWave();
+    return;
+  }
+  // fight: vai soltando os jacarés da wave
+  if (run.toSpawn > 0 && (run.spawnTimer -= dt) <= 0) {
+    const alive = enemies.filter(e => e.alive).length;
+    const n = Math.min(run.cfg.group, run.toSpawn, ROGUE.maxEnemies - alive);
+    for (let i = 0; i < n; i++) spawnEdgeEnemy(run.cfg);
+    run.toSpawn -= n;
+    run.spawnTimer = run.cfg.interval;
+  }
+  if (run.toSpawn === 0 && !enemies.some(e => e.alive)) finishWave();
 }
 
 // =====================================================================
@@ -871,13 +1105,18 @@ function updateMelee(dt) {
 function update(dt) {
   // (re)constrói o mapa quando os tiles carregam ou a janela muda de tamanho
   const sizeChanged = map.builtW !== canvas.width || map.builtH !== canvas.height;
-  if ((!map.ready || sizeChanged) && canvas.width > 0 && sandImg.complete && grassImg.complete) buildMap();
+  if ((!map.ready || sizeChanged) && canvas.width > 0 && sandSet.complete && grassSet.complete) buildMap();
   if (!map.ready) return;
 
   clock += dt;
   if (mode === 'menu') {
     if (mouse.pressed) { const b = hoveredButton(); if (b) startMode(b.id); }
     mouse.pressed = false;
+    return;
+  }
+  if (paused) {                       // tudo congelado; só os botões da pausa respondem
+    if (mouse.pressed) { const b = hoveredIn(pauseButtons()); if (b) pauseAction(b.id); }
+    mouse.pressed = false; mouse.rightPressed = false; mouse.down = false;
     return;
   }
 
@@ -929,17 +1168,13 @@ function update(dt) {
   mouse.pressed = false;
   updateReload(dt);
   updatePickups(dt);
+  updateTufts(dt);
+  updateTrainingAmmo(dt);
   reservePop *= Math.exp(-6 * dt);
 
-  // roguelike: spawns cada vez mais frequentes
-  if (mode === 'rogue' && !gameOver) {
-    run.time += dt;
-    run.spawnTimer -= dt;
-    if (run.spawnTimer <= 0) {
-      if (enemies.length < ROGUE.maxEnemies) spawnEdgeEnemy();
-      run.spawnTimer = spawnInterval(run.time);
-    }
-  }
+  // roguelike: waves
+  if (mode === 'rogue') updateWaves(dt);
+  house.heal = Math.max(0, (house.heal || 0) - dt * 1.5);
 
   // inimigos: perseguem (speed > 0) ou ficam parados; dano por contato
   const ox = (ENEMY_HITBOX.w + PLAYER_HITBOX.w) * SCALE / 2;
@@ -949,7 +1184,7 @@ function update(dt) {
     e.jiggle *= Math.exp(-12 * dt);
     e.hpShow -= dt;
     if (!e.alive) {
-      if (e.homeRel && (e.respawn -= dt) <= 0) {   // inimigo de teste reaparece
+      if (e.homeRel && (e.respawn -= dt) <= 0) {   // inimigo do campo de treino reaparece
         Object.assign(e, { alive: true, hp: e.maxHp, flash: 0.15, hpShow: 0 });
         particles.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0.3, age: 0, size: 60, grow: -180, color: 'ring', drag: 0 });
       }
@@ -1066,6 +1301,58 @@ function update(dt) {
 // =====================================================================
 // Render
 // =====================================================================
+// =====================================================================
+// Tufos de grama: vento + dobram quando alguém passa (mola amortecida)
+// =====================================================================
+function updateTufts(dt) {
+  const bodies = [];
+  if (mode !== 'menu' && player.hp > 0) bodies.push({ x: player.x, y: player.y + player.h / 2 - 6, moving: true });
+  for (const e of enemies) if (e.alive) bodies.push({ x: e.x, y: e.y + ENEMY_H * SCALE / 2 - 6 });
+  for (const t of tufts) {
+    let push = 0, near = false;
+    for (const b of bodies) {
+      const dx = t.x - b.x, dy = (t.y - b.y) * 1.6, dist = Math.hypot(dx, dy);
+      if (dist < TUFT.pushRadius) {
+        near = true;
+        push += Math.sign(dx || 1) * TUFT.pushForce * (1 - dist / TUFT.pushRadius) * 1.6;
+      }
+    }
+    if (near && !t.touched) {   // folhinhas ao entrar no tufo
+      for (let i = 0; i < 2; i++)
+        particles.push({ x: t.x + rand(-8, 8), y: t.y - rand(10, 24), vx: rand(-50, 50), vy: rand(-90, -40), life: rand(0.3, 0.5),
+          age: 0, size: 3, color: Math.random() < .5 ? '#7bd04a' : '#4f9a3c', gravity: 300, drag: 3 });
+    }
+    t.touched = near;
+    // mola: puxa para a posição empurrada (ou 0) e oscila um pouco ao soltar
+    const target = Math.max(-TUFT.pushForce, Math.min(TUFT.pushForce, push));
+    t.vel += ((target - t.bend) * 90 - t.vel * 9) * dt;
+    t.bend += t.vel * dt;
+  }
+}
+
+function drawTuft(t) {
+  const im = t.big ? tuftBigImg : tuftSmallImg;
+  if (!im.complete) return;
+  const S = TUFT.scale, w = im.width, h = im.height;
+  // vento: onda que atravessa a tela + rajadas lentas
+  const wind = Math.sin(clock * 1.7 + t.x * 0.011 + t.phase * 0.3) * 0.65
+             + Math.sin(clock * 0.53 + t.x * 0.004) * 0.35;
+  const sway = wind * TUFT.windAmp * (t.big ? 1.2 : 0.8) + t.bend;
+  const x0 = Math.round(t.x - (w * S) / 2), y0 = Math.round(t.y - h * S);
+  // desenha linha a linha: o topo se desloca mais que a base (base fica presa no chão)
+  for (let r = 0; r < h; r++) {
+    const k = Math.pow(1 - r / h, 1.6);
+    const off = Math.round(sway * k);
+    if (t.flip) {
+      ctx.save(); ctx.translate(x0 + w * S + off, 0); ctx.scale(-1, 1);
+      ctx.drawImage(im, 0, r, w, 1, 0, y0 + r * S, w * S, S);
+      ctx.restore();
+    } else {
+      ctx.drawImage(im, 0, r, w, 1, x0 + off, y0 + r * S, w * S, S);
+    }
+  }
+}
+
 function drawGun() {
   if (player.meleeT >= 0) {
     // golpe de faca: 3 frames do GIF, apontado para onde o golpe começou
@@ -1170,7 +1457,7 @@ function drawParticles() {
       ctx.font = 'bold 18px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#000'; ctx.fillText(p.text, p.x + 2, p.y + 2);
-      ctx.fillStyle = '#ffe08a'; ctx.fillText(p.text, p.x, p.y);
+      ctx.fillStyle = p.tint || '#ffe08a'; ctx.fillText(p.text, p.x, p.y);
       ctx.textAlign = 'left';
       ctx.globalAlpha = 1;
     } else if (p.color === 'sparkle') {               // estrelinha de 4 pontas
@@ -1248,26 +1535,65 @@ const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStar
 
 function drawRunHud() {
   if (mode !== 'rogue') return;
-  const text = `${fmtTime(run.time)}   ·   ABATES ${run.kills}`;
-  ctx.font = 'bold 22px monospace';
+  const alive = enemies.filter(e => e.alive).length;
+  const left = run.phase === 'fight' ? run.toSpawn + alive : 0;
+  const text = run.wave === 0 ? 'PREPARE-SE' : `WAVE ${run.wave}`;
   ctx.textAlign = 'right';
+  ctx.font = 'bold 24px monospace';
   ctx.fillStyle = '#000'; ctx.fillText(text, canvas.width - 14, 38);
-  ctx.fillStyle = '#f4f1de'; ctx.fillText(text, canvas.width - 16, 36);
+  ctx.fillStyle = '#e9c46a'; ctx.fillText(text, canvas.width - 16, 36);
+  ctx.font = 'bold 14px monospace';
+  const sub = run.phase === 'fight' ? `${left} restantes  ·  ${run.kills} abates`
+                                    : `próxima em ${Math.ceil(run.phaseT)}s  ·  ${run.kills} abates`;
+  ctx.fillStyle = '#000'; ctx.fillText(sub, canvas.width - 15, 59);
+  ctx.fillStyle = '#f4f1de'; ctx.fillText(sub, canvas.width - 16, 58);
   ctx.textAlign = 'left';
+
+  // anúncio grande no centro
+  const b = run.banner;
+  if (b && !gameOver && !paused) {
+    const inT = Math.min(1, b.t / 0.25), outT = Math.min(1, (b.dur - b.t) / 0.5);
+    const a = Math.min(inT, outT), sc = 1 + (1 - inT) * 0.6;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(canvas.width / 2, canvas.height * 0.28);
+    ctx.scale(sc, sc);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 52px monospace';
+    ctx.fillStyle = '#000'; ctx.fillText(b.text, 3, 3);
+    ctx.fillStyle = b.color; ctx.fillText(b.text, 0, 0);
+    if (b.sub) {
+      ctx.font = 'bold 18px monospace';
+      ctx.fillStyle = '#000'; ctx.fillText(b.sub, 2, 34);
+      ctx.fillStyle = '#f4f1de'; ctx.fillText(b.sub, 0, 32);
+    }
+    ctx.restore();
+  }
 }
 
-function drawMenu() {
-  ctx.fillStyle = 'rgba(8,12,8,.62)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.textAlign = 'center';
-  if (sprite.complete) {           // dino flutuando acima do título
-    ctx.drawImage(sprite, canvas.width / 2 - 36, canvas.height / 2 - 196 + Math.sin(clock * 2.6) * 5, 72, 72);
-  }
-  ctx.font = 'bold 56px monospace';
-  ctx.fillStyle = '#000'; ctx.fillText('DINO', canvas.width / 2 + 4, canvas.height / 2 - 56);
-  ctx.fillStyle = '#7bd04a'; ctx.fillText('DINO', canvas.width / 2, canvas.height / 2 - 60);
-  const hov = hoveredButton();
-  for (const b of menuButtons()) {
+// jacarezinho com a escopeta na mão (tela inicial)
+function drawTitleGator(cx, cy) {
+  if (!sprite.complete || !gunSprite.complete) return;
+  const S = 6, w = 18 * S, h = 18 * S;
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.ellipse(cx, cy + h / 2 - 2, w * 0.36, 8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(-1, 1);                                        // sprite olha para a esquerda: vira para a direita
+  ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+  ctx.restore();
+  // escopeta empunhada, apontando um pouco para cima, com um leve "respirar"
+  const a = -0.28 + Math.sin(clock * 1.3) * 0.04;
+  const hx = cx + GUN_HAND.x * S, hy = cy + GUN_HAND.y * S;
+  ctx.save();
+  ctx.translate(hx + Math.cos(a) * GUN_RADIUS * S, hy + Math.sin(a) * GUN_RADIUS * S);
+  ctx.rotate(a);
+  ctx.drawImage(gunSprite, -GUN_GRIP.x * S, -GUN_GRIP.y * S, GUN_W * S, GUN_H * S);
+  ctx.restore();
+}
+
+function drawButtons(list, hov) {
+  for (const b of list) {
     const on = hov === b;
     ctx.fillStyle = on ? '#f4f1de' : 'rgba(20,28,20,.9)';
     ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -1275,14 +1601,42 @@ function drawMenu() {
     ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
     ctx.fillStyle = on ? '#10170f' : '#f4f1de';
     ctx.font = 'bold 20px monospace';
-    ctx.fillText(b.label, b.x + b.w / 2, b.y + 28);
+    ctx.fillText(b.label, b.x + b.w / 2, b.y + (b.h > 56 ? 28 : 26));
     ctx.font = '13px monospace';
     ctx.fillStyle = on ? '#3a4a3a' : '#a9b8a0';
-    ctx.fillText(b.sub, b.x + b.w / 2, b.y + 48);
+    ctx.fillText(b.sub, b.x + b.w / 2, b.y + (b.h > 56 ? 48 : 43));
   }
+}
+
+function drawPause() {
+  if (!paused) return;
+  ctx.fillStyle = 'rgba(8,12,8,.62)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 48px monospace';
+  const y = canvas.height / 2 - 76;
+  ctx.fillStyle = '#000'; ctx.fillText('PAUSADO', canvas.width / 2 + 3, y + 3);
+  ctx.fillStyle = '#f4f1de'; ctx.fillText('PAUSADO', canvas.width / 2, y);
+  drawButtons(pauseButtons(), hoveredIn(pauseButtons()));
+  ctx.textAlign = 'left';
+}
+
+function drawMenu() {
+  ctx.fillStyle = 'rgba(8,12,8,.62)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = 'center';
+  drawTitleGator(canvas.width / 2, canvas.height / 2 - 150 + Math.sin(clock * 2.6) * 5);
+  // título: encolhe em telas estreitas
+  const fs = Math.min(56, Math.floor((canvas.width - 40) / 8.4));
+  ctx.font = `bold ${fs}px monospace`;
+  const ty = canvas.height / 2 - 48;
+  ctx.fillStyle = '#000'; ctx.fillText('GATOR SHOOTER', canvas.width / 2 + 4, ty + 4);
+  ctx.fillStyle = '#7bd04a'; ctx.fillText('GATOR', canvas.width / 2 - ctx.measureText(' SHOOTER').width / 2, ty);
+  ctx.fillStyle = '#e9c46a'; ctx.fillText('SHOOTER', canvas.width / 2 + ctx.measureText('GATOR ').width / 2, ty);
+  drawButtons(menuButtons(), hoveredButton());
   ctx.font = '13px monospace';
   ctx.fillStyle = '#a9b8a0';
-  ctx.fillText('clique ou aperte 1 / 2  ·  ESC volta para este menu', canvas.width / 2, canvas.height - 24);
+  ctx.fillText('clique ou aperte 1 / 2  ·  ESC pausa o jogo', canvas.width / 2, canvas.height - 24);
   ctx.textAlign = 'left';
 }
 
@@ -1313,7 +1667,7 @@ function drawHearts() {
 }
 
 function drawHouse() {
-  if (!house.active || !houseImg.complete) return;
+  if ((!house.active && !house.decor) || !houseImg.complete) return;
   const w = HOUSE_W * HOUSE_SCALE, h = HOUSE_H * HOUSE_SCALE;
   const sx = rand(-1, 1) * house.shake * 4;
   const x = Math.round(house.x - w / 2 + sx), y = Math.round(house.y - h / 2);
@@ -1350,6 +1704,7 @@ function drawHouseBar() {
   ctx.fillRect(x + sx, y, Math.round(bw * k), bh);
   ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(x + sx, y, Math.round(bw * k), 4);  // brilho
   if (pop > 0.05) { ctx.fillStyle = `rgba(255,255,255,${pop * 0.6})`; ctx.fillRect(x + sx, y, bw, bh); }
+  if (house.heal > 0.02) { ctx.strokeStyle = `rgba(123,208,74,${house.heal})`; ctx.lineWidth = 3; ctx.strokeRect(x - 5, y - 5, bw + 10, bh + 10); }
   ctx.font = 'bold 12px monospace';
   ctx.fillStyle = '#f4f1de';
   ctx.fillText(`CASA ${house.hp}/${HOUSE_HP}`, x + 4 + sx, y + bh + 16);
@@ -1381,7 +1736,7 @@ function drawGameOver() {
   ctx.font = '18px monospace';
   let y = canvas.height / 2 + 36;
   if (mode === 'rogue') {
-    ctx.fillText(`sobreviveu ${fmtTime(run.time)}  ·  ${run.kills} abates`, canvas.width / 2, y);
+    ctx.fillText(`chegou à wave ${run.wave}  ·  ${run.kills} abates  ·  ${fmtTime(run.time)}`, canvas.width / 2, y);
     y += 28;
   }
   ctx.fillText('R recomeçar  ·  ESC menu', canvas.width / 2, y);
@@ -1474,11 +1829,13 @@ function render() {
     if (!gunBehind) drawGun();
   };
   const objs = pickups.map(b => ({ y: b.y - 30, draw: () => drawPickup(b) }));
+  // tufos ordenados pela base: o dino fica atrás quando está acima deles
+  for (const t of tufts) objs.push({ y: t.y - 36, draw: () => drawTuft(t) });
   if (mode !== 'menu') {
     objs.push({ y: player.y, draw: drawPlayerAndGun });
     for (const e of enemies) objs.push({ y: e.y, draw: () => drawEnemy(e) });
     // casa ordenada pela base das paredes (centro equivalente dos personagens)
-    if (house.active) objs.push({ y: houseRect().b - 36, draw: drawHouse });
+    if (house.active || house.decor) objs.push({ y: houseRect().b - 36, draw: drawHouse });
   }
   objs.sort((a, b) => a.y - b.y);
 
@@ -1496,6 +1853,7 @@ function render() {
     if (mode === 'rogue') drawHouseBar(); else drawHearts();
     drawRunHud();
     drawGameOver();
+    drawPause();
   }
   drawCrosshair();
 }
