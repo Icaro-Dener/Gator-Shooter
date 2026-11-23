@@ -124,7 +124,6 @@ const BOX_SHINE_EVERY = [1.8, 3.2];    // intervalo aleatório entre brilhos (s)
 const BOX_SHINE_TIME = 0.45;           // duração da passada do brilho (s)
 
 // Inimigo (18x19, olha para a ESQUERDA)
-const ENEMY_W = 18, ENEMY_H = 19;
 const ENEMY_POSITIONS = [                // campo de treino: em coluna à direita (0..1 da tela)
   { x: 0.86, y: 0.20 },
   { x: 0.86, y: 0.44 },
@@ -132,7 +131,6 @@ const ENEMY_POSITIONS = [                // campo de treino: em coluna à direit
 ];
 const ENEMY_HP = 160;                    // vida no campo de treino (cada projétil tira 10)
 const ENEMY_RESPAWN = 2.5;               // segundos até reaparecer depois de morrer
-const ENEMY_HITBOX = { w: 12, h: 17 };   // hitbox em px do sprite (centralizada)
 
 // Modo roguelike — sistema de waves
 const ROGUE = {
@@ -151,6 +149,7 @@ function waveConfig(n) {
     count: 6 + (n - 1) * 5,                                   // 6, 11, 16, 21... (+5 por wave)
     interval: Math.max(0.35, 1.4 * Math.pow(0.9, n - 1)),     // chegam cada vez mais seguidos
     group: 1 + Math.floor((n - 1) / 2),                       // wave 3: duplas, 5: trios, 7: grupos de 4...
+    tanks: n >= 5 ? 1 + Math.floor((n - 5) / 2) : 0,          // wave 5-6: 1 tank, 7-8: 2, 9-10: 3...
   };
 }
 
@@ -214,7 +213,42 @@ const meleeImgs = [1, 2, 3].map(i => null);
 meleeImgs[0] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAdklEQVR4nGNgGDLg6tWr/7GJMxGjed26dVg1E2XAOjyaCRqwDqpZXV2dQVtbm5EkA9YRoRkEGJE5GUu0/kso8TLovShnIEYzigENx8zBNm7N/QOXPH32LF7NGF7YmvuHgYuHh0FBSYkozRjA1Nj4PwiTrHFAAQDU3SXb2+n/XgAAAABJRU5ErkJggg==');
 meleeImgs[1] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAf0lEQVR4nGNgoBAw4pK4evXqf3QxbW1tRqINwGUYuiFMDEQAZE3YXEYSABlAFUMYBhRcRXIBC7JEwzFzuESD1UnGdevWYThVXV0dhc+Crnlr7h8wH6QZpPjmzZsoGtGjEc4xNTYGG6CgpATmP7h3j2HBokVYEw9WADMAF59mAAC1yTdSwinx2QAAAABJRU5ErkJggg==');
 meleeImgs[2] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAeElEQVR4nGNgGDLg6tWr/weXQUPYBeiuYGFAAg3HzOESDVYnGRmIACwwhqmx8f+tuX+I0YMCwLaANIPo02fPMoaGhoLZkZGRDOrq6gw3b94EKwwKCsLqIqyCIAMXLFrEoK2tzbhu3TqUUAcZCgIgOZKcCgs49GgEALdCL7fd9tO2AAAAAElFTkSuQmCC'); // melee.gif
-const enemyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABIklEQVQ4jZ2UrW7DMBSFP1dNo5RaY1Zh0V6gcH6HhIz1LUoGQvYIYXuAPUQGiysFVRqZyqbQWUMeaJ16q52fHZLI9v18dc5NBBGVSlmAl+8vALbpkqfTScTOC1cQkoOki4RHkXTrIeAMoDEmCNqmS9JFEtz7qznAfZZFD/id9GkGcLfZEHpOkajyPOoRwOd+f7MW8iiaAsBOawuQHY+DoHkIUEhpH7S+dsU1kJifQRDAR9t27/EoIqBCys6vlZQAvNX1CMzIjiaDXtu2M7G6dLfSOpjcvzqa7JEv5xGcUxtS7xyVSlmzXp+78mapMeaXDXD5RGJqjOH9cOC5rm8u9BMeBPnyp9kNayGl7fsN9d7sCnda2yrP7ShYIaX1QaVS0aIfLPtlq/rW0sIAAAAASUVORK5CYII='); // inimigo.png
+// inimigos: corpo sem pernas + pernas em 2 frames, como o jogador
+const enemyBodyImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABBElEQVR4nGNkwAFypaX/izIywvmv//9nmPz0KUIADTA2ycj8RxcEaQIZUvfkCVysSUYGr4FMIAJZAwgguwTZEGxyeF2ED7zG5SKQRPBBbwZsNCmA8erddLw6ZthtwfBO3ZMnGC7CGQsgcGClP9iSQ8VnCXqNBZsBYcLC/+tPhaBofvnjB5itw8mJ1VKsBoE1n3mBXfz/f8IGgVwCY4uaSIDpRrM1KBpwRT9tXAQDq96+Zaw3kUDRoYMjbAjGGizGQGBt0Rm4l0iKNeQwQgc4swgDAXAA6jJkV135/h3sfQZKQZiw8H/kGAYBcO4nFcASK8gwWKYn23kgL4PCEZTOCMUoSQAAI618GWl7/iAAAAAASUVORK5CYII='); // inimigo-piscar.gif quadro 1 (olho preto)
+const enemyBlinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABB0lEQVR4nGNkwAFypaX/izIywvmv//9nmPz0KUIADTA2ycj8RxcEaQIZcuX7d7iYDicnXgOZQETdkycogjCXrHr7FoxhhiDLEeUifOA1LheBJIIPejNgo0kBjFfvpuPVMcNuC4Z36p48wXARzlgAgQMr/cGWHCo+S9BrLNgMCBMW/l9/KgRF88sfP8Bs5IAnaBBY85kX2MX//ydsEMglMLaoiQSYbjRbg6IBV/TTxkUwsOrtW8Z6EwkUHTo4woZgrMFiDATWFp2Be4mkWEMOI3SAM4swEAAHoC5DdhUoM4O8z0ApCBMW/o8cwyAAzv2kAlhiBRkGy/RkOw/kZVA4gtIZoRglCQAApgOApZOeBN4AAAAASUVORK5CYII='); // quadro 2 (olho fechado)
+const enemyLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAMUlEQVR4nGNgIAEwInPChIX/g2gdTk4wv+7JExR5JlJMxgAw05tkZMA0TpPxKQTJAwCagApuem+CewAAAABJRU5ErkJggg=='),   // pernas juntas
+                      img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAKUlEQVR4nGNgIAeECQv/B2FksSYZmf8gDOMzkWUyzHR0MawmE1IIUgMAA0QM1ZbYkDUAAAAASUVORK5CYII=')];  // pernas abertas
+const titleImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIsAAAAzCAYAAACngPvnAAAJcklEQVR4nO2cQUgcWRrH/z0MBKrj4iEZ+hKJvQHBoQUHoXFz2EWiIAjJabLgeEhgkuviIbkYxsVc4iH3zYA5ZDxkTyMEAiqye3BFaEboZoUG04bMpVk9BNQCTzUH873+3lfvvapqe6Pl1A+KtF31Xr167/++73tfvQ6QkZGRkZGRkXH+ySW5uOx5gev8pu8nqi8jXVgHtxsI+jwv9P2To0kAQGWjCgB4e6umnY8SjKy3HYF1A5poPyYUPZU3PV8meDvGjpEDSgLhkFgILhpTh9vEZ7veBhdKO6LjQhlfLWFoeEA7P5dfzARjQeuUKJGQQJqNg1BFhWKXEozs7G4g+Cn4XqsDiBaYhA/04IvrAICtB+9j10Hl//afsvpOigWwC8Ym+E3fz/0eXLR6AJdQKhtVrC3vWivpv3EFQGvgeMdwoVBdEpvIJNRGsghvFtexvbOP4/nD2OX/+lM/CsUu43kuHCkYk9CajQNNrLzP3iyuA0gm5vPOF6Yv+UPP/33JKpSRsV71uV2hDA0PqPuZZmfZ84JuIOBibjYOUNmoolDsUkKNwuUGTe17cjQZas/A7FdaXxSKXcrCja+WtLomJm9iYvKm0YWnlS/pA3WkFAqHZjDxdv7EImwhPLPl4FQ2qiH3xWf4+GopFCyXPS/gAfXa8q5qA1mBN411XHp0GQAwO1ZSgzv7p01tFnPXBbRcKblPGmwSDIl4IvcjJGvLu9pE4fXyOqiewRfXsfXgPcqeF6TZuhgtC6A/8PH8YUgowIk4+MHP9XleaFZt7+xj68F7bD14j+2dfU08NPg0m7lQiJGxXiUMwuRShoYH8Cb4Xgmn7HmBLAecWEMSqBQqwesx9YHp/mvLu8oCkQWUgkojmlhMJtPUQUTZ8wJ+0PdyaSutAtW7vbOv1cdNed33Yz+EDdkOwhSgA7pg+GSheuq+ryaOdEdUprJRVc/J72OLk9KE1bLYGF8tGQ/AnbSzxRamOIbq+S73oxoAG6bVTGWjirn8ovM5eODJsQkmbi6HRMTd1EXhy+hLWgy+uG6NO54cTWIuv2idzYViVygIlAwNDwCr+oDRZ152e2cfE6Ls8fyhiqE4vD3bO/vov3FFm+XkPl1C7/M8bH6ydHXfV/EdFyoJi6zK21s1zfXY3Fya0MRS2ahqHTAy1mscAE6zcRASjKwTMFsAfl7yEch1AwENDu/sS48ua23tv3FFBdmmOpwP8AlbrkRaF9WmeQA/6NdKQUjrlebgFmBuqO77RvXzwHB7Z187ONSpFPckWTLK1QNBpr/u+1oMI+MoUzzQqYGRIje5I95+GfTbFgBpRLMsfECGhgdQ2ahiZKwXazjxw8fzh0o8x/OH2MKhMrU2y0G44g7J+GoJuFULNn0/xweHXEHZ84Jm4wAYbrX1LeyJvbrvYwAt0TcbB6GlelQGViJXN66k5UUhFLPM5RdDVmFkrBdry7uhZatpOcrr4XGGzHZyBl9cRwXVSMF1mvHVEgYbBwEQzrfYsLk1myu8SIRWQ3XfV3GHjF84NqG4LIhLXJSVTWKBklxLrku6T3JhzcZBZC6EhDIw+1XonG0iXCSUWKQv5oIh0YyM9aL/xhV1jIz1olDs0kTlivpty2c5gO1gswg87uHIHAgdEtdbaCnuixCXuNAsi+zYufxiSDQTkzedHcvhwpHLVR70uRJ/nYCeqzr7PwAtcdqSc4RJ+FHvly4y1v0sgLljnhxNOveymKBZb3q7zANL13UcKsOtSZw31/x91aVHl50vIW0vRqm8vPdFtypAxE45oL2ZFLW/Q3as6dqozm+nDJDsuUz1tXvfi0CszUKujuWxwKdMp9FqEFHWwnVNJ8rYysdp4++d2DMR0EVjetFnSliddkAzzg+pHTxbviPp5u2M+CR6kXhesFk7oJXlNZHGeIPaXPf9M58IibconCW0vZL+NsVScm8N/54+L9Sm8OzlqKrz/9Pa01P2vGChNoWVo6cAzr6tqbEsUiTUgZLR/AwAWLcwLtSm1OeVo6foyU13vK2doOx5AQkaAD4Ez9GTm0Y3EJyVhUmVZSFIKL826uqQ59JM0pean4vUWBbiQ/BcEwchBTOan4m9QfosZ2uaSJ1l+eWf/9b+3qs0sVdpat+ZxCS5OlToaLs6RdSOvbMkdZaFs1dp4vG9FQBQAet5FUEcbELh4u/zPNR9/0wsYWrEwrdI7lWaIVE8vreCZy9HNQElIa7L4gPKE5OuwTOtYmzZbh6ASxZqU7hW7AMA9OSmEwvmtKmDVPnpbiD4+fVtACcWhNzPN9/+Wa2COKZ3UHwwrhX71GqITLyr80ydHSWYsucFrp+1UBm++nFZRxILAPTkprXypjbRPdoJmmVuJzWWhbhzdwk/v74dsi58FWQSjg0KmGkQRvMzRgvz33cPVWfzASNMy1oqY7reViYK3lZCTgJ5z9H8jJZjIu6XXqnPUqh0jrcvdQEuhyyLafm8cvQ0cgnKy9G/pnL/en07sJUjPgTPAbRcjixjQpYh90lBuwzcAXA3BCCcj+FtlMjrSDgmi7ZQmwoF1KkSCyn8zt0l43mZd4kjGBO8nKu8FA0NvizD22UrQ67j8b0VdXCuFftwv/QKPblpJZROBLkkGJPrkzmrVLkhHijeubuklG+aGSZzHYUsYxMKmWhXMJrkXpSdjdoHZIuP6LllcE/XUz/RIoCXM1kvG6mxLFwo6+8eYv3dQ3WOZmI7+Za9SlPz3UScTLCpnOtaOlzti1qdfARy0qLw516oTalj/d1DfAieo+77ql5psa4OFUJxCmCOs1IjFoKLRM5sk2BcmK61CcxVbxxRcpKIDLAHyJKoHJNNMLxNJOjR/EzovVmq3JAJU3DXDvdLr07lVkyY8kGA2X3x31N/DlzCsrm7VImFfC8fBNdDx7UyMlawxTt0X5eobCn5TgnRttSmtvG4xZbfkRNM9pMtcE6NG6IHIHNpW1p2CnIt7WyO2vT9HF8Gxy2T9D4SLmYeswCdeZOdGrEAus/lKwA5IPRdnLQ/v4bHEvzzX+4uqYG0iZSWxNRGPvguYf/aqOMPuelTCYU/g0ucJsHIfnKJNlXpfkI+tDSrtoeX719IEK4lKy/vSrRdHSrg6z/+I9SfrjKP761E/tqBt9W2tZKulctioPVKg7vHZy9HQyugOJYtlWIh2vm/Z2UZ109X4v5uyHbtacrIcnH24Mr7yED1tD99SbVYMpITZ0JkZGRkfD5+A9fWHKB86J+uAAAAAElFTkSuQmCC'); // titulo.png (139x51)
+const tankBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAXCAYAAAAP6L+eAAABzklEQVQ4ja1VIU/DQBh9t6yZaWoOEtxEkyEQNYBf5rAj+wHgMPwAAgRQzGFI8AtiATO/BIGCmqHYkglck3KmmWkqDsG+W3e7Yx3wzF2/Xt/37n13XxksaLiu5JUKAECkKfqTCbOtNYG1OJd6UKQpiDQfW4W8BADDJJkL5km7QqhYw3UXRPxIvOl51gUtzo0JlxJ3hWAiTWEaTR8UVV3qteuyP5kwfQS+fdVRVHXZb9bwVPXk+vbGwggAcRjh9ui5ENmcYgAgEn3U54QidpS3/LsFLxuuK4/PdtTzMElUgU32mGAl9Zs1FYvDCMlHgtOTZ6xpHtvOdpkmgeNIANBJAbMdy1AmQoJX9RCHkXHxWqWC/DUHZn7rylleLQDcvx9YVYwfR+hcvwEAukIwGykwtWKQZSxwHDnIMhaHkbXifrMGTIkJSz0eZBkDivvZ4lzabuccMWH8OIJXNfeOfNJlx86YsdeuS/1kUFLymFqrTbV1K/olubl8BTDrFcMkUafERG4lph/A+cu+il3sPqg5EVOyn/xeCb12XQaOIwPHkQ3XlS3OZb6HlH5L7DdruOnsAQA+01QVk3b6J/lU5DiMcHXYn3v3L7702nVlARX5C8yX3B9+OCP9AAAAAElFTkSuQmCC'); // tank-corpo.png (22x23)
+const tankLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAOUlEQVR4nGNgIAEwInP0WVn/w9jqfHxw8VVv34LVMSErvvj7N1wzTAEyQFFMCKAoRnZGmLAwnA0DAPtjDAjTPs6EAAAAAElFTkSuQmCC'),    // pernas juntas (tank-pernas.gif quadro 2)
+                     img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAO0lEQVR4nGNgIAEwggh9Vtb/MIGLv3+DxUAgTFgYLr7q7VtGJnQFyACkAJkPVkwsACtGdgYyQHYGiA8AgZAQCECjU/oAAAAASUVORK5CYII=')];   // pernas abertas (quadro 1)
+
+// tipos de inimigo. Vida e velocidade são FIXAS; as waves só mudam a quantidade.
+const ENEMY_TYPES = {
+  basic: { id: 'basic', name: 'JACARÉ', sc: SCALE, w: 18, h: 19, hitbox: { w: 12, h: 17 }, legOffset: { x: 5, y: 13 },
+           stepLen: 15, knockMul: 1, body: enemyBodyImg, blink: enemyBlinkImg, legs: enemyLegImgs },
+  // tank: sc 5 = desenhado 25% maior que o básico (escala inteira, pixel art nítido)
+  tank:  { id: 'tank', name: 'TANK', desc: 'muita vida  ·  lento', sc: 5, w: 22, h: 23, hitbox: { w: 16, h: 21 }, legOffset: { x: 4, y: 17 },
+           stepLen: 11, knockMul: 0.3, body: tankBodyImg, blink: null, legs: tankLegImgs,
+           hp: 300, speed: 35, bite: 20 },   // 10x a vida do básico; quase metade da velocidade; mordida 4x; empurrões fazem 30% do efeito
+};
+// a cada 5 waves entra um inimigo novo
+const NEW_ENEMY_AT = { 5: 'tank' };
+const ENEMY_BLINK = { every: [3, 8], dur: 0.12 };
+
+// quadros (w x h+1, 1 px de folga em cima): 'stand'/'step' = pernas abertas, 'pass' = juntas com o corpo 1 px acima
+const enemyFrames = {};
+function enemyFrame(T, name, blink = false) {
+  const key = T.id + name + (blink ? 'b' : '');
+  if (enemyFrames[key]) return enemyFrames[key];
+  const body = blink && T.blink ? T.blink : T.body;
+  if (!body.complete || !T.legs[0].complete || !T.legs[1].complete) return null;
+  const c = document.createElement('canvas'); c.width = T.w; c.height = T.h + 1;
+  const g = c.getContext('2d');
+  g.drawImage(name === 'pass' ? T.legs[0] : T.legs[1], T.legOffset.x, T.legOffset.y + 1);
+  g.drawImage(body, 0, name === 'pass' ? 0 : 1);
+  return (enemyFrames[key] = c);
+}
 const boxImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAANCAYAAABPeYUaAAAAuElEQVQokaWTMQrCQBBF/19ShYC94CKk0IPkHB7EWjyI58gpUmkRkAgWAUUhSSWMRVxxNxjW9Td/YeY/ZgaWACAigkCRJA1gsVr+DDjs9j1IRGSWacTTGN258waY/lNeIXKL22iO8t4gnSRfff04WhnlAnzk9g0mQQagAqBHPLcjygWUVYNUJ6OOzIZYk2yKun/cOj//hLR1O9jKRyanAOBaXIIgJqdIMojwEkm+bxK6EgAQ+P/vPAHyqFpEdVYUZwAAAABJRU5ErkJggg=='); // caixa-municao.png
 // tilesets 24x24: tile 16x16 em (4,4) + franjas de 2 px em cada lado, para invadir o tile vizinho
 const grassSet  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAXCAYAAAARIY8tAAACkklEQVRIibVVsWrjQBB9WiMkjL2NZQxCEJfuVYbU+QO7OQRXXB3IhxykdmEQaXR/kDqkdO/SBiMwkhvFGAkj+QppRru2UxxHplqNdt+8eTO7A3yzGV/9mIXBGQCQVoieX41ZGJyRVpCeidVHjPeXN/ZFz68GnYmCUMO8CjALg7O0O8i2J0jPBABkeYl4uYPrjyDtDrK85P3xcofJvQsAHPj/8/4H42iU3uz3jzOz2yQYDPqwejaKQ47hpF+zTyvAESDJ1IwIg2QTBB4vd7ypOOSAI+DeDdvvS0urK1exPvL615+fZw4QBaFxCVasj7ze7z9hjbvMXnom4k2C4pAjy8saOK1g9ewa3REcqF01TmvcZZc17raHGtbSM5GsPrW9Vs/mhgDqws+nC10iaXe0NK1xF9LuQHomXH9UH9wkDEg+TaqG5OTe1SUicDpMzLLtSWPl3g2RbU9aTSioWmgAegZZXl6BaUWn4jkCxSFvZST2DXMimuUlHp4e2wxUJmr3wBHI8hJWz8Zg0OcMyaRn8l6VEAD2C2LCmt4y6oqm/6Xd0dizfI1M8XLHZ4TGvgEpDjkH5KL3bAZffcRfk1HYc4D3lzeDu4g0TitIu4PhpM9sNRka+ZBWNaDS+9IzuR4CaG8dAAaHI7jfKUvXH+nd0mR766bTPgHULUVpF+sj4k2CeLnTLxnaLnH9EZMYTvpaQAKnZ5szUIusrrPtSe8shTkAJKv6GdHkUy6fuHRqrB3BXcJpN+D7/SeK9fEqS6CWkwYWS6SBQu8E1U9vDj3jt/a7/giXk+3b7CrKw9PjWR2Baj1oXKrjEwCPV7W4ZAIX5vojzKcLYz5d8IyIgtDgIja3PgpCI9ue6ro4AvPpwrgly1/6vH1i+2VaXgAAAABJRU5ErkJggg=='); // tileset-grama.png
@@ -400,6 +434,12 @@ const sfx = (() => {
       if (!ok('rustle', 0.15)) return;
       noise({ dur: 0.25, peak: 0.08, type: 'bandpass', f0: rand(2500, 4000), q: 1, attack: 0.04 });
     },
+    threat() {        // nova ameaça: rugido grave + alarme
+      if (!ok('threat', 1)) return;
+      tone({ dur: 1.2, peak: 0.5, wave: 'sawtooth', f0: 70, f1: 40, delay: 0.35 });
+      noise({ dur: 1.0, peak: 0.5, type: 'lowpass', f0: 600, f1: 90, delay: 0.35, attack: 0.08 });
+      for (let i = 0; i < 3; i++) tone({ dur: 0.22, peak: 0.18, wave: 'square', f0: 880, f1: 660, delay: 0.45 + i * 0.3 });
+    },
     crit() {          // crítico
       if (!ok('crit', 0.05)) return;
       tone({ dur: 0.08, peak: 0.16, wave: 'square', f0: 1400, f1: 2200 });
@@ -407,6 +447,10 @@ const sfx = (() => {
     upgrade() {       // escolheu uma carta
       if (!ok('upgrade', 0.3)) return;
       [659, 880, 1175, 1568].forEach((f, i) => tone({ dur: 0.12, peak: 0.13, wave: 'square', f0: f, delay: i * 0.05 }));
+    },
+    hover() {         // mouse passou sobre um botão
+      if (!ok('hover', 0.04)) return;
+      tone({ dur: 0.045, peak: 0.07, wave: 'square', f0: 1320, f1: 1760 });
     },
     step() {          // passo bem baixinho
       if (!ok('step', 0.06)) return;
@@ -708,9 +752,10 @@ function pushOutOfHouse(o, hw, hh) {
   return true;
 }
 // homeRel: posição fixa relativa à tela (inimigo do campo de treino, que reaparece). speed 0 = estático.
-function makeEnemy(x, y, hp, speed, homeRel = null) {
-  return { x, y, hp, maxHp: hp, speed, homeRel, alive: true, respawn: 0,
-    flash: 0, jiggle: 0, hpShow: 0, facing: -1, walk: rand(0, 10), bite: rand(0.3, BITE_EVERY), lunge: 0, attacking: false };
+function makeEnemy(x, y, hp, speed, homeRel = null, type = 'basic') {
+  return { x, y, hp, maxHp: hp, speed, homeRel, alive: true, respawn: 0, T: ENEMY_TYPES[type],
+    blinkNext: rand(...ENEMY_BLINK.every), blinkT: 0,
+    flash: 0, jiggle: 0, hpShow: 0, facing: -1, walk: rand(0, 100), bite: rand(0.3, BITE_EVERY), lunge: 0, attacking: false };
 }
 
 // silhueta branca de um sprite (para o flash de dano)
@@ -992,7 +1037,7 @@ function impact(x, y, ang, strong) {
 // Inimigo / dano
 // =====================================================================
 function inEnemy(e, x, y, pad = 0) {
-  const hw = ENEMY_HITBOX.w * SCALE / 2 + pad, hh = ENEMY_HITBOX.h * SCALE / 2 + pad;
+  const hw = e.T.hitbox.w * e.T.sc / 2 + pad, hh = e.T.hitbox.h * e.T.sc / 2 + pad;
   return Math.abs(x - e.x) < hw && Math.abs(y - e.y) < hh;
 }
 
@@ -1017,7 +1062,7 @@ function hitEnemy(e, b, ang, dmg = PELLET_DAMAGE) {
   e.flash = 0.09;               // fica branco
   e.jiggle = 1;                 // tremidinha
   e.hpShow = 2;                 // mostra a barra de vida por um tempo
-  if (!e.homeRel) { e.x += Math.cos(ang) * 6; e.y += Math.sin(ang) * 6; }  // leve empurrão do impacto
+  if (!e.homeRel) { e.x += Math.cos(ang) * 6 * e.T.knockMul; e.y += Math.sin(ang) * 6 * e.T.knockMul; }  // leve empurrão do impacto
   cam.trauma = Math.min(1, cam.trauma + 0.015);
   for (let i = 0; i < 4; i++) { // respingo vermelho na direção do tiro
     const a = ang + rand(-0.7, 0.7), sp = rand(120, 320);
@@ -1032,7 +1077,7 @@ function killEnemy(e) {
   sfx.kill();
   e.respawn = ENEMY_RESPAWN;
   if (mode === 'rogue') run.kills++;
-  rollDrop(e.x, e.y + ENEMY_H * SCALE / 2 - 10);
+  rollDrop(e.x, e.y + e.T.h * e.T.sc / 2 - 10);
   cam.trauma = Math.min(1, cam.trauma + (mode === 'rogue' ? 0.05 : 0.2));
   for (let i = 0; i < 28; i++) {
     const a = rand(0, Math.PI * 2), sp = rand(100, 480);
@@ -1043,7 +1088,7 @@ function killEnemy(e) {
 }
 
 // nasce fora da tela, numa borda aleatória, e caminha até o jogador
-function spawnEdgeEnemy(cfg) {
+function spawnEdgeEnemy(cfg, type = 'basic') {
   // nasce fora da tela, numa borda aleatória, e atravessa a mata até a clareira
   const m = 50, side = Math.floor(Math.random() * 4);
   let x, y;
@@ -1051,18 +1096,20 @@ function spawnEdgeEnemy(cfg) {
   else if (side === 1) { x = WORLD_W + m; y = rand(0, WORLD_H); }
   else if (side === 2) { x = rand(0, WORLD_W); y = WORLD_H + m; }
   else                 { x = -m; y = rand(0, WORLD_H); }
-  enemies.push(makeEnemy(x, y, ROGUE.enemyHp, ROGUE.enemySpeed));
+  const T = ENEMY_TYPES[type];
+  enemies.push(makeEnemy(x, y, T.hp || ROGUE.enemyHp, T.speed || ROGUE.enemySpeed, null, type));
 }
 
 function damageHouse(e) {
   if (gameOver) return;
-  house.hp = Math.max(0, house.hp - BITE_DAMAGE);
+  const dmg = e.T.bite || BITE_DAMAGE;              // básico 5, tank 20
+  house.hp = Math.max(0, house.hp - dmg);
   house.flash = 0.08;
-  house.shake = 1;
+  house.shake = dmg > BITE_DAMAGE ? 2 : 1;          // mordida do tank sacode mais a casa
   house.pop = 1;
   e.lunge = 1;
   sfx.bite();
-  cam.trauma = Math.min(1, cam.trauma + 0.12);
+  cam.trauma = Math.min(1, cam.trauma + (dmg > BITE_DAMAGE ? 0.3 : 0.12));
   const R = houseRect();
   const px = Math.max(R.l, Math.min(R.r, e.x)), py = Math.max(R.t, Math.min(R.b, e.y));
   for (let i = 0; i < 6; i++) {    // lascas de madeira/tijolo
@@ -1135,10 +1182,13 @@ function startMode(m) {
 
 // botões do menu (em coordenadas de tela)
 function menuButtons() {
-  const w = Math.min(340, canvas.width - 40), h = 64, x = (canvas.width - w) / 2, cy = canvas.height / 2;
+  // canto inferior direito
+  const W = canvas.width, H = canvas.height;
+  const w = Math.max(220, Math.min(300, W * 0.26)), h = Math.max(48, Math.min(62, H * 0.085)), gap = 10;
+  const x = W - w - Math.max(16, W * 0.025), y1 = H - h - Math.max(16, H * 0.035);
   return [
-    { id: 'test',  label: '1  ·  CAMPO DE TREINO', sub: '3 jacarés parados para treinar', x, y: cy - 10, w, h },
-    { id: 'rogue', label: '2  ·  ROGUELIKE',       sub: 'defenda a casa wave após wave',     x, y: cy + h + 6, w, h },
+    { id: 'test',  label: 'CAMPO DE TREINO', sub: '', x, y: y1 - h - gap, w, h },
+    { id: 'rogue', label: 'MODO HORDA',      sub: '', x, y: y1, w, h },
   ];
 }
 // botões da pausa
@@ -1155,6 +1205,14 @@ function pauseButtons() {
 }
 const hoveredIn = list => list.find(b => mouse.x >= b.x && mouse.x <= b.x + b.w && mouse.y >= b.y && mouse.y <= b.y + b.h);
 const hoveredButton = () => hoveredIn(menuButtons());
+// som ao passar o mouse sobre um botão/carta novo
+let lastHover = null;
+function hoverSfx(list, prefix) {
+  const h = hoveredIn(list);
+  const key = h ? prefix + (h.id ?? h.i) : null;
+  if (key && key !== lastHover) sfx.hover();
+  lastHover = key;
+}
 
 function setPaused(v) {
   if (paused === v) return;
@@ -1231,9 +1289,12 @@ function startWave() {
   run.wave++;
   run.cfg = waveConfig(run.wave);
   run.toSpawn = run.cfg.count;
+  run.tanksLeft = Math.min(run.cfg.tanks, run.cfg.count);
   run.spawnTimer = 0.3;
   run.phase = 'fight';
-  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés`, '#e9c46a', 2.0, true);
+  const novo = NEW_ENEMY_AT[run.wave];
+  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés`, '#e9c46a', novo ? 3.6 : 2.0, true);
+  if (novo) { run.banner.threat = ENEMY_TYPES[novo]; sfx.threat(); }
   sfx.waveStart();
 }
 
@@ -1262,7 +1323,12 @@ function updateWaves(dt) {
   if (run.toSpawn > 0 && (run.spawnTimer -= dt) <= 0) {
     const alive = enemies.filter(e => e.alive).length;
     const n = Math.min(run.cfg.group, run.toSpawn, ROGUE.maxEnemies - alive);
-    for (let i = 0; i < n; i++) spawnEdgeEnemy(run.cfg);
+    for (let i = 0; i < n; i++) {
+      // os tanks da wave saem misturados no meio dos básicos
+      const tank = run.tanksLeft > 0 && Math.random() < run.tanksLeft / (run.toSpawn - i);
+      if (tank) run.tanksLeft--;
+      spawnEdgeEnemy(run.cfg, tank ? 'tank' : 'basic');
+    }
     run.toSpawn -= n;
     run.spawnTimer = run.cfg.interval;
   }
@@ -1325,11 +1391,11 @@ function meleeStrike() {
     const dx = e.x - h.x, dy = e.y - h.y, dist = Math.hypot(dx, dy);
     let diff = Math.atan2(dy, dx) - a;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    const reach = meleeRange() + ENEMY_HITBOX.w * SCALE / 2;
-    if (dist < reach && (Math.abs(diff) < MELEE_ARC / 2 || dist < ENEMY_HITBOX.w * SCALE)) {
+    const reach = meleeRange() + e.T.hitbox.w * e.T.sc / 2;
+    if (dist < reach && (Math.abs(diff) < MELEE_ARC / 2 || dist < e.T.hitbox.w * e.T.sc)) {
       hits++;
       const ang = Math.atan2(dy, dx);
-      if (!e.homeRel) { e.x += Math.cos(ang) * meleeKnock(); e.y += Math.sin(ang) * meleeKnock(); }
+      if (!e.homeRel) { e.x += Math.cos(ang) * meleeKnock() * e.T.knockMul; e.y += Math.sin(ang) * meleeKnock() * e.T.knockMul; }
       hitEnemy(e, { x: e.x - Math.cos(ang) * 20, y: e.y - Math.sin(ang) * 20 }, ang, meleeDamage());
     }
   }
@@ -1368,11 +1434,13 @@ function update(dt) {
   clock += dt;
   if (mode === 'menu') {
     updateTrees(dt);
+    hoverSfx(menuButtons(), 'menu:');
     if (mouse.pressed) { const b = hoveredButton(); if (b) startMode(b.id); }
     mouse.pressed = false;
     return;
   }
   if (paused) {                       // tudo congelado; só os botões da pausa respondem
+    hoverSfx(pauseButtons(), 'pause:');
     if (mouse.pressed) { const b = hoveredIn(pauseButtons()); if (b) pauseAction(b.id); }
     mouse.pressed = false; mouse.rightPressed = false; mouse.down = false;
     return;
@@ -1380,6 +1448,7 @@ function update(dt) {
   for (const k in statFlash) statFlash[k] = Math.max(0, statFlash[k] - dt * 0.8);
   if (mode === 'rogue' && run.phase === 'cards') {   // escolhendo upgrade: jogo congelado
     updateCards(dt);
+    if (cards.picked < 0 && cards.t > 0.3) hoverSfx(cardRects(), 'card:'); else lastHover = null;
     if (mouse.pressed) { const c = hoveredIn(cardRects()); if (c) pickCard(c.i); }
     mouse.pressed = false; mouse.rightPressed = false; mouse.down = false;
     updateTrees(dt);
@@ -1446,10 +1515,15 @@ function update(dt) {
   house.heal = Math.max(0, (house.heal || 0) - dt * 1.5);
 
   // inimigos: perseguem (speed > 0) ou ficam parados; dano por contato
-  const ox = (ENEMY_HITBOX.w + PLAYER_HITBOX.w) * SCALE / 2;
-  const oy = (ENEMY_HITBOX.h + PLAYER_HITBOX.h) * SCALE / 2;
   for (const e of enemies) {
+    const ox = (e.T.hitbox.w * e.T.sc + PLAYER_HITBOX.w * SCALE) / 2;
+    const oy = (e.T.hitbox.h * e.T.sc + PLAYER_HITBOX.h * SCALE) / 2;
     e.flash -= dt;
+    // piscar de vez em quando (só quem tem sprite de olho fechado)
+    if (e.T.blink) {
+      if (e.blinkT > 0) e.blinkT -= dt;
+      else if ((e.blinkNext -= dt) <= 0) { e.blinkT = ENEMY_BLINK.dur; e.blinkNext = rand(...ENEMY_BLINK.every); }
+    }
     e.jiggle *= Math.exp(-12 * dt);
     e.hpShow -= dt;
     if (!e.alive) {
@@ -1472,13 +1546,13 @@ function update(dt) {
       if (!e.attacking) {
         e.x += ddx / dist * e.speed * dt;
         e.y += ddy / dist * e.speed * dt;
-        e.walk += dt * e.speed * 0.09;
+        e.walk += dt * e.speed;            // distância andada (avança as pernas)
       }
       e.dirX = ddx / dist; e.dirY = ddy / dist;
     }
     if (house.active) {
       // encostou na casa: para e morde
-      const hw = ENEMY_HITBOX.w * SCALE / 2, hh = ENEMY_HITBOX.h * SCALE / 2;
+      const hw = e.T.hitbox.w * e.T.sc / 2, hh = e.T.hitbox.h * e.T.sc / 2;
       e.attacking = pushOutOfHouse(e, hw + 1, hh + 1) || (() => {
         const R = houseRect();
         return e.x > R.l - hw - 3 && e.x < R.r + hw + 3 && e.y > R.t - hh - 3 && e.y < R.b + hh + 3;
@@ -1487,19 +1561,21 @@ function update(dt) {
     } else if (Math.abs(player.x - e.x) < ox && Math.abs(player.y - e.y) < oy) hurtPlayer(e);
   }
   // separação simples para não empilharem
-  const minD = ENEMY_HITBOX.w * SCALE * 0.9;
   for (let i = 0; i < enemies.length; i++) {
     const a = enemies[i]; if (!a.alive || a.homeRel) continue;
     for (let j = i + 1; j < enemies.length; j++) {
       const b = enemies[j]; if (!b.alive || b.homeRel) continue;
+      const minD = (a.T.hitbox.w * a.T.sc + b.T.hitbox.w * b.T.sc) / 2 * 0.9;
       const ddx = b.x - a.x, ddy = b.y - a.y, d = Math.hypot(ddx, ddy);
       if (d > 0 && d < minD) {
-        const push = (minD - d) / 2, nx = ddx / d, ny = ddy / d;
-        a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+        // o mais pesado empurra mais (o tank abre caminho entre os básicos)
+        const ma = a.T.knockMul, mb = b.T.knockMul, push = minD - d, nx = ddx / d, ny = ddy / d;
+        const fa = ma / (ma + mb), fb = mb / (ma + mb);
+        a.x -= nx * push * fa; a.y -= ny * push * fa; b.x += nx * push * fb; b.y += ny * push * fb;
       }
     }
   }
-  if (house.active) for (const e of enemies) if (e.alive) pushOutOfHouse(e, ENEMY_HITBOX.w * SCALE / 2, ENEMY_HITBOX.h * SCALE / 2);
+  if (house.active) for (const e of enemies) if (e.alive) pushOutOfHouse(e, e.T.hitbox.w * e.T.sc / 2, e.T.hitbox.h * e.T.sc / 2);
   house.flash -= dt;
   house.shake *= Math.exp(-10 * dt);
   house.pop *= Math.exp(-5 * dt);
@@ -1603,7 +1679,7 @@ function updateTrees(dt) {
       const S = TREE.scale;
       for (const e of enemies) {
         if (!e.alive || e.speed <= 0) continue;
-        const feet = e.y + ENEMY_H * SCALE / 2;
+        const feet = e.y + e.T.h * e.T.sc / 2;
         if (Math.abs(e.x - t.x) < 16 * S && feet > t.baseY - 26 * S && feet < t.baseY + 6 * S) {
           shakeTree(t, e.x < t.x ? 1 : -1);   // balança para o lado contrário de quem passou
           sfx.rustle();
@@ -1777,7 +1853,7 @@ function drawLeaves(landed) {
 function updateTufts(dt) {
   const bodies = [];
   if (mode !== 'menu' && player.hp > 0) bodies.push({ x: player.x, y: player.y + player.h / 2 - 6, moving: true });
-  for (const e of enemies) if (e.alive) bodies.push({ x: e.x, y: e.y + ENEMY_H * SCALE / 2 - 6 });
+  for (const e of enemies) if (e.alive) bodies.push({ x: e.x, y: e.y + e.T.h * e.T.sc / 2 - 6 });
   for (const t of tufts) {
     let push = 0, near = false;
     for (const b of bodies) {
@@ -2019,14 +2095,17 @@ function drawCrosshair() {
 }
 
 function drawEnemy(e) {
-  if (!e.alive || !enemyImg.complete) return;
-  const w = ENEMY_W * SCALE, h = ENEMY_H * SCALE;
+  if (!e.alive) return;
+  const T = e.T, w = T.w * T.sc, h = T.h * T.sc;
   const lx = (e.dirX || 0) * e.lunge * 14, ly = (e.dirY || 0) * e.lunge * 14;   // bote na mordida
   const ex = Math.round(e.x + lx + rand(-1, 1) * e.jiggle * 4), ey = Math.round(e.y + ly);
-  // andando: pulinhos + balanço (só temos 1 frame de sprite)
+  // andando: alterna passo aberto / pernas juntas (corpo sobe 1 px); parado ou mordendo: pernas abertas
   const moving = e.speed > 0 && !gameOver && !e.attacking;
-  const hop = moving ? Math.abs(Math.sin(e.walk)) * 6 : 0;
-  const tilt = moving ? Math.sin(e.walk) * 0.08 : 0;
+  const frameName = moving ? (Math.floor(e.walk / T.stepLen) % 2 ? 'pass' : 'step') : 'stand';
+  const fr = enemyFrame(T, frameName, e.blinkT > 0);
+  if (!fr) return;
+  const hop = 0;
+  const tilt = moving ? (Math.floor(e.walk / (T.stepLen * 2)) % 2 ? 0.035 : -0.035) : 0;   // gingado a cada passada
 
   ctx.fillStyle = 'rgba(0,0,0,.28)';
   ctx.beginPath();
@@ -2038,12 +2117,12 @@ function drawEnemy(e) {
   ctx.translate(ex, ey + h / 2 - hop);
   ctx.rotate(tilt);
   ctx.scale(sq * (e.facing === -1 ? 1 : -1), 1 / sq);   // sprite olha para a esquerda
-  ctx.drawImage(e.flash > 0 ? whiteOf(enemyImg) : enemyImg, -w / 2, -h, w, h);
+  ctx.drawImage(e.flash > 0 ? whiteOf(fr) : fr, -w / 2, -h - T.sc, w, h + T.sc);
   ctx.restore();
 
   // barra de vida (aparece depois de tomar dano)
   if (e.hpShow > 0) {
-    const bw = 56, bh = 6, bx = e.x - bw / 2, by = ey - h / 2 - 16;
+    const bw = T.id === 'tank' ? 84 : 56, bh = T.id === 'tank' ? 8 : 6, bx = e.x - bw / 2, by = ey - h / 2 - 16;
     ctx.globalAlpha = Math.min(1, e.hpShow * 2);
     ctx.fillStyle = '#000'; ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
     ctx.fillStyle = '#3a1414'; ctx.fillRect(bx, by, bw, bh);
@@ -2071,6 +2150,32 @@ function drawRunHud() {
   ctx.fillStyle = '#f4f1de'; ctx.fillText(sub, cx, 52);
   ctx.textAlign = 'left';
   drawBanner();
+}
+
+// "UMA NOVA AMEAÇA SURGE": aparece junto com o anúncio da wave em que entra um inimigo novo
+function drawThreat(b, t, outA, cy) {
+  const W = canvas.width, H = canvas.height, T = b.threat;
+  const k = Math.max(0, Math.min(1, (t - 0.35) / 0.25));
+  if (k <= 0) return;
+  // vinheta vermelha pulsando nas bordas
+  const pulse = 0.5 + 0.5 * Math.sin(t * 9);
+  const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+  vg.addColorStop(0, 'rgba(120,0,0,0)'); vg.addColorStop(1, `rgba(150,0,0,${(0.35 + 0.2 * pulse) * outA * k})`);
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.globalAlpha = outA * k;
+  ctx.textAlign = 'center';
+  // faixa de aviso acima do título
+  const ty = cy - 110;
+  ctx.fillStyle = 'rgba(0,0,0,.8)'; ctx.fillRect(0, ty - 30, W, 42);
+  ctx.font = `bold ${Math.min(34, Math.floor(W / 22))}px monospace`;
+  ctx.lineWidth = 6; ctx.lineJoin = 'round'; ctx.strokeStyle = '#000';
+  const msg = 'UMA NOVA AMEAÇA SURGE';
+  const jit = (1 - k) * 8 + (t < 1.2 ? 1.5 : 0);
+  ctx.strokeText(msg, W / 2 + rand(-jit, jit), ty + rand(-jit, jit));
+  ctx.fillStyle = pulse > 0.5 ? '#ff4d4d' : '#ffffff';
+  ctx.fillText(msg, W / 2 + rand(-jit, jit), ty + rand(-jit, jit));
+  ctx.restore();
 }
 
 // anúncios no centro. Início de wave: entra "batendo" na tela, com clarão e faixas de cinema.
@@ -2114,6 +2219,7 @@ function drawBanner() {
       ctx.fillStyle = '#f4f1de'; ctx.fillText(b.sub.toUpperCase(), 0, 66);
     }
     ctx.restore();
+    if (b.threat) drawThreat(b, t, outA, cy);
     return;
   }
   const inT = Math.min(1, t / 0.25), a = Math.min(inT, outA), sc = 1 + (1 - inT) * 0.6;
@@ -2134,21 +2240,26 @@ function drawBanner() {
 }
 
 // jacarezinho com a escopeta na mão (tela inicial)
-function drawTitleGator(cx, cy) {
+// protagonista gigante na esquerda, olhando para a direita, com a escopeta
+// protagonista em close: enorme, cortado pela esquerda e por baixo, levemente inclinado, com a escopeta
+function drawTitleGator(S, snoutX, headTop, tilt) {
   const fr = walkFrame(Math.sin(clock * 2.4) > 0.55 ? 'breath' : 'stand', clock % 4.3 < BLINK.dur);
   if (!fr || !gunSprite.complete) return;
-  const S = 6, w = 18 * S, h = 18 * S;
-  ctx.fillStyle = 'rgba(0,0,0,.35)';
-  ctx.beginPath(); ctx.ellipse(cx, cy + h / 2 - 2, w * 0.36, 8, 0, 0, Math.PI * 2); ctx.fill();
+  const w = 18 * S, h = 19 * S;
+  // caixa do sprite (virado para a direita): o focinho fica na borda direita da caixa
+  const x0 = Math.round(snoutX - w), y0 = Math.round(headTop - S);
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(-1, 1);                                        // sprite olha para a esquerda: vira para a direita
-  ctx.drawImage(fr, -w / 2, -h / 2 - S, w, h + S);
+  ctx.translate(snoutX, headTop);
+  ctx.rotate(tilt);
+  ctx.translate(-snoutX, -headTop);
+  ctx.save();
+  ctx.translate(x0 + w, y0);
+  ctx.scale(-1, 1);                                          // sprite olha para a esquerda: vira para a direita
+  ctx.drawImage(fr, 0, 0, w, h);
   ctx.restore();
-  // escopeta empunhada, apontando um pouco para cima, com um leve "respirar"
-  const a = -0.28 + Math.sin(clock * 1.3) * 0.04;
-  const hx = cx + GUN_HAND.x * S, hy = cy + GUN_HAND.y * S;
-  ctx.save();
+  // escopeta na mão, apontando para cima e para a frente, com um leve "respirar"
+  const a = -0.3 + Math.sin(clock * 1.3) * 0.025;
+  const hx = x0 + w / 2 + GUN_HAND.x * S, hy = y0 + S + 9 * S + GUN_HAND.y * S;
   ctx.translate(hx + Math.cos(a) * GUN_RADIUS * S, hy + Math.sin(a) * GUN_RADIUS * S);
   ctx.rotate(a);
   ctx.drawImage(gunSprite, -GUN_GRIP.x * S, -GUN_GRIP.y * S, GUN_W * S, GUN_H * S);
@@ -2322,21 +2433,30 @@ function drawPause() {
 }
 
 function drawMenu() {
-  ctx.fillStyle = 'rgba(8,12,8,.62)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const W = canvas.width, H = canvas.height;
+  ctx.imageSmoothingEnabled = false;                        // pixel art sempre nítido
+  ctx.fillStyle = 'rgba(8,12,8,.5)';
+  ctx.fillRect(0, 0, W, H);
+  // escala inteira: a cabeça ocupa ~40% da largura (limitada pela altura em telas estreitas)
+  const S = Math.max(6, Math.round(Math.min(W / 31, H / 17.5)));
+  const bob = Math.sin(clock * 1.6) * S * 0.25;
+  drawTitleGator(S, Math.min(W * 0.42, 18 * S * 0.72), H * 0.23 + bob, -0.05);
+  // logo embaixo à esquerda, por cima do jacaré
+  if (titleImg.complete) {
+    const L = Math.max(2, Math.floor(Math.min(W * 0.46, H * 0.62 * 2.7) / titleImg.width));
+    const lw = titleImg.width * L, lh = titleImg.height * L;
+    const lx = Math.round(W * 0.04), ly = Math.round(H - lh - H * 0.04 + Math.sin(clock * 2) * L * 0.5);
+    ctx.filter = 'brightness(0)'; ctx.globalAlpha = 0.5;    // sombra
+    ctx.drawImage(titleImg, lx + L * 2, ly + L * 3, lw, lh);
+    ctx.filter = 'none'; ctx.globalAlpha = 1;
+    ctx.drawImage(titleImg, lx, ly, lw, lh);
+  }
+  // botões no canto inferior direito, sobre uma placa escura
+  const bs = menuButtons(), pad = 8;
+  const px = bs[0].x - pad, py = bs[0].y - pad, pw = bs[0].w + pad * 2, ph = bs[1].y + bs[1].h - bs[0].y + pad * 2;
+  ctx.fillStyle = 'rgba(10,16,10,.82)'; ctx.fillRect(px, py, pw, ph);
   ctx.textAlign = 'center';
-  drawTitleGator(canvas.width / 2, canvas.height / 2 - 150 + Math.sin(clock * 2.6) * 5);
-  // título: encolhe em telas estreitas
-  const fs = Math.min(56, Math.floor((canvas.width - 40) / 8.4));
-  ctx.font = `bold ${fs}px monospace`;
-  const ty = canvas.height / 2 - 48;
-  ctx.fillStyle = '#000'; ctx.fillText('GATOR SHOOTER', canvas.width / 2 + 4, ty + 4);
-  ctx.fillStyle = '#7bd04a'; ctx.fillText('GATOR', canvas.width / 2 - ctx.measureText(' SHOOTER').width / 2, ty);
-  ctx.fillStyle = '#e9c46a'; ctx.fillText('SHOOTER', canvas.width / 2 + ctx.measureText('GATOR ').width / 2, ty);
-  drawButtons(menuButtons(), hoveredButton());
-  ctx.font = '13px monospace';
-  ctx.fillStyle = '#a9b8a0';
-  ctx.fillText('clique ou aperte 1 / 2  ·  ESC pausa o jogo', canvas.width / 2, canvas.height - 24);
+  drawButtons(bs, hoveredButton());
   ctx.textAlign = 'left';
 }
 

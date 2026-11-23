@@ -31,6 +31,7 @@ Abra `index.html` no navegador.
 - **Campo de treino**: três jacarés parados em coluna à direita (que reaparecem) e a casa só de enfeite, para treinar o tiro e a faca. Se a munição acabar de vez, aparece uma caixa ao lado da casa.
 - **Roguelike**: defenda a casa no centro, wave após wave. Os jacarés vêm das bordas e mordem a casa; se a vida dela chegar a zero, você perde.
   - O jacaré básico é lento e frágil, com vida e velocidade fixas. O que cresce a cada wave é a quantidade: mais jacarés, chegando mais seguidos e em grupos maiores.
+  - A cada 5 waves entra um inimigo novo, anunciado com "UMA NOVA AMEAÇA SURGE". Wave 5: **Tank** (maior que o básico, 300 de vida, bem lento, mordida de 20 na casa contra 5 do básico, quase não é empurrado). A partir daí aparecem tanks misturados na horda, um a mais a cada 2 waves.
   - Ao fim de cada wave aparecem na frente da porta uma caixa de munição (12 + 4 por wave) e um curativo que recupera 20% da vida da casa. Somem em 5 s; com a casa em 100%, o curativo some na hora.
   - Entre uma wave e outra há uma pausa de 4 s.
   - Ao fim de cada wave o jogo congela e aparecem 3 cartas de upgrade; escolha 1 (clique ou teclas 1/2/3). Os upgrades acumulam durante a partida:
