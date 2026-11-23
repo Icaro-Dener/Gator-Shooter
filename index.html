@@ -7,16 +7,10 @@
 <style>
   html, body { margin: 0; height: 100%; background: #10170f; overflow: hidden; }
   canvas { display: block; image-rendering: pixelated; cursor: none; }
-  #hud {
-    position: fixed; bottom: 10px; left: 12px; max-width: calc(100% - 360px);
-    font: 14px monospace; color: #f4f1de; opacity: .85; pointer-events: none;
-    text-shadow: 1px 1px 0 #000;
-  }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="hud" style="display:none">WASD mover · mouse mirar · clique atirar · botão direito faca · R recarregar · M som · ESC pausa</div>
 <script>
 // =====================================================================
 // Config
@@ -38,17 +32,22 @@ const GUN_HAND   = { x: 0, y: 3 };   // mão relativa ao centro do jogador
 const GUN_RADIUS = 4;                // distância da mão até a empunhadura
 const FACE_MOUSE = true;             // jogador olha para a mira (estilo Gungeon)
 
+// tremor de tela: multiplicador geral (1 = forte, 0 = desligado)
+const SHAKE_SCALE = 0.3;
+
 // Shotgun
 const SHOT = {
   cooldown: 0.42,     // segundos entre tiros (segurar o botão = automático)
   pellets: 8,
-  spread: 0.42,       // abertura total em radianos (~24°)
+  spread: 0.30,       // abertura total em radianos (~17°)
+  pierce: 3,          // cada projétil atravessa até 3 jacarés
+  pierceFalloff: 0.8, // dano a cada jacaré atravessado (100% → 80% → 64%)
   speedMin: 1500,
   speedMax: 1850,
   drag: 0.25,         // desaceleração dos projéteis (baixa = atravessam a tela)
   life: 3,            // vida máxima (s) — normalmente batem na borda antes
   bulletScale: 6,     // tamanho do projétil (o dino usa 4)
-  shake: 0.55,        // "trauma" da tela por tiro (0..1)
+  shake: 0.3,         // "trauma" da tela por tiro (0..1)
   knockback: 140,     // empurrão no jogador (px/s)
 };
 // Melee (faca, botão direito) — melee.gif: 16x13, 3 frames de 100 ms, lâmina para a DIREITA
@@ -58,10 +57,48 @@ const MELEE_SCALE = 9;              // tamanho da faca na tela (o resto do jogo 
 const MELEE_FRAME = 0.1;             // segundos por frame
 const MELEE_HIT_AT = 0.1;            // o golpe acerta no início do frame 2
 const MELEE_COOLDOWN = 1;            // segundos
-const MELEE_DAMAGE = 2;              // um projétil tira 1; um tiro de perto até 8
+const MELEE_DAMAGE = 20;             // dano base da faca (um projétil tira 10)
 const MELEE_RANGE = 190;             // alcance a partir da mão (px de tela)
 const MELEE_ARC = 2.2;               // abertura do golpe em radianos (~125°)
 const MELEE_KNOCKBACK = 46;          // empurrão nos inimigos que andam (px)
+
+// =====================================================================
+// Stats do personagem (upgrades do modo roguelike). Cada upgrade soma 1 "nível".
+// =====================================================================
+const PELLET_DAMAGE = 10;
+const CRIT_MULT = 2;               // crítico dobra o dano
+const lv = {};                      // níveis de cada upgrade
+const UPGRADES = [
+  { id: 'crit',      title: 'Olho de Jacaré',  desc: '+5% de chance de crítico',            cat: 'geral'   },
+  { id: 'vamp',      title: 'Vampirismo',      desc: '+2% do dano causado vira vida da casa', cat: 'geral' },
+  { id: 'atkSpd',    title: 'Gatilho Leve',    desc: '+10% de velocidade de ataque',         cat: 'shotgun' },
+  { id: 'shotDmg',   title: 'Chumbo Grosso',   desc: '+10% de dano da escopeta',             cat: 'shotgun' },
+  { id: 'reload',    title: 'Mãos Rápidas',    desc: '+10% de velocidade de recarga',        cat: 'shotgun' },
+  { id: 'houseHp',   title: 'Tábuas Extras',   desc: '+15% de vida máxima da casa',          cat: 'casa'    },
+  { id: 'meleeCd',   title: 'Lâmina Ágil',     desc: '-10% de recarga da faca',              cat: 'faca'    },
+  { id: 'meleeDmg',  title: 'Fio Afiado',      desc: '+10 de dano da faca',                  cat: 'faca'    },
+  { id: 'bulletSz',  title: 'Calibre Maior',   desc: 'balas da escopeta 10% maiores',        cat: 'shotgun' },
+  { id: 'pellets',   title: 'Cartucho Cheio',  desc: '+3 projéteis por tiro',                cat: 'shotgun' },
+  { id: 'meleeKb',   title: 'Golpe Pesado',    desc: '+15% de empurrão da faca',             cat: 'faca'    },
+  { id: 'meleeRng',  title: 'Braço Longo',     desc: '+5% de alcance da faca',               cat: 'faca'    },
+];
+const CAT_COLOR = { geral: '#e9c46a', shotgun: '#f4a261', faca: '#8ecae6', casa: '#7bd04a' };
+function resetStats() { for (const u of UPGRADES) lv[u.id] = 0; }
+resetStats();
+// valores derivados (usados pelo jogo no lugar das constantes)
+const critChance    = () => 0.05 * lv.crit;
+const vampirism     = () => 0.02 * lv.vamp;
+const shotCooldown  = () => SHOT.cooldown / (1 + 0.1 * lv.atkSpd);
+const pelletDamage  = () => PELLET_DAMAGE * (1 + 0.1 * lv.shotDmg);
+const reloadShell   = () => RELOAD_SHELL / (1 + 0.1 * lv.reload);
+const houseMax      = () => HOUSE_HP * (1 + 0.15 * lv.houseHp);
+const meleeCooldown = () => MELEE_COOLDOWN * Math.pow(0.9, lv.meleeCd);
+const meleeDamage   = () => MELEE_DAMAGE + 10 * lv.meleeDmg;
+const bulletMul     = () => 1 + 0.1 * lv.bulletSz;
+const pelletCount   = () => SHOT.pellets + 3 * lv.pellets;
+const meleeKnock    = () => MELEE_KNOCKBACK * (1 + 0.15 * lv.meleeKb);
+const meleeRangeMul = () => 1 + 0.05 * lv.meleeRng;
+const meleeRange    = () => MELEE_RANGE * meleeRangeMul();
 
 // Munição (HUD no canto inferior direito)
 const AMMO_MAX = 6;          // cartuchos na escopeta
@@ -76,11 +113,12 @@ const AMMO_MARGIN = 20;   // distância das bordas da tela
 const BOX_W = 17, BOX_H = 13;
 const BOX_RADIUS = 50;                 // distância para pegar (px de tela)
 const DROP_LIFE = 5;                   // segundos até qualquer drop sumir (pisca nos últimos 2)
-// drop ao matar um inimigo: um único sorteio (sobra 72% = nada)
+// drop ao matar um inimigo: um único sorteio (sobra 90% = nada).
+// A fonte principal de munição é a caixa do fim de cada wave; o drop é só um alívio.
 const DROP_TABLE = [
-  { amount: 12, chance: 0.02, scale: 4.2 },
-  { amount: 6,  chance: 0.08, scale: 3.6 },
-  { amount: 3,  chance: 0.18, scale: 3.0 },
+  { amount: 12, chance: 0.005, scale: 4.2 },
+  { amount: 6,  chance: 0.025, scale: 3.6 },
+  { amount: 3,  chance: 0.07,  scale: 3.0 },
 ];
 const BOX_SHINE_EVERY = [1.8, 3.2];    // intervalo aleatório entre brilhos (s)
 const BOX_SHINE_TIME = 0.45;           // duração da passada do brilho (s)
@@ -92,39 +130,37 @@ const ENEMY_POSITIONS = [                // campo de treino: em coluna à direit
   { x: 0.86, y: 0.44 },
   { x: 0.86, y: 0.68 },
 ];
-const ENEMY_HP = 16;                     // vida no campo de treino (cada projétil tira 1; tiro de perto = 8)
+const ENEMY_HP = 160;                    // vida no campo de treino (cada projétil tira 10)
 const ENEMY_RESPAWN = 2.5;               // segundos até reaparecer depois de morrer
 const ENEMY_HITBOX = { w: 12, h: 17 };   // hitbox em px do sprite (centralizada)
 
 // Modo roguelike — sistema de waves
 const ROGUE = {
-  enemyHp: 6,            // vida base dos jacarés (um tiro bem dado mata)
-  speedMin: 78,          // velocidade base dos inimigos (px/s)
-  speedMax: 124,
-  maxEnemies: 60,        // limite de jacarés vivos ao mesmo tempo
+  // jacaré básico: valores FIXOS em todas as waves (o que cresce é a quantidade)
+  enemyHp: 30,           // morre com 3 projéteis (meio tiro de perto)
+  enemySpeed: 60,        // lento (o jogador anda a 360 px/s)
+  maxEnemies: 150,       // limite de jacarés vivos ao mesmo tempo
   firstBreak: 1.5,       // segundos antes da wave 1
   breakTime: 4,          // pausa entre waves (para pegar as recompensas)
-  rewardAmmo: 12,        // caixa de munição ao fim de cada wave
+  rewardAmmo: 12,        // caixa de munição ao fim de cada wave: 12 + 4 por wave (acompanha o tamanho das waves)
   rewardHeal: 0.2,       // curativo: recupera 20% da vida máxima da casa
 };
 // dificuldade de cada wave (n = 1, 2, 3...)
 function waveConfig(n) {
   return {
-    count: 6 + (n - 1) * 4,                                   // 6, 10, 14, 18...
-    interval: Math.max(0.3, 1.6 * Math.pow(0.86, n - 1)),     // spawns mais rápidos
-    group: 1 + Math.floor((n - 1) / 3),                       // a partir da wave 4 vêm em duplas, 7 em trios...
-    speedMul: Math.min(1.7, 1 + 0.07 * (n - 1)),              // +7% de velocidade por wave
-    hp: ROGUE.enemyHp + Math.floor((n - 1) / 3) * 2,          // +2 de vida a cada 3 waves
+    count: 6 + (n - 1) * 5,                                   // 6, 11, 16, 21... (+5 por wave)
+    interval: Math.max(0.35, 1.4 * Math.pow(0.9, n - 1)),     // chegam cada vez mais seguidos
+    group: 1 + Math.floor((n - 1) / 2),                       // wave 3: duplas, 5: trios, 7: grupos de 4...
   };
 }
 
 // Casa (modo roguelike) — sprite 72x40
 const HOUSE_W = 72, HOUSE_H = 40;
 const HOUSE_SCALE = 3;
-const HOUSE_HP = 40;
+const HOUSE_HP = 200;            // vida base da casa
 const HOUSE_SOLID_TOP = 12;      // px do sprite: acima disso é telhado (dá para passar "atrás")
 const BITE_EVERY = 1.0;          // cada jacaré encostado morde a casa a cada X s
-const BITE_DAMAGE = 1;
+const BITE_DAMAGE = 5;
 
 // Jogador
 const PLAYER_HP = 5;
@@ -341,12 +377,15 @@ const sfx = (() => {
       tone({ dur: 0.08, peak: 0.08, wave: 'triangle', f0: 1568 });
       tone({ dur: 0.12, peak: 0.08, wave: 'triangle', f0: 2093, delay: 0.06 });
     },
-    waveStart() {     // começo de wave: tambor + nota grave
+    waveStart() {     // começo de wave: impacto grave + tambores
       if (!ok('waveStart', 1)) return;
-      tone({ dur: 0.35, peak: 0.35, wave: 'sawtooth', f0: 110, f1: 82 });
-      noise({ dur: 0.2, peak: 0.4, type: 'lowpass', f0: 600, f1: 80 });
-      tone({ dur: 0.35, peak: 0.3, wave: 'sawtooth', f0: 110, f1: 82, delay: 0.3 });
-      noise({ dur: 0.2, peak: 0.4, type: 'lowpass', f0: 600, f1: 80, delay: 0.3 });
+      noise({ dur: 0.6, peak: 0.8, type: 'lowpass', f0: 1800, f1: 60 });
+      tone({ dur: 0.7, peak: 0.6, wave: 'sine', f0: 90, f1: 35 });
+      tone({ dur: 0.35, peak: 0.3, wave: 'sawtooth', f0: 220, f1: 110 });
+      for (let i = 0; i < 3; i++) {
+        tone({ dur: 0.18, peak: 0.35, wave: 'sine', f0: 120, f1: 50, delay: 0.35 + i * 0.16 });
+        noise({ dur: 0.12, peak: 0.3, type: 'lowpass', f0: 500, f1: 80, delay: 0.35 + i * 0.16 });
+      }
     },
     waveClear() {     // fim de wave: fanfarra curta
       if (!ok('waveClear', 1)) return;
@@ -360,6 +399,14 @@ const sfx = (() => {
     rustle() {        // folhagem balançando
       if (!ok('rustle', 0.15)) return;
       noise({ dur: 0.25, peak: 0.08, type: 'bandpass', f0: rand(2500, 4000), q: 1, attack: 0.04 });
+    },
+    crit() {          // crítico
+      if (!ok('crit', 0.05)) return;
+      tone({ dur: 0.08, peak: 0.16, wave: 'square', f0: 1400, f1: 2200 });
+    },
+    upgrade() {       // escolheu uma carta
+      if (!ok('upgrade', 0.3)) return;
+      [659, 880, 1175, 1568].forEach((f, i) => tone({ dur: 0.12, peak: 0.13, wave: 'square', f0: f, delay: i * 0.05 }));
     },
     step() {          // passo bem baixinho
       if (!ok('step', 0.06)) return;
@@ -402,6 +449,50 @@ const sfx = (() => {
       tone({ dur: 0.12, peak: 0.15, wave: 'square', f0: 990, delay: 0.07 });
     },
     get muted() { return muted; },
+  };
+})();
+
+// =====================================================================
+// Música: tema no menu e no campo de treino, Swamp Attack no modo horda.
+// Troca com fade; abaixa durante a pausa e a escolha de cartas; M silencia junto com os efeitos.
+// =====================================================================
+const MUSIC = { volume: 0.45, ducked: 0.22, fade: 1.6 };   // fade = quanto o volume anda por segundo
+let musicLevel = 0.7;                                       // ajuste do jogador (0..1), no menu de pausa
+try { const v = parseFloat(localStorage.getItem('gs_music')); if (!isNaN(v)) musicLevel = v; } catch (e) {}
+let musicPreviewT = 0;                                      // ao mexer no volume, toca sem abaixar por um instante
+function setMusicLevel(v) {
+  musicLevel = Math.max(0, Math.min(1, Math.round(v * 10) / 10));
+  musicPreviewT = 1.5;
+  try { localStorage.setItem('gs_music', musicLevel); } catch (e) {}
+}
+const music = (() => {
+  const tracks = {
+    theme: new Audio('musica/gator-shooter-theme.mp3'),
+    swamp: new Audio('musica/swamp-attack.mp3'),
+  };
+  for (const t of Object.values(tracks)) { t.loop = true; t.volume = 0; t.preload = 'auto'; }
+  let unlocked = false, lastWant = null;
+  // o navegador só deixa tocar áudio depois de uma interação
+  const unlock = () => { unlocked = true; };
+  ['mousedown', 'keydown'].forEach(ev => window.addEventListener(ev, unlock));
+  const want = () => (mode === 'rogue' ? 'swamp' : 'theme');
+  return {
+    restart(name) { const t = tracks[name]; if (t) { try { t.currentTime = 0; } catch (e) {} } },
+    update(dt) {
+      if (!unlocked) return;
+      const w = want();
+      if (w !== lastWant) { if (w === 'swamp') this.restart('swamp'); lastWant = w; }   // horda começa do início
+      musicPreviewT = Math.max(0, musicPreviewT - dt);
+      const duck = (paused || (mode === 'rogue' && run.phase === 'cards')) && musicPreviewT <= 0;
+      for (const [name, t] of Object.entries(tracks)) {
+        const target = sfx.muted ? 0 : name === w ? MUSIC.volume * musicLevel * (duck ? MUSIC.ducked : 1) : 0;
+        const v = t.volume + Math.sign(target - t.volume) * Math.min(Math.abs(target - t.volume), MUSIC.fade * dt);
+        t.volume = Math.max(0, Math.min(1, v));
+        if (t.volume > 0.001 && t.paused) t.play().catch(() => {});
+        else if (t.volume <= 0.001 && !t.paused && target === 0) t.pause();
+      }
+    },
+    tracks,
   };
 })();
 
@@ -599,7 +690,7 @@ const run = { time: 0, kills: 0, spawnTimer: 0, wave: 0, phase: 'break', phaseT:
 const enemies = [];
 
 // casa: x/y = centro do sprite; o retângulo sólido é a parte das paredes
-const house = { x: 0, y: 0, hp: HOUSE_HP, flash: 0, shake: 0, pop: 0, active: false };
+const house = { x: 0, y: 0, hp: 0, flash: 0, shake: 0, pop: 0, active: false };
 function houseRect() {
   const w = HOUSE_W * HOUSE_SCALE, h = HOUSE_H * HOUSE_SCALE;
   const left = house.x - w / 2, top = house.y - h / 2;
@@ -689,15 +780,17 @@ function shoot() {
   sfx.shot();
   const m = muzzlePos(), a = player.aim;
 
-  for (let i = 0; i < SHOT.pellets; i++) {
+  const nPellets = pelletCount();
+  for (let i = 0; i < nPellets; i++) {
     // distribuição uniforme + jitter, para o leque ficar cheio mas orgânico
-    const t = SHOT.pellets === 1 ? 0 : i / (SHOT.pellets - 1) - 0.5;
+    const t = nPellets === 1 ? 0 : i / (nPellets - 1) - 0.5;
     const ang = a + t * SHOT.spread + rand(-0.05, 0.05);
     const sp = rand(SHOT.speedMin, SHOT.speedMax);
     bullets.push({
       x: m.x, y: m.y, px: m.x, py: m.y,
       vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
       life: SHOT.life * rand(0.75, 1), age: 0,
+      hits: [], dmgMul: 1,           // jacarés já atingidos por este projétil (atravessa)
     });
   }
 
@@ -752,7 +845,7 @@ const pickupCenterY = b => b.y - 14 + pickupFloat(b) - b.pop * 30;   // nasce co
 
 // recompensa de fim de wave (some em DROP_LIFE, como os outros drops)
 function spawnReward(kind, x, y) {
-  pickups.push({ kind, x, y, amount: kind === 'ammo' ? ROGUE.rewardAmmo : 0, scale: kind === 'ammo' ? 4.2 : 4,
+  pickups.push({ kind, x, y, amount: kind === 'ammo' ? ROGUE.rewardAmmo + 4 * run.wave : 0, scale: kind === 'ammo' ? 4.2 : 4,
     t: rand(0, 6), age: 0, shine: 0, nextShine: 0.5, pop: 1, life: DROP_LIFE, reward: true });
   particles.push({ x, y: y - 20, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
 }
@@ -774,12 +867,12 @@ function updateTrainingAmmo(dt) {
 
 function canCollect(b) {
   if (gameOver) return false;
-  if (b.kind === 'heal') return house.active && house.hp < HOUSE_HP;
+  if (b.kind === 'heal') return house.active && house.hp < houseMax();
   return player.reserve < RESERVE_MAX;
 }
 
 function collectHeal(b) {
-  const gained = Math.min(Math.round(HOUSE_HP * ROGUE.rewardHeal), HOUSE_HP - house.hp);
+  const gained = Math.round(Math.min(houseMax() * ROGUE.rewardHeal, houseMax() - house.hp));
   house.hp += gained;
   house.heal = 1;
   sfx.heal();
@@ -824,7 +917,7 @@ function updatePickups(dt) {
     }
     const near = Math.hypot(player.x - b.x, player.y - b.y) < BOX_RADIUS + b.scale * 4;
     if (near && canCollect(b)) { collectPickup(b); pickups.splice(i, 1); continue; }
-    const healUseless = b.kind === 'heal' && house.hp >= HOUSE_HP && b.pop < 0.2;   // casa 100%: a cura some
+    const healUseless = b.kind === 'heal' && house.hp >= houseMax() && b.pop < 0.2;   // casa 100%: a cura some
     if (b.age > b.life || healUseless) {
       particles.push({ x: b.x, y: pickupCenterY(b), vx: 0, vy: -15, life: 0.4, age: 0, size: 10, grow: 25, color: 'dust', drag: 2 });
       pickups.splice(i, 1);
@@ -898,19 +991,34 @@ function impact(x, y, ang, strong) {
 // =====================================================================
 // Inimigo / dano
 // =====================================================================
-function inEnemy(e, x, y) {
-  const hw = ENEMY_HITBOX.w * SCALE / 2, hh = ENEMY_HITBOX.h * SCALE / 2;
+function inEnemy(e, x, y, pad = 0) {
+  const hw = ENEMY_HITBOX.w * SCALE / 2 + pad, hh = ENEMY_HITBOX.h * SCALE / 2 + pad;
   return Math.abs(x - e.x) < hw && Math.abs(y - e.y) < hh;
 }
 
-function hitEnemy(e, b, ang, dmg = 1) {
+function hitEnemy(e, b, ang, dmg = PELLET_DAMAGE) {
+  const crit = Math.random() < critChance();
+  if (crit) dmg *= CRIT_MULT;
+  const dealt = Math.min(dmg, e.hp);
   e.hp -= dmg;
+  // vampirismo: parte do dano vira vida da casa
+  if (house.active && vampirism() > 0 && house.hp > 0) {
+    house.hp = Math.min(houseMax(), house.hp + dealt * vampirism());
+    house.heal = Math.max(house.heal || 0, 0.25);
+  }
+  if (crit) {
+    particles.push({ x: e.x + rand(-10, 10), y: e.y - 40, vx: rand(-20, 20), vy: -90, life: 0.6, age: 0, size: 0,
+      color: 'text', text: `${Math.round(dmg)}!`, tint: '#ffd166', drag: 3 });
+    for (let i = 0; i < 5; i++)
+      particles.push({ x: b.x, y: b.y, vx: rand(-200, 200), vy: rand(-200, 200), life: 0.25, age: 0, size: 4, color: '#ffd166', drag: 8 });
+    sfx.crit();
+  }
   if (e.hp > 0) sfx.hit();
   e.flash = 0.09;               // fica branco
   e.jiggle = 1;                 // tremidinha
   e.hpShow = 2;                 // mostra a barra de vida por um tempo
   if (!e.homeRel) { e.x += Math.cos(ang) * 6; e.y += Math.sin(ang) * 6; }  // leve empurrão do impacto
-  cam.trauma = Math.min(1, cam.trauma + 0.06);
+  cam.trauma = Math.min(1, cam.trauma + 0.015);
   for (let i = 0; i < 4; i++) { // respingo vermelho na direção do tiro
     const a = ang + rand(-0.7, 0.7), sp = rand(120, 320);
     particles.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
@@ -925,7 +1033,7 @@ function killEnemy(e) {
   e.respawn = ENEMY_RESPAWN;
   if (mode === 'rogue') run.kills++;
   rollDrop(e.x, e.y + ENEMY_H * SCALE / 2 - 10);
-  cam.trauma = Math.min(1, cam.trauma + (mode === 'rogue' ? 0.25 : 0.5));
+  cam.trauma = Math.min(1, cam.trauma + (mode === 'rogue' ? 0.05 : 0.2));
   for (let i = 0; i < 28; i++) {
     const a = rand(0, Math.PI * 2), sp = rand(100, 480);
     particles.push({ x: e.x + rand(-15, 15), y: e.y + rand(-20, 20), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
@@ -943,7 +1051,7 @@ function spawnEdgeEnemy(cfg) {
   else if (side === 1) { x = WORLD_W + m; y = rand(0, WORLD_H); }
   else if (side === 2) { x = rand(0, WORLD_W); y = WORLD_H + m; }
   else                 { x = -m; y = rand(0, WORLD_H); }
-  enemies.push(makeEnemy(x, y, cfg.hp, rand(ROGUE.speedMin, ROGUE.speedMax) * cfg.speedMul));
+  enemies.push(makeEnemy(x, y, ROGUE.enemyHp, ROGUE.enemySpeed));
 }
 
 function damageHouse(e) {
@@ -1006,12 +1114,14 @@ function hurtPlayer(src) {
 function startMode(m) {
   mode = m;
   paused = false;
+  resetStats();
+  cards.list = [];
   sfx.select();
   gameOver = false;
   Object.assign(player, { hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
     x: WORLD_W / 2, y: WORLD_H / 2 });
   // roguelike: casa de verdade (vida, alvo dos jacarés). Campo de treino: só cosmética.
-  Object.assign(house, { hp: HOUSE_HP, flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test' });
+  Object.assign(house, { hp: houseMax(), flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test' });
   if (m === 'rogue' || m === 'test') player.y = houseRect().b + player.h / 2 + 24;   // nasce na frente da porta
   Object.assign(run, { time: 0, kills: 0, spawnTimer: 0, wave: 0, phase: 'break', phaseT: ROGUE.firstBreak,
     toSpawn: 0, cfg: null, banner: null });
@@ -1021,7 +1131,6 @@ function startMode(m) {
     for (const pos of ENEMY_POSITIONS)
       enemies.push(makeEnemy(Math.round(WORLD_W * pos.x), Math.round(WORLD_H * pos.y), ENEMY_HP, 0, pos));
   }
-  document.getElementById('hud').style.display = m === 'menu' ? 'none' : '';
 }
 
 // botões do menu (em coordenadas de tela)
@@ -1035,10 +1144,13 @@ function menuButtons() {
 // botões da pausa
 function pauseButtons() {
   const w = Math.min(300, canvas.width - 40), h = 52, x = (canvas.width - w) / 2, y0 = canvas.height / 2 - 40;
+  const vy = y0 + (h + 10) * 3 + 6, vb = 44;
   return [
-    { id: 'resume',  label: 'CONTINUAR',      sub: 'ESC / P', x, y: y0, w, h },
-    { id: 'restart', label: 'RECOMEÇAR',      sub: 'R',       x, y: y0 + h + 10, w, h },
-    { id: 'menu',    label: 'MENU PRINCIPAL', sub: 'Q',       x, y: y0 + (h + 10) * 2, w, h },
+    { id: 'resume',  label: 'CONTINUAR',      sub: '', x, y: y0, w, h },
+    { id: 'restart', label: 'RECOMEÇAR',      sub: '', x, y: y0 + h + 10, w, h },
+    { id: 'menu',    label: 'MENU PRINCIPAL', sub: '', x, y: y0 + (h + 10) * 2, w, h },
+    { id: 'volDown', label: '−', sub: '', x, y: vy, w: vb, h: vb, small: true },
+    { id: 'volUp',   label: '+', sub: '', x: x + w - vb, y: vy, w: vb, h: vb, small: true },
   ];
 }
 const hoveredIn = list => list.find(b => mouse.x >= b.x && mouse.x <= b.x + b.w && mouse.y >= b.y && mouse.y <= b.y + b.h);
@@ -1052,6 +1164,8 @@ function setPaused(v) {
   sfx.select();
 }
 function pauseAction(id) {
+  if (id === 'volDown') return setMusicLevel(musicLevel - 0.1);
+  if (id === 'volUp') return setMusicLevel(musicLevel + 0.1);
   if (id === 'resume') setPaused(false);
   else if (id === 'restart') startMode(mode);
   else if (id === 'menu') startMode('menu');
@@ -1060,13 +1174,18 @@ function pauseAction(id) {
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (mode === 'menu') { if (k === '1') startMode('test'); if (k === '2') startMode('rogue'); return; }
+  if (k === 'control' && gameOver) { toggleStats(); return; }
   if (gameOver) {                         // tela de game over: R recomeça, ESC volta ao menu
     if (k === 'r') startMode(mode);
     if (k === 'escape') startMode('menu');
     return;
   }
+  if (k === 'control') { toggleStats(); return; }
+  if (mode === 'rogue' && run.phase === 'cards' && !paused && ['1', '2', '3'].includes(k)) { pickCard(+k - 1); return; }
   if (k === 'escape' || k === 'p') { setPaused(!paused); return; }
   if (paused) {
+    if (k === 'arrowleft' || k === '-') pauseAction('volDown');
+    if (k === 'arrowright' || k === '+' || k === '=') pauseAction('volUp');
     if (k === 'r') pauseAction('restart');
     if (k === 'q') pauseAction('menu');
     return;
@@ -1087,7 +1206,7 @@ function startReload() {
 function updateReload(dt) {
   if (!player.reloading) return;
   player.reloadT += dt;
-  if (player.reloadT >= RELOAD_SHELL - 1e-6) {
+  if (player.reloadT >= reloadShell() - 1e-6) {
     player.ammo++;
     player.reserve--;
     ammoPop[player.ammo - 1] = 1;
@@ -1097,7 +1216,7 @@ function updateReload(dt) {
     for (let i = 0; i < 3; i++)
       particles.push({ x: h.x + player.facing * 14, y: h.y - 10, vx: rand(-60, 60), vy: rand(-140, -60), life: 0.25, age: 0,
         size: 3, color: '#ffe08a', drag: 5 });
-    player.reloadT = Math.max(0, player.reloadT - RELOAD_SHELL);   // mantém o resto do tempo
+    player.reloadT = Math.max(0, player.reloadT - reloadShell());   // mantém o resto do tempo
     // continua sozinho até encher a escopeta ou acabar a reserva
     if (!canReload()) { player.reloading = false; player.reloadT = 0; }
   }
@@ -1106,7 +1225,7 @@ function updateReload(dt) {
 // =====================================================================
 // Waves
 // =====================================================================
-function banner(text, sub, color = '#f4f1de', dur = 2.4) { run.banner = { text, sub, color, t: 0, dur }; }
+function banner(text, sub, color = '#f4f1de', dur = 2.4, big = false) { run.banner = { text, sub, color, t: 0, dur, big }; }
 
 function startWave() {
   run.wave++;
@@ -1114,14 +1233,15 @@ function startWave() {
   run.toSpawn = run.cfg.count;
   run.spawnTimer = 0.3;
   run.phase = 'fight';
-  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés`, '#e9c46a');
+  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés`, '#e9c46a', 2.0, true);
   sfx.waveStart();
 }
 
 function finishWave() {
-  run.phase = 'break';
+  run.phase = 'cards';                 // jogo congela até escolher um upgrade
   run.phaseT = ROGUE.breakTime;
-  const full = house.hp >= HOUSE_HP;
+  openCards();
+  const full = house.hp >= houseMax();
   banner(`WAVE ${run.wave} COMPLETA`, full ? '+ munição' : '+ munição   + curativo da casa', '#7bd04a', 2.2);
   sfx.waveClear();
   // recompensas na frente da porta
@@ -1150,11 +1270,46 @@ function updateWaves(dt) {
 }
 
 // =====================================================================
+// Cartas de upgrade (1 de 3) — aparecem ao fim de cada wave
+// =====================================================================
+const cards = { list: [], t: 0, picked: -1, pickT: 0 };
+function openCards() {
+  const pool = UPGRADES.slice();
+  cards.list = [];
+  for (let i = 0; i < 3; i++) cards.list.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  cards.t = 0; cards.picked = -1; cards.pickT = 0;
+  mouse.down = false;
+}
+function cardRects() {
+  const n = 3, gap = 18;
+  const w = Math.min(190, (canvas.width - 40 - gap * 2) / 3), h = Math.min(250, w * 1.35);
+  const x0 = (canvas.width - (w * n + gap * (n - 1))) / 2, y = canvas.height / 2 - h / 2 + 20;
+  return cards.list.map((u, i) => ({ u, i, x: x0 + i * (w + gap), y, w, h }));
+}
+function pickCard(i) {
+  if (cards.picked >= 0 || !cards.list[i] || cards.t < 0.35) return;   // pequena trava contra clique acidental
+  cards.picked = i; cards.pickT = 0;
+  const u = cards.list[i];
+  const oldMax = houseMax();
+  lv[u.id]++;
+  if (u.id === 'houseHp') house.hp += houseMax() - oldMax;       // a vida extra já vem cheia
+  statFlash[u.id] = 1;
+  sfx.upgrade();
+}
+function updateCards(dt) {
+  cards.t += dt;
+  if (cards.picked >= 0 && (cards.pickT += dt) > 0.45) {          // animação da escolha e volta ao jogo
+    run.phase = 'break';
+    cards.list = [];
+  }
+}
+
+// =====================================================================
 // Melee
 // =====================================================================
 function startMelee() {
   player.meleeT = 0;
-  player.meleeCd = MELEE_COOLDOWN;
+  player.meleeCd = meleeCooldown();
   player.meleeAngle = player.aim;
   player.meleeHit = false;
   player.reloading = false; player.reloadT = 0;   // golpe cancela a recarga
@@ -1170,21 +1325,21 @@ function meleeStrike() {
     const dx = e.x - h.x, dy = e.y - h.y, dist = Math.hypot(dx, dy);
     let diff = Math.atan2(dy, dx) - a;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    const reach = MELEE_RANGE + ENEMY_HITBOX.w * SCALE / 2;
+    const reach = meleeRange() + ENEMY_HITBOX.w * SCALE / 2;
     if (dist < reach && (Math.abs(diff) < MELEE_ARC / 2 || dist < ENEMY_HITBOX.w * SCALE)) {
       hits++;
       const ang = Math.atan2(dy, dx);
-      if (!e.homeRel) { e.x += Math.cos(ang) * MELEE_KNOCKBACK; e.y += Math.sin(ang) * MELEE_KNOCKBACK; }
-      hitEnemy(e, { x: e.x - Math.cos(ang) * 20, y: e.y - Math.sin(ang) * 20 }, ang, MELEE_DAMAGE);
+      if (!e.homeRel) { e.x += Math.cos(ang) * meleeKnock(); e.y += Math.sin(ang) * meleeKnock(); }
+      hitEnemy(e, { x: e.x - Math.cos(ang) * 20, y: e.y - Math.sin(ang) * 20 }, ang, meleeDamage());
     }
   }
   // faíscas do corte ao longo do arco
   for (let i = 0; i < 20; i++) {
-    const t = a + rand(-MELEE_ARC / 2, MELEE_ARC / 2), r = rand(40, MELEE_RANGE);
+    const t = a + rand(-MELEE_ARC / 2, MELEE_ARC / 2), r = rand(40, meleeRange());
     particles.push({ x: h.x + Math.cos(t) * r, y: h.y + Math.sin(t) * r, vx: Math.cos(t) * 80, vy: Math.sin(t) * 80,
       life: rand(0.1, 0.22), age: 0, size: rand(2, 4), color: '#ffffff', drag: 8 });
   }
-  if (hits) { sfx.slash(); cam.trauma = Math.min(1, cam.trauma + 0.25); }
+  if (hits) { sfx.slash(); cam.trauma = Math.min(1, cam.trauma + 0.12); }
 }
 
 function updateMelee(dt) {
@@ -1220,6 +1375,14 @@ function update(dt) {
   if (paused) {                       // tudo congelado; só os botões da pausa respondem
     if (mouse.pressed) { const b = hoveredIn(pauseButtons()); if (b) pauseAction(b.id); }
     mouse.pressed = false; mouse.rightPressed = false; mouse.down = false;
+    return;
+  }
+  for (const k in statFlash) statFlash[k] = Math.max(0, statFlash[k] - dt * 0.8);
+  if (mode === 'rogue' && run.phase === 'cards') {   // escolhendo upgrade: jogo congelado
+    updateCards(dt);
+    if (mouse.pressed) { const c = hoveredIn(cardRects()); if (c) pickCard(c.i); }
+    mouse.pressed = false; mouse.rightPressed = false; mouse.down = false;
+    updateTrees(dt);
     return;
   }
 
@@ -1261,7 +1424,7 @@ function update(dt) {
       shoot();
       player.ammo--;
       ammoPop[player.ammo] = 1;
-      player.cooldown = SHOT.cooldown;
+      player.cooldown = shotCooldown();
     } else if (mouse.pressed && !player.reloading) {
       // sem munição: "clique seco" — HUD pisca e a arma dá um tranquinho
       emptyFlash = 1;
@@ -1356,8 +1519,8 @@ function update(dt) {
   player.kick *= rk; player.kickRot *= rk;
   player.flash -= dt;
   crossPulse *= Math.exp(-9 * dt);
-  cam.trauma = Math.max(0, cam.trauma - dt * 2.2);
-  const shake = cam.trauma * cam.trauma * 14;
+  cam.trauma = Math.max(0, cam.trauma - dt * 3.5);
+  const shake = cam.trauma * cam.trauma * 14 * SHAKE_SCALE;   // amplitude máxima ~4 px
   cam.sx = rand(-1, 1) * shake; cam.sy = rand(-1, 1) * shake;
 
   // projéteis
@@ -1372,10 +1535,15 @@ function update(dt) {
     const out = b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H;
     // testa o ponto atual e o meio do passo (projéteis rápidos não atravessam o inimigo)
     const mx = (b.x + b.px) / 2, my = (b.y + b.py) / 2;
-    const target = enemies.find(e => e.alive && (inEnemy(e, b.x, b.y) || inEnemy(e, mx, my)));
+    const pad = SHOT.bulletScale * (bulletMul() - 1) * 1.5;   // balas maiores acertam um pouco mais longe
+    const target = enemies.find(e => e.alive && !b.hits.includes(e) && (inEnemy(e, b.x, b.y, pad) || inEnemy(e, mx, my, pad)));
     if (target) {
-      hitEnemy(target, b, ang);
-      bullets.splice(i, 1);
+      // atravessa: acerta este jacaré e segue em frente, um pouco mais fraco e mais lento
+      hitEnemy(target, b, ang, pelletDamage() * b.dmgMul);
+      b.hits.push(target);
+      b.dmgMul *= SHOT.pierceFalloff;
+      b.vx *= 0.85; b.vy *= 0.85;
+      if (b.hits.length >= SHOT.pierce) bullets.splice(i, 1);
     } else if (out) {
       impact(Math.max(0, Math.min(WORLD_W, b.x)), Math.max(0, Math.min(WORLD_H, b.y)), ang, true);
       bullets.splice(i, 1);
@@ -1665,19 +1833,20 @@ function drawGun() {
     ctx.translate(Math.round(h.x + Math.cos(a) * 2 * SCALE), Math.round(h.y + Math.sin(a) * 2 * SCALE));
     ctx.rotate(a);
     if (Math.cos(a) < 0) ctx.scale(1, -1);
-    ctx.drawImage(f, -MELEE_GRIP.x * MELEE_SCALE, -MELEE_GRIP.y * MELEE_SCALE, MELEE_W * MELEE_SCALE, MELEE_H * MELEE_SCALE);
+    const ms = MELEE_SCALE * meleeRangeMul();   // faca cresce junto com o alcance
+    ctx.drawImage(f, -MELEE_GRIP.x * ms, -MELEE_GRIP.y * ms, MELEE_W * ms, MELEE_H * ms);
     ctx.restore();
     return;
   }
   if (player.reloading) {
     // pose de recarga: arma de lado, inclinada para cima, animação do GIF (frame 1 -> 2)
-    const f = reloadImgs[player.reloadT < RELOAD_SHELL / 2 ? 0 : 1];
+    const f = reloadImgs[player.reloadT < reloadShell() / 2 ? 0 : 1];
     if (!f.complete) return;
     const h = hand();
     ctx.save();
     ctx.translate(Math.round(h.x + player.facing * 8), Math.round(h.y - 2));
     ctx.scale(player.facing, 1);
-    ctx.rotate(-0.35 + Math.sin(player.reloadT / RELOAD_SHELL * Math.PI) * 0.08);
+    ctx.rotate(-0.35 + Math.sin(player.reloadT / reloadShell() * Math.PI) * 0.08);
     ctx.drawImage(f, -RELOAD_GRIP.x * SCALE, -RELOAD_GRIP.y * SCALE, RELOAD_W * SCALE, RELOAD_H * SCALE);
     ctx.restore();
     return;
@@ -1777,7 +1946,7 @@ function drawPlayer() {
 function drawBullets() {
   ctx.lineCap = 'round';
   for (const b of bullets) {
-    const k = 1 - b.age / b.life, s = SHOT.bulletScale;
+    const k = 1 - b.age / b.life, s = SHOT.bulletScale * bulletMul();
     // rastro
     ctx.strokeStyle = `rgba(255,255,255,${0.35 * k})`;
     ctx.lineWidth = s * 0.6;
@@ -1890,37 +2059,78 @@ function drawRunHud() {
   const alive = enemies.filter(e => e.alive).length;
   const left = run.phase === 'fight' ? run.toSpawn + alive : 0;
   const text = run.wave === 0 ? 'PREPARE-SE' : `WAVE ${run.wave}`;
-  ctx.textAlign = 'right';
+  const cx = canvas.width / 2;
+  ctx.textAlign = 'center';
   ctx.font = 'bold 24px monospace';
-  ctx.fillStyle = '#000'; ctx.fillText(text, canvas.width - 14, 38);
-  ctx.fillStyle = '#e9c46a'; ctx.fillText(text, canvas.width - 16, 36);
-  ctx.font = 'bold 14px monospace';
-  const sub = run.phase === 'fight' ? `${left} restantes  ·  ${run.kills} abates`
+  ctx.fillStyle = '#000'; ctx.fillText(text, cx + 2, 34);
+  ctx.fillStyle = '#e9c46a'; ctx.fillText(text, cx, 32);
+  ctx.font = 'bold 13px monospace';
+  const sub = run.phase === 'fight' ? `${left} jacarés  ·  ${run.kills} abates`
                                     : `próxima em ${Math.ceil(run.phaseT)}s  ·  ${run.kills} abates`;
-  ctx.fillStyle = '#000'; ctx.fillText(sub, canvas.width - 15, 59);
-  ctx.fillStyle = '#f4f1de'; ctx.fillText(sub, canvas.width - 16, 58);
+  ctx.fillStyle = '#000'; ctx.fillText(sub, cx + 1, 53);
+  ctx.fillStyle = '#f4f1de'; ctx.fillText(sub, cx, 52);
   ctx.textAlign = 'left';
+  drawBanner();
+}
 
-  // anúncio grande no centro
+// anúncios no centro. Início de wave: entra "batendo" na tela, com clarão e faixas de cinema.
+function drawBanner() {
   const b = run.banner;
-  if (b && !gameOver && !paused) {
-    const inT = Math.min(1, b.t / 0.25), outT = Math.min(1, (b.dur - b.t) / 0.5);
-    const a = Math.min(inT, outT), sc = 1 + (1 - inT) * 0.6;
+  if (!b || gameOver || paused || run.phase === 'cards') return;
+  const W = canvas.width, H = canvas.height, t = b.t;
+  const outA = Math.min(1, (b.dur - t) / 0.4);
+  if (b.big) {
+    // clarão
+    if (t < 0.3) { ctx.fillStyle = `rgba(255,240,210,${0.45 * (1 - t / 0.3)})`; ctx.fillRect(0, 0, W, H); }
+    // faixas de cinema
+    const bar = H * 0.12 * Math.min(1, t / 0.18) * outA;
+    ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
+    // faixa vermelha atrás do texto
+    const cy = H * 0.42;
+    const stripe = Math.min(1, t / 0.15);
+    ctx.fillStyle = `rgba(150,20,20,${0.55 * outA})`;
+    ctx.fillRect(W / 2 - (W / 2) * stripe, cy - 70, W * stripe, 120);
+    ctx.fillStyle = `rgba(255,90,60,${0.8 * outA})`;
+    ctx.fillRect(W / 2 - (W / 2) * stripe, cy - 74, W * stripe, 4); ctx.fillRect(W / 2 - (W / 2) * stripe, cy + 50, W * stripe, 4);
+    // texto: começa enorme e "bate" no lugar, com um tremidinho só no texto
+    const k = Math.min(1, t / 0.16);
+    const sc = k < 1 ? 3 - 2 * (1 - Math.pow(1 - k, 3)) : 1 + Math.sin(Math.min(1, (t - 0.16) / 0.25) * Math.PI) * 0.06;
+    const jit = t < 0.5 ? (1 - t / 0.5) * 5 : 0;
+    const fs = Math.min(130, Math.floor(W / 5.2));
     ctx.save();
-    ctx.globalAlpha = a;
-    ctx.translate(canvas.width / 2, canvas.height * 0.28);
+    ctx.globalAlpha = Math.min(1, t / 0.08) * outA;
+    ctx.translate(W / 2 + rand(-jit, jit), cy + rand(-jit, jit));
     ctx.scale(sc, sc);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 52px monospace';
-    ctx.fillStyle = '#000'; ctx.fillText(b.text, 3, 3);
-    ctx.fillStyle = b.color; ctx.fillText(b.text, 0, 0);
+    ctx.font = `bold ${fs}px monospace`;
+    ctx.lineJoin = 'round'; ctx.lineWidth = 10; ctx.strokeStyle = '#000';
+    ctx.strokeText(b.text, 0, 26);
+    const g = ctx.createLinearGradient(0, -fs * 0.6, 0, 26);
+    g.addColorStop(0, '#ffe08a'); g.addColorStop(1, '#ff6b3d');
+    ctx.fillStyle = g; ctx.fillText(b.text, 0, 26);
     if (b.sub) {
-      ctx.font = 'bold 18px monospace';
-      ctx.fillStyle = '#000'; ctx.fillText(b.sub, 2, 34);
-      ctx.fillStyle = '#f4f1de'; ctx.fillText(b.sub, 0, 32);
+      ctx.font = 'bold 20px monospace';
+      ctx.lineWidth = 5; ctx.strokeText(b.sub.toUpperCase(), 0, 66);
+      ctx.fillStyle = '#f4f1de'; ctx.fillText(b.sub.toUpperCase(), 0, 66);
     }
     ctx.restore();
+    return;
   }
+  const inT = Math.min(1, t / 0.25), a = Math.min(inT, outA), sc = 1 + (1 - inT) * 0.6;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.translate(W / 2, H * 0.3);
+  ctx.scale(sc, sc);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 56px monospace';
+  ctx.lineWidth = 8; ctx.lineJoin = 'round'; ctx.strokeStyle = '#000'; ctx.strokeText(b.text, 0, 0);
+  ctx.fillStyle = b.color; ctx.fillText(b.text, 0, 0);
+  if (b.sub) {
+    ctx.font = 'bold 18px monospace';
+    ctx.lineWidth = 4; ctx.strokeText(b.sub, 0, 34);
+    ctx.fillStyle = '#f4f1de'; ctx.fillText(b.sub, 0, 34);
+  }
+  ctx.restore();
 }
 
 // jacarezinho com a escopeta na mão (tela inicial)
@@ -1953,12 +2163,140 @@ function drawButtons(list, hov) {
     ctx.strokeStyle = '#f4f1de'; ctx.lineWidth = 2;
     ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
     ctx.fillStyle = on ? '#10170f' : '#f4f1de';
-    ctx.font = 'bold 20px monospace';
+    ctx.font = b.small ? 'bold 26px monospace' : 'bold 20px monospace';
+    if (!b.sub) { ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + (b.small ? 9 : 7)); continue; }
     ctx.fillText(b.label, b.x + b.w / 2, b.y + (b.h > 56 ? 28 : 26));
     ctx.font = '13px monospace';
     ctx.fillStyle = on ? '#3a4a3a' : '#a9b8a0';
     ctx.fillText(b.sub, b.x + b.w / 2, b.y + (b.h > 56 ? 48 : 43));
   }
+}
+
+// ícones pequenos em pixel art para as cartas
+const PIX = {
+  crit: ['...#...', '...#...', '.#####.', '##.#.##', '.#####.', '...#...', '...#...'],
+  vamp: ['...#...', '..###..', '.#####.', '#######', '#######', '.#####.', '..###..'],
+};
+function drawPix(pat, x, y, s, col) {
+  ctx.fillStyle = col;
+  pat.forEach((row, r) => [...row].forEach((ch, c) => { if (ch === '#') ctx.fillRect(x + c * s, y + r * s, s, s); }));
+}
+function drawCardIcon(u, cx, cy, sz) {
+  const img2 = { atkSpd: gunSprite, shotDmg: gunSprite, pellets: gunSprite, reload: ammoFullImg, bulletSz: null,
+    houseHp: houseImg, meleeCd: meleeImgs[0], meleeDmg: meleeImgs[0], meleeKb: meleeImgs[0], meleeRng: meleeImgs[0] }[u.id];
+  if (u.id === 'crit') return drawPix(PIX.crit, cx - 3.5 * sz / 7, cy - 3.5 * sz / 7, sz / 7, '#ffd166');
+  if (u.id === 'vamp') return drawPix(PIX.vamp, cx - 3.5 * sz / 7, cy - 3.5 * sz / 7, sz / 7, '#e63946');
+  if (u.id === 'bulletSz') {                         // bala branca grande
+    ctx.fillStyle = '#fff'; ctx.fillRect(cx - sz * 0.45, cy - sz * 0.15, sz * 0.9, sz * 0.3); return;
+  }
+  if (!img2 || !img2.complete) return;
+  const k = sz / Math.max(img2.width, img2.height);
+  ctx.drawImage(img2, Math.round(cx - img2.width * k / 2), Math.round(cy - img2.height * k / 2), img2.width * k, img2.height * k);
+  if (u.id === 'pellets') { ctx.fillStyle = '#fff'; for (let i = 0; i < 3; i++) ctx.fillRect(cx + sz * 0.55, cy - 10 + i * 9, 10, 4); }
+}
+
+function wrapText(text, maxW) {
+  const words = text.split(' '), lines = []; let line = '';
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawCards() {
+  if (mode !== 'rogue' || run.phase !== 'cards' || !cards.list.length) return;
+  ctx.fillStyle = 'rgba(6,10,8,.55)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const rects = cardRects(), hov = cards.picked < 0 ? hoveredIn(rects) : null;
+  ctx.textAlign = 'center';
+  const titleA = Math.min(1, cards.t / 0.3);
+  ctx.globalAlpha = titleA;
+  ctx.font = 'bold 30px monospace';
+  ctx.fillStyle = '#000'; ctx.fillText('ESCOLHA UM UPGRADE', canvas.width / 2 + 3, rects[0].y - 26);
+  ctx.fillStyle = '#e9c46a'; ctx.fillText('ESCOLHA UM UPGRADE', canvas.width / 2, rects[0].y - 29);
+  ctx.globalAlpha = 1;
+  for (const r of rects) {
+    // entrada: sobe e aparece, uma de cada vez
+    const ent = Math.max(0, Math.min(1, (cards.t - r.i * 0.08) / 0.3));
+    const e = 1 - Math.pow(1 - ent, 3);
+    let y = r.y + (1 - e) * 60, a = e, sc = 1;
+    const on = hov === r, chosen = cards.picked === r.i;
+    if (on) y -= 8;
+    if (cards.picked >= 0) {
+      if (chosen) { sc = 1 + Math.sin(Math.min(1, cards.pickT / 0.2) * Math.PI) * 0.08; y -= 12; }
+      else a *= Math.max(0, 1 - cards.pickT / 0.25);
+    }
+    if (a <= 0.01) continue;
+    const col = CAT_COLOR[r.u.cat];
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(r.x + r.w / 2, y + r.h / 2); ctx.scale(sc, sc); ctx.translate(-r.w / 2, -r.h / 2);
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(5, 6, r.w, r.h);                 // sombra
+    ctx.fillStyle = '#18221a'; ctx.fillRect(0, 0, r.w, r.h);
+    ctx.fillStyle = col; ctx.fillRect(0, 0, r.w, 6);                                  // faixa da categoria
+    ctx.strokeStyle = on || chosen ? '#fff' : col; ctx.lineWidth = on || chosen ? 3 : 2;
+    ctx.strokeRect(1, 1, r.w - 2, r.h - 2);
+    // ícone
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(12, 18, r.w - 24, r.h * 0.34);
+    drawCardIcon(r.u, r.w / 2, 18 + r.h * 0.17, Math.min(64, r.w * 0.42));
+    // textos
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 15px monospace'; ctx.fillStyle = '#f4f1de';
+    ctx.fillText(r.u.title, r.w / 2, r.h * 0.34 + 44);
+    ctx.font = '12px monospace'; ctx.fillStyle = '#c9d4c0';
+    wrapText(r.u.desc, r.w - 22).forEach((l, i) => ctx.fillText(l, r.w / 2, r.h * 0.34 + 66 + i * 16));
+    ctx.font = 'bold 11px monospace'; ctx.fillStyle = col;
+    ctx.fillText(r.u.cat.toUpperCase() + '  ·  ' + (lv[r.u.id] ? `nível ${lv[r.u.id]} → ${lv[r.u.id] + 1}` : 'NOVO'), r.w / 2, r.h - 30);
+    ctx.fillStyle = 'rgba(244,241,222,.55)'; ctx.fillText(`[${r.i + 1}]`, r.w / 2, r.h - 12);
+    ctx.restore();
+  }
+  ctx.textAlign = 'left';
+}
+
+// painel de stats (esquerda, discreto). Ctrl mostra/esconde.
+const statFlash = {};
+let showStats = true;
+try { showStats = localStorage.getItem('gs_stats') !== '0'; } catch (e) {}
+function toggleStats() {
+  showStats = !showStats;
+  try { localStorage.setItem('gs_stats', showStats ? '1' : '0'); } catch (e) {}
+}
+const pct = v => `${Math.round(v * 100)}%`;
+function statLines() {
+  return [
+    ['crit',     'Crítico',        pct(critChance())],
+    ['vamp',     'Vampirismo',     pct(vampirism())],
+    ['atkSpd',   'Vel. ataque',    `${(1 / shotCooldown()).toFixed(2)}/s`],
+    ['shotDmg',  'Dano escopeta',  `${+pelletDamage().toFixed(1)} x${pelletCount()}`],
+    ['pellets',  'Projéteis',      `${pelletCount()}`],
+    ['bulletSz', 'Tamanho bala',   pct(bulletMul())],
+    ['reload',   'Recarga',        `${reloadShell().toFixed(2)}s/cart.`],
+    ['houseHp',  'Vida da casa',   `${Math.round(houseMax())}`],
+    ['meleeDmg', 'Dano faca',      `${meleeDamage()}`],
+    ['meleeCd',  'Recarga faca',   `${meleeCooldown().toFixed(2)}s`],
+    ['meleeKb',  'Empurrão faca',  pct(1 + 0.15 * lv.meleeKb)],
+    ['meleeRng', 'Alcance faca',   `${Math.round(meleeRange())}`],
+  ];
+}
+function drawStats() {
+  if (!showStats || mode === 'menu') return;
+  const lines = statLines(), lh = 16, x = 14;
+  const y0 = Math.max(mode === 'rogue' ? 72 : 60, canvas.height / 2 - lines.length * lh / 2 - 20);
+  ctx.font = '12px monospace';
+  for (let i = 0; i < lines.length; i++) {
+    const [id, name, val] = lines[i], f = statFlash[id] || 0, y = y0 + i * lh;
+    const up = lv[id] > 0;
+    ctx.globalAlpha = 0.5 + f * 0.5 + (up ? 0.15 : 0);
+    if (f > 0.01) { ctx.fillStyle = `rgba(233,196,106,${f * 0.35})`; ctx.fillRect(x - 6, y - 12, 190, lh); }
+    ctx.fillStyle = '#000'; ctx.fillText(name, x + 1, y + 1); ctx.fillText(val, x + 111, y + 1);
+    ctx.fillStyle = f > 0.01 ? '#ffe08a' : '#dfe6d6'; ctx.fillText(name, x, y);
+    ctx.fillStyle = f > 0.01 ? '#ffe08a' : up ? '#e9c46a' : '#dfe6d6'; ctx.fillText(val, x + 110, y);
+  }
+  ctx.globalAlpha = 0.35; ctx.fillStyle = '#dfe6d6'; ctx.font = '10px monospace';
+  ctx.fillText('Ctrl esconde', x, y0 + lines.length * lh + 4);
+  ctx.globalAlpha = 1;
 }
 
 function drawPause() {
@@ -1970,7 +2308,16 @@ function drawPause() {
   const y = canvas.height / 2 - 76;
   ctx.fillStyle = '#000'; ctx.fillText('PAUSADO', canvas.width / 2 + 3, y + 3);
   ctx.fillStyle = '#f4f1de'; ctx.fillText('PAUSADO', canvas.width / 2, y);
-  drawButtons(pauseButtons(), hoveredIn(pauseButtons()));
+  const list = pauseButtons();
+  drawButtons(list, hoveredIn(list));
+  // volume da música: barra entre os botões − e +
+  const dn = list[3], up = list[4];
+  const bx = dn.x + dn.w + 12, bw = up.x - 12 - bx, by = dn.y + dn.h / 2;
+  ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#a9b8a0';
+  ctx.fillText(`MÚSICA  ${Math.round(musicLevel * 100)}%`, bx + bw / 2, by - 8);
+  ctx.fillStyle = 'rgba(20,28,20,.9)'; ctx.fillRect(bx, by, bw, 10);
+  ctx.fillStyle = '#e9c46a'; ctx.fillRect(bx, by, Math.round(bw * musicLevel), 10);
+  ctx.strokeStyle = '#f4f1de'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, 10);
   ctx.textAlign = 'left';
 }
 
@@ -2034,7 +2381,7 @@ function drawHouse() {
   }
   ctx.drawImage(house.flash > 0 ? whiteOf(houseImg) : houseImg, x, y, w, h);
   // rachaduras conforme perde vida
-  const dmg = 1 - house.hp / HOUSE_HP;
+  const dmg = 1 - house.hp / houseMax();
   if (dmg > 0.33) {
     ctx.fillStyle = 'rgba(20,10,10,.7)';
     const cracks = [[0.22, 0.55], [0.7, 0.62], [0.45, 0.8], [0.85, 0.45], [0.12, 0.85]];
@@ -2047,9 +2394,10 @@ function drawHouse() {
 }
 
 function drawHouseBar() {
-  const bw = Math.max(80, Math.min(280, canvas.width - 400)), bh = 16, x = 70, y = 22;
-  const k = house.hp / HOUSE_HP, pop = house.pop;
-  if (houseImg.complete) ctx.drawImage(houseImg, 14, 14, 44, 24);        // ícone
+  const bw = Math.max(80, Math.min(240, canvas.width - 420)), bh = 14;
+  const x = 66, y = canvas.height - 34;                                    // canto inferior esquerdo
+  const k = house.hp / houseMax(), pop = house.pop;
+  if (houseImg.complete) ctx.drawImage(houseImg, 14, y - 6, 44, 24);       // ícone
   const sx = rand(-1, 1) * pop * 3;
   ctx.fillStyle = '#000'; ctx.fillRect(x - 3 + sx, y - 3, bw + 6, bh + 6);
   ctx.fillStyle = '#3a1414'; ctx.fillRect(x + sx, y, bw, bh);
@@ -2059,8 +2407,8 @@ function drawHouseBar() {
   if (pop > 0.05) { ctx.fillStyle = `rgba(255,255,255,${pop * 0.6})`; ctx.fillRect(x + sx, y, bw, bh); }
   if (house.heal > 0.02) { ctx.strokeStyle = `rgba(123,208,74,${house.heal})`; ctx.lineWidth = 3; ctx.strokeRect(x - 5, y - 5, bw + 10, bh + 10); }
   ctx.font = 'bold 12px monospace';
-  ctx.fillStyle = '#f4f1de';
-  ctx.fillText(`CASA ${house.hp}/${HOUSE_HP}`, x + 4 + sx, y + bh + 16);
+  ctx.fillStyle = '#000'; ctx.fillText(`CASA ${Math.ceil(house.hp)}/${Math.round(houseMax())}`, x + 5 + sx, y - 7);
+  ctx.fillStyle = '#f4f1de'; ctx.fillText(`CASA ${Math.ceil(house.hp)}/${Math.round(houseMax())}`, x + 4 + sx, y - 8);
 }
 
 function drawReloadHint() {
@@ -2106,7 +2454,7 @@ function drawMeleeIcon(x, y) {
   ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
   if (meleeImgs[0].complete) ctx.drawImage(meleeImgs[0], 2, 4, MELEE_W * 3, MELEE_H * 3);
   if (!ready) {   // escurece de cima para baixo conforme o tempo que falta
-    const k = player.meleeCd / MELEE_COOLDOWN;
+    const k = player.meleeCd / meleeCooldown();
     ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, s, Math.round(s * k));
     ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
     ctx.fillStyle = '#000'; ctx.fillText(Math.ceil(player.meleeCd), s / 2 + 1, s / 2 + 7);
@@ -2145,7 +2493,7 @@ function drawAmmo() {
   }
   // barra de progresso da recarga logo acima das gauges
   if (player.reloading) {
-    const k = player.reloadT / RELOAD_SHELL;
+    const k = player.reloadT / reloadShell();
     ctx.fillStyle = '#000'; ctx.fillRect(x0, y0 - 14, total, 6);
     ctx.fillStyle = '#ffe08a'; ctx.fillRect(x0, y0 - 14, Math.round(total * k), 6);
   }
@@ -2210,7 +2558,9 @@ function render() {
   } else {
     drawAmmo();
     if (mode === 'rogue') drawHouseBar(); else drawHearts();
+    drawStats();
     drawRunHud();
+    drawCards();
     drawGameOver();
     drawPause();
   }
@@ -2225,6 +2575,7 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   update(dt);
+  music.update(dt);
   render();
   requestAnimationFrame(loop);
 }
