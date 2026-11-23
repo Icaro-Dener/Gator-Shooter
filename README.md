@@ -32,6 +32,10 @@ Abra `index.html` no navegador.
   - Ao fim de cada wave aparecem na frente da porta uma caixa de munição (+12) e um curativo que recupera 20% da vida da casa. Somem em 5 s; com a casa em 100%, o curativo some na hora.
   - Entre uma wave e outra há uma pausa de 4 s.
 
+## Cenário
+
+A partida acontece numa clareira cercada de mata. As árvores balançam com o vento, soltam folhas e tremem quando um jacaré passa por elas. As bordas ficam na sombra das árvores, o centro tem luz de sol, e alguns vagalumes piscam perto da mata. O jacaré anima as pernas ao andar e pisca de vez em quando.
+
 ## Arquivos
 
 Todos os sprites estão embutidos em `index.html` (base64). Os `.png` e `.gif` da pasta são as cópias originais, para referência e edição.

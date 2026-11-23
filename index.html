@@ -140,6 +140,33 @@ const BULLET_FACES = -1;
 // =====================================================================
 function img(src) { const i = new Image(); i.src = src; return i; }
 const sprite    = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAABE0lEQVQ4jWNkwAEylmj9l1DihfNf3PvMMCPmGiMu9YwNx8z/owu+uPeZAWZIg9VJCH3MHK+BTAwMDAz7dt1HEUR2CTrAJcfCwMDA4OSmiFMjzCXIrsUGmF7c+8wQKm7AgI0mBTBevZuOEUbIYPLxwxjeabA6iRFGOGOBgYGB4cBK//8MDAwMB2RfwMVwBTYLLkOQXfri+G24q/AGNjbw+swLrOK4wg6nQaImEgjO8dtw5gh0ERM+F8EwMpBQ4mWwaxDDSHs4DdJWnsmYuXg9AwMDA0MEqyrBlI43QcJsPtTwipGBAVK0MDAwMFy784YBWRyvi9AVMjAwwFN0k6YlikUEDUIPC5iLHMI3MiIb1nDM/D8A05B4xHmw7QEAAAAASUVORK5CYII=');   // dino.png
+// caminhada: corpo sem pernas (18x18) + pernas em 2 frames (11x5, de pernas.gif)
+const bodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAA/0lEQVQ4jWNkwAEylmj9l1DihfNf3PvMMCPmGiMu9YwNx8z/owu+uPeZAWZIg9VJCH3MHK+BTAwMDAz7dt1HEUR2CTrAJcfCwMDA4OSmiFMjzCXIrsUGmF7c+8wQKm7AgI0mBTBevZuOEUbIYPLxwxjeabA6iRFGOGOBgYGB4cBK//8MDAwMB2RfwMVwBTYLLkOQXfri+G24q/AGNjbw+swLrOK4wg6nQaImEgjO8dtw5gh0ERM+F8EwMpBQ4mWwaxDDSHs4DdJWnsmorTyTkYGBgSGCVZXklE4UsGsQ+4/uKpwuwgeaNC3hBsLE8GYRfODASv//ddePMzAwQEoPALs2Z5UzM4egAAAAAElFTkSuQmCC'); // corpo.png
+const legImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAMUlEQVR4nGNgIAEwInPsGsT+g2gtFREwf0bMNRR5JlJMxgAw0zOWaIFpnCbjUwiSBwDuJgwWveZFegAAAABJRU5ErkJggg=='),   // pernas juntas
+                 img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAKUlEQVR4nGNgIAfYNYj9B2FksYwlWv9BGMZnIstkmOnoYlhNJqQQpAYATbMQJWbnUooAAAAASUVORK5CYII=')];  // pernas abertas
+const blinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAA7klEQVR4nGNkwAEylmj9l1DihfNf3PvMMCPmGiMu9YwNx8z/owuCNMEMeXHvM5hG5mMzkAlE7Nt1H0UQ2SUzYq6BMTY5ZMACIpzcFHG5mKHhmDmGa7EBJpBEqLgBAzaaFMB49W46Rhghg8nHD2N4p8HqJEYY4YwFEDiw0h9syQHZF3AxXIENDiNsANmlL47fhrsKb2BjA6/PIFyBDHCFHU6DRE0kEJzjt+HMEegiJnwugmFkAHKRXYPYf6IN0laeyQjCDAwMDBGsqiSndKIAyEXorsLpInygSdMSbiBMDG8WwQdA2afu+nEwG1R6AACXymspRG5I9wAAAABJRU5ErkJggg=='); // olho fechado (quadro 2 de piscar.gif)
+const BLINK = { every: [3, 7], dur: 0.11, doubleChance: 0.2 };   // piscadas eventuais
+const LEG_OFFSET = { x: 5, y: 13 };   // onde as pernas encaixam no corpo (px do sprite)
+const WALK = {
+  stepLen: 34,       // px andados por quadro da caminhada (sincroniza a passada com a velocidade)
+  tilt: 0.06,        // inclinação do corpo andando (rad)
+  dust: true,        // poeirinha a cada passo
+};
+// quadros 18x19 (1 px de folga em cima para o corpo subir):
+//   'stand' / 'step' = pernas abertas (parado e passo), 'pass' = pernas juntas com o corpo 1 px acima,
+//   'breath' = parado respirando (pernas abertas, corpo 1 px acima)
+const walkFrames = {};
+function walkFrame(name, blink = false) {
+  const key = blink ? name + '_b' : name;
+  if (walkFrames[key]) return walkFrames[key];
+  if (!bodyImg.complete || !blinkImg.complete || !legImgs[0].complete || !legImgs[1].complete) return null;
+  const c = document.createElement('canvas'); c.width = 18; c.height = 19;
+  const g = c.getContext('2d');
+  const leg = name === 'pass' ? legImgs[0] : legImgs[1];
+  g.drawImage(leg, LEG_OFFSET.x, LEG_OFFSET.y + 1);
+  g.drawImage(blink ? blinkImg : bodyImg, 0, name === 'pass' || name === 'breath' ? 0 : 1);
+  return (walkFrames[key] = c);
+}
 const gunSprite = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAECAYAAACHtL/sAAAAnElEQVQYlW2OMQrCQBRE30JgG4MQtFeCjY21XsA7qL14Aes0uYHgCVJZpdMjeAZxA1aCYSWsza/WQiIh+sqZeTCKBvN+6HsdDcBks0VrjYjQRuvPRkQImlJN+RJuRUE3iqis5Xk8MMpiAC7LK4PFGoDKWoK2OM3HhMaxW+1Vs0uI/d04sqJUpOk3D2rx9HAKYGic//kMJLOz+pe/AdOINMJCT3qYAAAAAElFTkSuQmCC');   // arma.png
 const bulletImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAYAAAAb4BS0AAAAFUlEQVQImWO8P1vt/9npPAwMDAwMACZ7BBHZ3QEnAAAAAElFTkSuQmCC');   // tiro.png
 const ammoFullImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAdklEQVQokWNkYGBgUFBQ+M+AAzx48ICRBcZp05dhMODnYGBgYGDgFRJm+PzuLYPXoTsMDAwMDEy4TEAGo4qoqAgeLfI+nxiYRNghgvy/GZg+/mdgOESCSYwKCgr/l1bzMahoq6FI8PKLMHz++IbBPOoMRBEhkwDFZxgcewHZtgAAAABJRU5ErkJggg=='); // municao-cheia.png
@@ -167,6 +194,35 @@ const TUFT = {
   pushForce: 9,      // dobra máxima ao ser empurrado (px de tela)
 };
 const tufts = [];
+
+// árvores nas bordas da tela (48x48): os jacarés saem delas
+const treeImg = img('data:image/png;base64,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'); // arvore.png
+const TREE = {
+  scale: 3,
+  canopyRows: 28,           // linhas da copa (balançam); o tronco fica parado
+  baseRow: 45,              // linha da base do tronco no sprite
+  trunkX: 23.5,             // centro do tronco no sprite
+  spacing: 78,              // distância entre árvores ao longo da borda (px de tela)
+  innerChance: 0.3,         // chance de uma árvore extra mais para dentro (borda irregular)
+  slice: 3,                 // linhas do sprite por faixa ao desenhar o balanço
+  windAmp: 2.2,             // balanço da copa com o vento (px no topo)
+  leafEvery: [4, 9],        // intervalo entre folhas caindo (s, por árvore)
+  shakeImpulse: 45,         // tranco quando um jacaré passa
+  shakeCooldown: 1.2,       // tempo mínimo entre tremidas da mesma árvore
+};
+// iluminação da clareira
+const LIGHT = {
+  shade: [6, 14, 10],       // cor da sombra da mata (rgb)
+  edgeDark: 0.62,           // escuridão máxima nas bordas (0..1)
+  sun: 0.09,                // brilho quente no meio da clareira
+  rays: 0.045,              // intensidade dos raios de sol
+  playerLight: 0.45,        // o jogador "abre" um pouco a sombra em volta dele
+  fireflies: 9,             // quantidade de vagalumes
+};
+const fireflies = [];
+const LEAF_COLORS = ['#7da64a', '#658a36', '#4b6930', '#8fb85a'];
+const trees = [];
+const leaves = [];
 const SAND_RADIUS = 0.36;      // raio do círculo de terra, em fração do lado menor da tela
 
 // =====================================================================
@@ -301,6 +357,14 @@ const sfx = (() => {
       if (!ok('heal', 0.2)) return;
       [392, 523, 659, 784].forEach((f, i) => tone({ dur: 0.14, peak: 0.12, wave: 'triangle', f0: f, f1: f * 1.02, delay: i * 0.06 }));
     },
+    rustle() {        // folhagem balançando
+      if (!ok('rustle', 0.15)) return;
+      noise({ dur: 0.25, peak: 0.08, type: 'bandpass', f0: rand(2500, 4000), q: 1, attack: 0.04 });
+    },
+    step() {          // passo bem baixinho
+      if (!ok('step', 0.06)) return;
+      noise({ dur: 0.05, peak: 0.07, type: 'lowpass', f0: rand(500, 800), f1: 150 });
+    },
     hit() {           // impacto no inimigo
       if (!ok('hit', 0.025)) return;
       tone({ dur: 0.07, peak: 0.22, wave: 'square', f0: rand(320, 380), f1: 120 });
@@ -433,6 +497,34 @@ function buildMap() {
   }
   m.putImageData(out, 0, 0);
 
+  // árvores: um anel denso em volta da tela, como uma clareira no meio da mata
+  trees.length = 0;
+  const addTree = (x, baseY, side) => trees.push({ x, baseY, side, phase: rnd() * 6.28, sway: 0, vel: 0,
+    flip: rnd() < 0.5, leafT: rnd() * 8, cool: 0 });
+  const jit = v => (rnd() - 0.5) * v;
+  for (let x = -30; x <= WORLD_W + 30; x += TREE.spacing) {
+    addTree(x + jit(30), 70 + jit(40), 'top');                          // topo: tronco e copa aparecendo
+    addTree(x + TREE.spacing / 2 + jit(30), WORLD_H + 95 + jit(40), 'bottom');   // embaixo: só a copa
+    if (rnd() < TREE.innerChance) addTree(x + jit(40), 125 + jit(25), 'top');
+  }
+  for (let y = 150; y <= WORLD_H + 40; y += TREE.spacing) {
+    addTree(-14 + jit(24), y + jit(30), 'left');
+    addTree(WORLD_W + 14 + jit(24), y + TREE.spacing / 2 + jit(30), 'right');
+    if (rnd() < TREE.innerChance) addTree(28 + jit(16), y + jit(40), 'left');
+    if (rnd() < TREE.innerChance) addTree(WORLD_W - 28 + jit(16), y + jit(40), 'right');
+  }
+  leaves.length = 0;
+  buildLightCache();
+  // vagalumes: vagando perto da mata (fora da clareira)
+  fireflies.length = 0;
+  for (let i = 0; i < LIGHT.fireflies; i++) {
+    const a = rnd() * Math.PI * 2;
+    const rr = 0.36 + rnd() * 0.12;
+    fireflies.push({ bx: WORLD_W / 2 + Math.cos(a) * WORLD_W * rr, by: WORLD_H / 2 + Math.sin(a) * WORLD_H * rr,
+      ax: 30 + rnd() * 50, ay: 20 + rnd() * 40, sx: 0.15 + rnd() * 0.25, sy: 0.12 + rnd() * 0.22,
+      ph: rnd() * 6.28, blink: 0.6 + rnd() * 0.9 });
+  }
+
   // tufos de grama: só em tiles de grama com grama dos 4 lados (longe das bordas) e fora da casa
   tufts.length = 0;
   const HR = houseRect();
@@ -442,6 +534,7 @@ function buildMap() {
       if (at(x, y) !== 0 || at(x - 1, y) === 1 || at(x + 1, y) === 1 || at(x, y - 1) === 1 || at(x, y + 1) === 1) continue;
       const tx = (x + 0.2 + rnd() * 0.6) * TILE, ty = (y + 0.35 + rnd() * 0.55) * TILE;
       if (tx > HR.l - 40 && tx < HR.r + 40 && ty > HR.t - 70 && ty < HR.b + 30) continue;
+      if (trees.some(tr => Math.abs(tr.x - tx) < 50 && ty < tr.baseY + 24 && ty > tr.baseY - 40)) continue;
       tufts.push({ x: tx, y: ty, big: rnd() < TUFT.bigChance, flip: rnd() < 0.5, phase: rnd() * Math.PI * 2,
         bend: 0, vel: 0, touched: false });
     }
@@ -463,6 +556,14 @@ const player = {
   w: 18 * SCALE, h: 18 * SCALE,
   facing: SPRITE_FACES,
   aim: 0,
+  walkDist: 0,          // distância andada (avança a animação das pernas)
+  walking: false,
+  walkFrame: 'stand',
+  moveX: 0,             // direção do movimento (para inclinar o corpo)
+  idleT: 0,             // relógio da respiração parado
+  blinkNext: 2.5,       // segundos até a próxima piscada
+  blinkT: 0,            // tempo restante de olho fechado
+  blinkAgain: false,
   cooldown: 0,
   ammo: AMMO_MAX,
   reserve: RESERVE_START,
@@ -835,6 +936,7 @@ function killEnemy(e) {
 
 // nasce fora da tela, numa borda aleatória, e caminha até o jogador
 function spawnEdgeEnemy(cfg) {
+  // nasce fora da tela, numa borda aleatória, e atravessa a mata até a clareira
   const m = 50, side = Math.floor(Math.random() * 4);
   let x, y;
   if (side === 0)      { x = rand(0, WORLD_W); y = -m; }
@@ -1110,6 +1212,7 @@ function update(dt) {
 
   clock += dt;
   if (mode === 'menu') {
+    updateTrees(dt);
     if (mouse.pressed) { const b = hoveredButton(); if (b) startMode(b.id); }
     mouse.pressed = false;
     return;
@@ -1132,11 +1235,13 @@ function update(dt) {
 
   const kd = Math.exp(-12 * dt);           // knockback some rápido
   player.vx *= kd; player.vy *= kd;
+  const prevX = player.x, prevY = player.y;
   player.x += (dx * SPEED + player.vx) * dt;
   player.y += (dy * SPEED + player.vy) * dt;
   player.x = Math.max(player.w / 2, Math.min(WORLD_W - player.w / 2, player.x));
   player.y = Math.max(player.h / 2, Math.min(WORLD_H - player.h / 2, player.y));
   pushOutOfHouse(player, PLAYER_HITBOX.w * SCALE / 2, PLAYER_HITBOX.h * SCALE / 2);
+  updateWalk(dt, len > 0, Math.hypot(player.x - prevX, player.y - prevY), dx);
 
   // câmera fixa: o cenário inteiro cabe na tela (só o tremor desloca)
   cam.x = 0; cam.y = 0;
@@ -1169,6 +1274,7 @@ function update(dt) {
   updateReload(dt);
   updatePickups(dt);
   updateTufts(dt);
+  updateTrees(dt);
   updateTrainingAmmo(dt);
   reservePop *= Math.exp(-6 * dt);
 
@@ -1304,6 +1410,202 @@ function update(dt) {
 // =====================================================================
 // Tufos de grama: vento + dobram quando alguém passa (mola amortecida)
 // =====================================================================
+// =====================================================================
+// Árvores: vento na copa, folhas caindo e tremida quando um jacaré sai
+// =====================================================================
+function shakeTree(t, dir) {
+  t.vel += (dir || (Math.random() < 0.5 ? -1 : 1)) * TREE.shakeImpulse;
+  t.cool = TREE.shakeCooldown;
+  for (let i = 0; i < 5; i++) dropLeaf(t, true);
+}
+
+function dropLeaf(t, burst = false) {
+  const S = TREE.scale, w = 48 * S;
+  const left = t.x - TREE.trunkX * S;
+  const x = left + rand(0.12, 0.88) * w, y = t.baseY - (TREE.baseRow - rand(4, 22)) * S;
+  leaves.push({ x, y, vx: burst ? rand(-70, 70) : rand(-12, 12), vy: burst ? rand(-60, 10) : rand(15, 30),
+    ph: rand(0, 6.28), sw: rand(18, 34), floor: t.baseY + rand(-6, 26), age: 0, landed: 0,
+    size: Math.random() < 0.6 ? 2 : 1, color: LEAF_COLORS[Math.floor(Math.random() * LEAF_COLORS.length)] });
+}
+
+function updateTrees(dt) {
+  for (const t of trees) {
+    // jacaré andando passa pela árvore (tronco ou embaixo da copa) -> ela balança
+    if ((t.cool -= dt) <= 0) {
+      const S = TREE.scale;
+      for (const e of enemies) {
+        if (!e.alive || e.speed <= 0) continue;
+        const feet = e.y + ENEMY_H * SCALE / 2;
+        if (Math.abs(e.x - t.x) < 16 * S && feet > t.baseY - 26 * S && feet < t.baseY + 6 * S) {
+          shakeTree(t, e.x < t.x ? 1 : -1);   // balança para o lado contrário de quem passou
+          sfx.rustle();
+          break;
+        }
+      }
+    }
+    // mola amortecida: a tremida vai sumindo
+    t.vel += (-t.sway * 60 - t.vel * 5) * dt;
+    t.sway += t.vel * dt;
+    if ((t.leafT -= dt) <= 0) { t.leafT = rand(...TREE.leafEvery); if (t.side === 'top' || Math.random() < 0.6) dropLeaf(t); }
+  }
+  for (let i = leaves.length - 1; i >= 0; i--) {
+    const l = leaves[i];
+    l.age += dt;
+    if (l.landed > 0) { if ((l.landed += dt) > 2.5) leaves.splice(i, 1); continue; }
+    l.vx *= Math.exp(-2 * dt);
+    l.vy += (40 - l.vy) * Math.min(1, dt * 2);          // cai devagar (resistência do ar)
+    l.x += (l.vx + Math.cos(l.age * 3 + l.ph) * l.sw) * dt;   // vai e volta enquanto cai
+    l.y += l.vy * dt;
+    if (l.y >= l.floor) { l.y = l.floor; l.landed = 0.001; }
+    if (l.age > 12) leaves.splice(i, 1);
+  }
+}
+
+function drawTree(t) {
+  if (!treeImg.complete) return;
+  const S = TREE.scale;
+  const wind = Math.sin(clock * 1.1 + t.phase) * 0.6 + Math.sin(clock * 0.47 + t.x * 0.01) * 0.4;
+  const sway = wind * TREE.windAmp + t.sway;
+  const x0 = Math.round(t.x - TREE.trunkX * S), y0 = Math.round(t.baseY - TREE.baseRow * S);
+  // sombra
+  ctx.fillStyle = 'rgba(0,0,0,.22)';
+  ctx.beginPath(); ctx.ellipse(t.x, t.baseY, 15 * S, 3 * S, 0, 0, Math.PI * 2); ctx.fill();
+  // em faixas: a copa desliza mais em cima, o tronco não mexe
+  if (t.flip) { ctx.save(); ctx.translate(2 * x0 + 48 * S, 0); ctx.scale(-1, 1); }
+  for (let r = 0; r < 48; r += TREE.slice) {
+    const n = Math.min(TREE.slice, 48 - r);
+    let off = 0;
+    if (r < TREE.canopyRows) off = Math.round(sway * (0.35 + 0.65 * Math.pow(1 - r / TREE.canopyRows, 1.2)));
+    ctx.drawImage(treeImg, 0, r, 48, n, x0 + (t.flip ? -off : off), y0 + r * S, 48 * S, n * S);
+  }
+  if (t.flip) ctx.restore();
+}
+
+// =====================================================================
+// Iluminação: sombra da mata nas bordas, sol na clareira, raios, luzes dinâmicas e vagalumes
+// =====================================================================
+const lightCanvas = document.createElement('canvas');
+const lightCtx = lightCanvas.getContext('2d');
+const shadeCache = document.createElement('canvas');   // sombra estática (recalculada só ao mudar o tamanho)
+
+function buildLightCache() {
+  const W = WORLD_W, H = WORLD_H, [r, g, b] = LIGHT.shade;
+  shadeCache.width = lightCanvas.width = W;
+  shadeCache.height = lightCanvas.height = H;
+  const c = shadeCache.getContext('2d');
+  c.clearRect(0, 0, W, H);
+  // radial: clara no meio, escura perto das árvores (elíptica, acompanha a tela)
+  const R = Math.max(W, H) * 0.62;
+  c.save();
+  c.translate(W / 2, H / 2);
+  c.scale(W / Math.max(W, H), H / Math.max(W, H));
+  const gr = c.createRadialGradient(0, 0, R * 0.42, 0, 0, R);
+  gr.addColorStop(0, `rgba(${r},${g},${b},0)`);
+  gr.addColorStop(0.45, `rgba(${r},${g},${b},${LIGHT.edgeDark * 0.35})`);
+  gr.addColorStop(1, `rgba(${r},${g},${b},${LIGHT.edgeDark})`);
+  c.fillStyle = gr;
+  c.fillRect(-R * 2, -R * 2, R * 4, R * 4);
+  c.restore();
+  // faixa extra embaixo das copas (topo e base da tela)
+  const top = c.createLinearGradient(0, 0, 0, 140);
+  top.addColorStop(0, `rgba(${r},${g},${b},0.35)`); top.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  c.fillStyle = top; c.fillRect(0, 0, W, 140);
+  const bot = c.createLinearGradient(0, H, 0, H - 90);
+  bot.addColorStop(0, `rgba(${r},${g},${b},0.3)`); bot.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  c.fillStyle = bot; c.fillRect(0, H - 90, W, 90);
+}
+
+// abre um "buraco" de luz na sombra
+function punchLight(x, y, radius, strength) {
+  const g = lightCtx.createRadialGradient(x, y, 0, x, y, radius);
+  g.addColorStop(0, `rgba(0,0,0,${strength})`);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  lightCtx.fillStyle = g;
+  lightCtx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+}
+
+function fireflyPos(f) {
+  return { x: f.bx + Math.sin(clock * f.sx + f.ph) * f.ax + Math.sin(clock * f.sx * 2.3 + f.ph * 2) * 10,
+           y: f.by + Math.cos(clock * f.sy + f.ph) * f.ay + Math.sin(clock * 1.7 + f.ph) * 4 };
+}
+// pisca devagar e às vezes "apaga" (curva pontuda)
+const fireflyGlow = f => Math.pow(Math.max(0, Math.sin(clock * f.blink + f.ph)), 3);
+
+function drawLighting() {
+  if (!WORLD_W) return;
+  // 1) sombra: cópia da sombra estática, com luzes recortadas
+  lightCtx.globalCompositeOperation = 'source-over';
+  lightCtx.clearRect(0, 0, lightCanvas.width, lightCanvas.height);
+  lightCtx.drawImage(shadeCache, 0, 0);
+  lightCtx.globalCompositeOperation = 'destination-out';
+  if (mode !== 'menu' && player.hp > 0) punchLight(player.x, player.y, 150, LIGHT.playerLight);
+  if (player.flash > 0) {                                  // clarão do tiro ilumina em volta
+    const m = muzzlePos(), k = player.flash / 0.07;
+    punchLight(m.x, m.y, 260, 0.9 * k);
+  }
+  for (const f of fireflies) { const q = fireflyPos(f); punchLight(q.x, q.y, 34, 0.5 * fireflyGlow(f)); }
+  for (const p of particles) if (p.color === 'ring' && p.size > 20) punchLight(p.x, p.y, p.size * 1.2, 0.35 * (1 - p.age / p.life));
+  ctx.drawImage(lightCanvas, 0, 0);
+
+  // 2) luz quente da clareira + raios de sol (aditivo, bem sutil)
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const cx = WORLD_W / 2, cy = WORLD_H / 2, R = SAND_RADIUS * Math.min(WORLD_W, WORLD_H) * 1.35;
+  const pulse = 1 + Math.sin(clock * 0.4) * 0.12;
+  const sun = ctx.createRadialGradient(cx, cy - R * 0.15, 0, cx, cy, R);
+  sun.addColorStop(0, `rgba(255,225,150,${LIGHT.sun * pulse})`);
+  sun.addColorStop(1, 'rgba(255,225,150,0)');
+  ctx.fillStyle = sun;
+  ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+  // raios diagonais vindos de cima à esquerda, oscilando devagar
+  for (let i = 0; i < 4; i++) {
+    const a = LIGHT.rays * (0.6 + 0.4 * Math.sin(clock * (0.25 + i * 0.07) + i * 2));
+    const x = cx - R * 0.9 + i * R * 0.5 + Math.sin(clock * 0.15 + i) * 20, w = 26 + i * 9;
+    const g = ctx.createLinearGradient(x, 0, x + WORLD_H * 0.45, WORLD_H);
+    g.addColorStop(0, `rgba(255,240,190,${a})`);
+    g.addColorStop(0.7, `rgba(255,240,190,${a * 0.4})`);
+    g.addColorStop(1, 'rgba(255,240,190,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x, 0); ctx.lineTo(x + w, 0);
+    ctx.lineTo(x + w + WORLD_H * 0.45, WORLD_H); ctx.lineTo(x + WORLD_H * 0.45, WORLD_H);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFireflies() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of fireflies) {
+    const g = fireflyGlow(f);
+    if (g < 0.02) continue;
+    const q = fireflyPos(f);
+    const halo = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, 14);
+    halo.addColorStop(0, `rgba(210,255,120,${0.45 * g})`);
+    halo.addColorStop(1, 'rgba(210,255,120,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(q.x - 14, q.y - 14, 28, 28);
+    ctx.fillStyle = `rgba(240,255,170,${0.9 * g})`;
+    ctx.fillRect(Math.round(q.x) - 2, Math.round(q.y) - 2, 4, 4);   // miolo em pixel
+  }
+  ctx.restore();
+}
+
+function drawLeaves(landed) {
+  const S = TREE.scale;
+  for (const l of leaves) {
+    if ((l.landed > 0) !== landed) continue;
+    ctx.globalAlpha = l.landed > 0 ? Math.max(0, 1 - (l.landed - 1.5)) : 1;
+    ctx.fillStyle = l.color;
+    const w = (l.size === 2 ? 2 : 1) * S, h = S;
+    // folha "virando" enquanto cai: alterna a largura
+    const flipW = l.landed > 0 ? w : Math.max(S, Math.round(w * Math.abs(Math.cos(l.age * 5 + l.ph))));
+    ctx.fillRect(Math.round(l.x - flipW / 2), Math.round(l.y), flipW, h);
+  }
+  ctx.globalAlpha = 1;
+}
+
 function updateTufts(dt) {
   const bodies = [];
   if (mode !== 'menu' && player.hp > 0) bodies.push({ x: player.x, y: player.y + player.h / 2 - 6, moving: true });
@@ -1406,19 +1708,69 @@ function drawMuzzleFlash() {
   ctx.restore();
 }
 
+// =====================================================================
+// Caminhada: passo aberto -> pernas juntas (corpo sobe) -> passo aberto -> ...
+// =====================================================================
+function updateWalk(dt, input, moved, dx) {
+  const walking = input && !gameOver && moved > SPEED * dt * 0.3;   // andando de verdade (não preso na parede)
+  player.moveX += ((walking ? dx : 0) - player.moveX) * Math.min(1, dt * 12);
+  if (walking) {
+    if (!player.walking) player.walkDist = WALK.stepLen;  // começa já no passo aberto
+    player.walkDist += moved;
+    const frame = Math.floor(player.walkDist / WALK.stepLen) % 2 === 1 ? 'step' : 'pass';
+    if (frame === 'step' && player.walkFrame !== 'step') footstep();
+    player.walkFrame = frame;
+    player.idleT = 0;
+  } else {
+    if (player.walking) player.walkFrame = 'stand';
+    player.idleT += dt;
+    // parado: pernas abertas, respirando (corpo sobe 1 px de vez em quando)
+    player.walkFrame = Math.sin(player.idleT * 2.4) > 0.55 ? 'breath' : 'stand';
+  }
+  player.walking = walking;
+  updateBlink(dt);
+}
+
+// piscadas: de vez em quando (3-7 s), às vezes duas seguidas
+function updateBlink(dt) {
+  if (player.blinkT > 0) { player.blinkT -= dt; return; }
+  if ((player.blinkNext -= dt) > 0) return;
+  player.blinkT = BLINK.dur;
+  if (player.blinkAgain) {                       // esta é a segunda da dupla
+    player.blinkAgain = false;
+    player.blinkNext = rand(...BLINK.every);
+  } else if (Math.random() < BLINK.doubleChance) {
+    player.blinkAgain = true;
+    player.blinkNext = BLINK.dur + 0.12;         // segunda piscada logo em seguida
+  } else {
+    player.blinkNext = rand(...BLINK.every);
+  }
+}
+
+function footstep() {
+  sfx.step();
+  if (!WALK.dust) return;
+  const fx = player.x + rand(-10, 10), fy = player.y + player.h / 2 - 4;
+  for (let i = 0; i < 2; i++)
+    particles.push({ x: fx, y: fy, vx: rand(-40, 40) - player.moveX * 30, vy: rand(-30, -8), life: rand(0.25, 0.4), age: 0,
+      size: rand(3, 5), grow: 10, color: 'dust', drag: 4 });
+}
+
 function drawPlayer() {
   const px = Math.round(player.x), py = Math.round(player.y);
   ctx.fillStyle = 'rgba(0,0,0,.28)';
   ctx.beginPath();
   ctx.ellipse(px, py + player.h / 2 - 2, player.w * 0.35, 6, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (!sprite.complete) return;
+  const fr = walkFrame(player.walkFrame, player.blinkT > 0);
+  if (!fr) return;
   ctx.save();
-  ctx.translate(px, py);
+  ctx.translate(px, py + player.h / 2);                 // pivô nos pés: inclina sem tirar os pés do chão
+  ctx.rotate(player.moveX * WALK.tilt);
   if (player.facing !== SPRITE_FACES) ctx.scale(-1, 1);
   // invencível: pisca; logo após o dano: fica branco
   if (player.invuln > 0 && Math.floor(player.invuln * 14) % 2 === 0) ctx.globalAlpha = 0.35;
-  ctx.drawImage(player.hurt > 0.5 ? whiteOf(sprite) : sprite, -player.w / 2, -player.h / 2, player.w, player.h);
+  ctx.drawImage(player.hurt > 0.5 ? whiteOf(fr) : fr, -player.w / 2, -player.h - SCALE, player.w, player.h + SCALE);
   ctx.restore();
 }
 
@@ -1573,14 +1925,15 @@ function drawRunHud() {
 
 // jacarezinho com a escopeta na mão (tela inicial)
 function drawTitleGator(cx, cy) {
-  if (!sprite.complete || !gunSprite.complete) return;
+  const fr = walkFrame(Math.sin(clock * 2.4) > 0.55 ? 'breath' : 'stand', clock % 4.3 < BLINK.dur);
+  if (!fr || !gunSprite.complete) return;
   const S = 6, w = 18 * S, h = 18 * S;
   ctx.fillStyle = 'rgba(0,0,0,.35)';
   ctx.beginPath(); ctx.ellipse(cx, cy + h / 2 - 2, w * 0.36, 8, 0, 0, Math.PI * 2); ctx.fill();
   ctx.save();
   ctx.translate(cx, cy);
   ctx.scale(-1, 1);                                        // sprite olha para a esquerda: vira para a direita
-  ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+  ctx.drawImage(fr, -w / 2, -h / 2 - S, w, h + S);
   ctx.restore();
   // escopeta empunhada, apontando um pouco para cima, com um leve "respirar"
   const a = -0.28 + Math.sin(clock * 1.3) * 0.04;
@@ -1831,6 +2184,8 @@ function render() {
   const objs = pickups.map(b => ({ y: b.y - 30, draw: () => drawPickup(b) }));
   // tufos ordenados pela base: o dino fica atrás quando está acima deles
   for (const t of tufts) objs.push({ y: t.y - 36, draw: () => drawTuft(t) });
+  // árvores ordenadas pela base do tronco: quem passa atrás fica escondido pela copa
+  for (const t of trees) objs.push({ y: t.baseY - 36, draw: () => drawTree(t) });
   if (mode !== 'menu') {
     objs.push({ y: player.y, draw: drawPlayerAndGun });
     for (const e of enemies) objs.push({ y: e.y, draw: () => drawEnemy(e) });
@@ -1839,10 +2194,14 @@ function render() {
   }
   objs.sort((a, b) => a.y - b.y);
 
+  drawLeaves(true);                    // folhas já no chão
   drawParticles();
   for (const o of objs) o.draw();
-  drawBullets();
+  drawLeaves(false);                   // folhas caindo, por cima de tudo
+  drawLighting();                      // sombra da mata + sol da clareira
+  drawBullets();                       // tiros e clarão brilham por cima da sombra
   drawMuzzleFlash();
+  drawFireflies();
   if (mode !== 'menu') drawReloadHint();
   ctx.restore();
 
