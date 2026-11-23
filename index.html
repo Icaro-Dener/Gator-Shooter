@@ -16,7 +16,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="hud" style="display:none">WASD mover · mouse mirar · clique atirar · M som · ESC menu</div>
+<div id="hud" style="display:none">WASD mover · mouse mirar · clique atirar · botão direito faca · R recarregar · M som · ESC menu</div>
 <script>
 // =====================================================================
 // Config
@@ -51,16 +51,37 @@ const SHOT = {
   shake: 0.55,        // "trauma" da tela por tiro (0..1)
   knockback: 140,     // empurrão no jogador (px/s)
 };
+// Melee (faca, botão direito) — melee.gif: 16x13, 3 frames de 100 ms, lâmina para a DIREITA
+const MELEE_W = 16, MELEE_H = 13;
+const MELEE_GRIP = { x: 3, y: 9 };   // mão no sprite (pivô)
+const MELEE_SCALE = 9;              // tamanho da faca na tela (o resto do jogo usa 4)
+const MELEE_FRAME = 0.1;             // segundos por frame
+const MELEE_HIT_AT = 0.1;            // o golpe acerta no início do frame 2
+const MELEE_COOLDOWN = 3;            // segundos
+const MELEE_DAMAGE = 2;              // um projétil tira 1; um tiro de perto até 8
+const MELEE_RANGE = 190;             // alcance a partir da mão (px de tela)
+const MELEE_ARC = 2.2;               // abertura do golpe em radianos (~125°)
+const MELEE_KNOCKBACK = 46;          // empurrão nos inimigos que andam (px)
+
 // Munição (HUD no canto inferior direito)
-const AMMO_MAX = 6;
+const AMMO_MAX = 6;          // cartuchos na escopeta
+const RESERVE_START = 12;    // cartuchos de reserva no início
+const RESERVE_MAX = 30;      // limite da reserva
+const RELOAD_SHELL = 0.25;   // segundos por cartucho (2 frames de 125 ms) — 6 cartuchos = 1,5 s
 const AMMO_SCALE = 3;     // gauges 9x16 ampliadas
 const AMMO_GAP = 4;       // espaço entre gauges (px de tela)
 const AMMO_MARGIN = 20;   // distância das bordas da tela
 
 // Caixa de munição (17x13)
 const BOX_W = 17, BOX_H = 13;
-const BOX_POS = { x: 0.25, y: 0.35 };  // posição relativa à tela (0..1)
-const BOX_RADIUS = 60;                 // distância para pegar (px de tela)
+const BOX_RADIUS = 50;                 // distância para pegar (px de tela)
+const DROP_LIFE = 14;                  // segundos até sumir (pisca nos últimos 3)
+// drop ao matar um inimigo: um único sorteio (sobra 72% = nada)
+const DROP_TABLE = [
+  { amount: 12, chance: 0.02, scale: 4.2 },
+  { amount: 6,  chance: 0.08, scale: 3.6 },
+  { amount: 3,  chance: 0.18, scale: 3.0 },
+];
 const BOX_SHINE_EVERY = [1.8, 3.2];    // intervalo aleatório entre brilhos (s)
 const BOX_SHINE_TIME = 0.45;           // duração da passada do brilho (s)
 
@@ -111,6 +132,12 @@ const bulletImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAY
 const ammoFullImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAdklEQVQokWNkYGBgUFBQ+M+AAzx48ICRBcZp05dhMODnYGBgYGDgFRJm+PzuLYPXoTsMDAwMDEy4TEAGo4qoqAgeLfI+nxiYRNghgvy/GZg+/mdgOESCSYwKCgr/l1bzMahoq6FI8PKLMHz++IbBPOoMRBEhkwDFZxgcewHZtgAAAABJRU5ErkJggg=='); // municao-cheia.png
 const ammoEmptyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAcUlEQVQoke2ROw6DQAxEn80uBQ0UOYDvf6rtIkU0lCu06xT8kkgUSCmZ7skz42IEwMycE6WUJGwwRKVVAUC1odbCK5eFzxo+dZv+aNpnCZ0j6yyijlQgX2gSM/NHL8QYvg/a4LXwHOfl3Tg5MP/kD34DQXoaYcq+77YAAAAASUVORK5CYII='); // municao-vazia.png
 const houseImg = img('data:image/png;base64,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'); // casa.png
+const reloadImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAjklEQVR4nGNgwAEajpn/z1ii9Z+BAGDCJfHi3meGkJoPDBSBPQpSBF3AiMxxF+X9L8LDDmYvvf8GTHd1dWFoYmeHqPn58ycDI7ImGHjz5SeDakgMA7+QEMPHd+8Y3u9YDRYDAZBahah0MBskh2IASJHlRi2w/2fEXENxHS7AAtO48/VnsAbFe58J+hsZAAC6jzdlywokngAAAABJRU5ErkJggg=='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAf0lEQVR4nGNgGLSg4Zj5/4wlWv8JqWNB5riL8v4X4WEHs1/c+8wQUvOBQamrC8MQdnaImp8/fzIwImuCgTdffjKohsQw8AsJMXx8947h/Y7VYDEQAKlViEoHs0FyKAaAFFlu1ALbPiPmGiMxXgV7AaRx5+vPYA2K9z4T9DcyAAAbmzOYUhqsPgAAAABJRU5ErkJggg==')]; // arma-recarga.gif (16x7, 2 frames)
+const RELOAD_W = 16, RELOAD_H = 7, RELOAD_GRIP = { x: 3, y: 5 };
+const meleeImgs = [1, 2, 3].map(i => null);
+meleeImgs[0] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAdklEQVR4nGNgGDLg6tWr/7GJMxGjed26dVg1E2XAOjyaCRqwDqpZXV2dQVtbm5EkA9YRoRkEGJE5GUu0/kso8TLovShnIEYzigENx8zBNm7N/QOXPH32LF7NGF7YmvuHgYuHh0FBSYkozRjA1Nj4PwiTrHFAAQDU3SXb2+n/XgAAAABJRU5ErkJggg==');
+meleeImgs[1] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAf0lEQVR4nGNgoBAw4pK4evXqf3QxbW1tRqINwGUYuiFMDEQAZE3YXEYSABlAFUMYBhRcRXIBC7JEwzFzuESD1UnGdevWYThVXV0dhc+Crnlr7h8wH6QZpPjmzZsoGtGjEc4xNTYGG6CgpATmP7h3j2HBokVYEw9WADMAF59mAAC1yTdSwinx2QAAAABJRU5ErkJggg==');
+meleeImgs[2] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAeElEQVR4nGNgGDLg6tWr/weXQUPYBeiuYGFAAg3HzOESDVYnGRmIACwwhqmx8f+tuX+I0YMCwLaANIPo02fPMoaGhoLZkZGRDOrq6gw3b94EKwwKCsLqIqyCIAMXLFrEoK2tzbhu3TqUUAcZCgIgOZKcCgs49GgEALdCL7fd9tO2AAAAAElFTkSuQmCC'); // melee.gif
 const enemyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABIklEQVQ4jZ2UrW7DMBSFP1dNo5RaY1Zh0V6gcH6HhIz1LUoGQvYIYXuAPUQGiysFVRqZyqbQWUMeaJ16q52fHZLI9v18dc5NBBGVSlmAl+8vALbpkqfTScTOC1cQkoOki4RHkXTrIeAMoDEmCNqmS9JFEtz7qznAfZZFD/id9GkGcLfZEHpOkajyPOoRwOd+f7MW8iiaAsBOawuQHY+DoHkIUEhpH7S+dsU1kJifQRDAR9t27/EoIqBCys6vlZQAvNX1CMzIjiaDXtu2M7G6dLfSOpjcvzqa7JEv5xGcUxtS7xyVSlmzXp+78mapMeaXDXD5RGJqjOH9cOC5rm8u9BMeBPnyp9kNayGl7fsN9d7sCnda2yrP7ShYIaX1QaVS0aIfLPtlq/rW0sIAAAAASUVORK5CYII='); // inimigo.png
 const boxImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAANCAYAAABPeYUaAAAAuElEQVQokaWTMQrCQBBF/19ShYC94CKk0IPkHB7EWjyI58gpUmkRkAgWAUUhSSWMRVxxNxjW9Td/YeY/ZgaWACAigkCRJA1gsVr+DDjs9j1IRGSWacTTGN258waY/lNeIXKL22iO8t4gnSRfff04WhnlAnzk9g0mQQagAqBHPLcjygWUVYNUJ6OOzIZYk2yKun/cOj//hLR1O9jKRyanAOBaXIIgJqdIMojwEkm+bxK6EgAQ+P/vPAHyqFpEdVYUZwAAAABJRU5ErkJggg=='); // caixa-municao.png
 const sandImg   = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAv0lEQVQ4jZ2SMRbCIBBEJzw7eupoqwfwKJ7AQ+QAeV4ivafQS2gL1KlNHRtIILssPqfLCzP8WbZ5DdcZANr9Af9ISWbvbNHonYV3Foo1awNowwZ39zfSS5vP4zYTc9Q0yvwIFRbcipmrtAREpG545uZQB9qgPZ1JAK2QKiUqkCl6QjAzKgf8qHyINU0jOZcPUXqF8L3djbWCNssNhEbYh10NuaaVIEHkVrg0I8UiB8W9j8HbQO+s/Iz95Vj8FwO/gYBP80k5sV8AAAAASUVORK5CYII=');  // areia.png
@@ -208,6 +235,30 @@ const sfx = (() => {
       noise({ dur: 0.05, peak: 0.45, type: 'bandpass', f0: 1200, q: 3, delay: 0.09 });
       [523, 659, 784, 1047].forEach((f, i) => tone({ dur: 0.09, peak: 0.12, wave: 'square', f0: f, delay: 0.14 + i * 0.05 }));
     },
+    reloadStart() {   // abre a recarga
+      if (!ok('reloadStart', 0.1)) return;
+      noise({ dur: 0.04, peak: 0.25, type: 'bandpass', f0: 1400, q: 3 });
+    },
+    shellIn() {       // cartucho entrando no tubo
+      if (!ok('shellIn', 0.05)) return;
+      noise({ dur: 0.035, peak: 0.4, type: 'bandpass', f0: 2200, q: 4 });
+      tone({ dur: 0.05, peak: 0.12, wave: 'square', f0: 700, f1: 420, delay: 0.02 });
+      noise({ dur: 0.05, peak: 0.25, type: 'lowpass', f0: 900, f1: 300, delay: 0.04 });
+    },
+    swing() {         // faca cortando o ar
+      if (!ok('swing', 0.1)) return;
+      noise({ dur: 0.16, peak: 0.45, type: 'bandpass', f0: 900, f1: 3500, q: 1.5, attack: 0.03 });
+    },
+    slash() {         // faca acertando
+      if (!ok('slash', 0.05)) return;
+      noise({ dur: 0.1, peak: 0.55, type: 'highpass', f0: 2500, f1: 900 });
+      tone({ dur: 0.09, peak: 0.3, wave: 'square', f0: 240, f1: 90 });
+    },
+    meleeReady() {    // faca disponível de novo
+      if (!ok('meleeReady', 0.5)) return;
+      tone({ dur: 0.08, peak: 0.08, wave: 'triangle', f0: 1568 });
+      tone({ dur: 0.12, peak: 0.08, wave: 'triangle', f0: 2093, delay: 0.06 });
+    },
     hit() {           // impacto no inimigo
       if (!ok('hit', 0.025)) return;
       tone({ dur: 0.07, peak: 0.22, wave: 'square', f0: rand(320, 380), f1: 120 });
@@ -257,7 +308,10 @@ window.addEventListener('keyup',   e => keys.delete(e.key.toLowerCase()));
 
 const mouse = { x: 0, y: 0, down: false };
 window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-canvas.addEventListener('mousedown', e => { if (e.button === 0) { mouse.down = true; mouse.pressed = true; } });
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0) { mouse.down = true; mouse.pressed = true; }
+  if (e.button === 2) mouse.rightPressed = true;
+});
 window.addEventListener('mouseup',   e => { if (e.button === 0) mouse.down = false; });
 window.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('blur', () => { keys.clear(); mouse.down = false; });
@@ -273,7 +327,6 @@ function buildMap() {
   WORLD_W = canvas.width; WORLD_H = canvas.height;
   MAP_W = Math.ceil(WORLD_W / TILE); MAP_H = Math.ceil(WORLD_H / TILE);
   if (!map.ready) { player.x = WORLD_W / 2; player.y = WORLD_H / 2; } // nasce no centro
-  box.x = Math.round(WORLD_W * BOX_POS.x); box.y = Math.round(WORLD_H * BOX_POS.y);
   house.x = Math.round(WORLD_W / 2); house.y = Math.round(WORLD_H / 2);
   for (const e of enemies) if (e.homeRel) { e.x = Math.round(WORLD_W * e.homeRel.x); e.y = Math.round(WORLD_H * e.homeRel.y); }
 
@@ -338,6 +391,14 @@ const player = {
   aim: 0,
   cooldown: 0,
   ammo: AMMO_MAX,
+  reserve: RESERVE_START,
+  reloading: false,
+  reloadT: 0,
+  meleeT: -1,                // tempo do golpe em andamento (-1 = nenhum)
+  meleeCd: 0,                // recarga do melee
+  meleeAngle: 0,
+  meleeHit: false,
+  meleeReadyPop: 0,                // progresso do cartucho atual (0..RELOAD_SHELL)
   hp: PLAYER_HP,
   invuln: 0,                 // tempo restante de invencibilidade
   hurt: 0,                   // flash do dano (1 -> 0)
@@ -352,6 +413,7 @@ const particles = [];
 let crossPulse = 0;
 const ammoPop = new Array(AMMO_MAX).fill(0); // animação da gauge que acabou de esvaziar
 let emptyFlash = 0;                          // pisca as gauges ao tentar atirar sem munição
+let reservePop = 0;                          // pulso do contador de reserva
 
 let heartPop = 0;
 let gameOver = false;
@@ -399,7 +461,8 @@ function whiteOf(image) {
   return c;
 }
 
-const box = { x: 0, y: 0, t: 0, shine: -1, nextShine: 1, pulse: 0 };
+let clock = 0;                                     // relógio global para animações
+const pickups = [];                                // caixas de munição dropadas
 const boxBuf = document.createElement('canvas');   // buffer em resolução nativa p/ o brilho
 boxBuf.width = BOX_W; boxBuf.height = BOX_H;
 const boxCtx = boxBuf.getContext('2d');
@@ -470,49 +533,83 @@ function shoot() {
 // =====================================================================
 // Caixa de munição
 // =====================================================================
-const boxFloat = () => Math.sin(box.t * 2.6) * 5;               // deslocamento vertical (px)
-const boxTop = () => box.y - BOX_H * SCALE / 2 - 14 + boxFloat(); // topo do sprite flutuando
-
 function sparkle(x, y) {
   particles.push({ x, y, vx: 0, vy: -10, life: 0.5, age: 0, size: 10, color: 'sparkle', drag: 0 });
 }
 
-function reload() {
-  sfx.reload();
-  player.ammo = AMMO_MAX;
-  ammoPop.fill(1);                 // todas as gauges pulam e brilham
-  emptyFlash = 0;
-  box.pulse = 1;
-  box.shine = 0;
-  const cy = boxTop() + BOX_H * SCALE / 2;
-  for (let i = 0; i < 16; i++) {   // explosão de faíscas
-    const a = (i / 16) * Math.PI * 2, sp = rand(150, 320);
-    particles.push({ x: box.x, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-      life: rand(0.25, 0.45), age: 0, size: rand(3, 5), color: Math.random() < .5 ? '#ffffff' : '#ffe08a', drag: 6 });
+function rollDrop(x, y) {
+  let r = Math.random();
+  for (const d of DROP_TABLE) {
+    if (r < d.chance) {
+      pickups.push({ x, y, amount: d.amount, scale: d.scale, t: rand(0, 6), age: 0,
+        shine: 0, nextShine: rand(...BOX_SHINE_EVERY), pop: 1 });
+      return;
+    }
+    r -= d.chance;
   }
-  particles.push({ x: box.x, y: cy, vx: 0, vy: 0, life: 0.35, age: 0, size: 10, grow: 260, color: 'ring', drag: 0 });
-  sparkle(box.x + 20, cy - 20);
-  sparkle(box.x - 24, cy + 6);
 }
 
-function drawBox() {
+const pickupFloat = b => Math.sin(b.t * 2.6) * 5;
+const pickupCenterY = b => b.y - 14 + pickupFloat(b) - b.pop * 30;   // nasce com um pulinho
+
+function collectPickup(b) {
+  const gained = Math.min(b.amount, RESERVE_MAX - player.reserve);
+  player.reserve += gained;
+  reservePop = 1;
+  sfx.reload();
+  const cy = pickupCenterY(b);
+  for (let i = 0; i < 16; i++) {   // explosão de faíscas
+    const a = (i / 16) * Math.PI * 2, sp = rand(150, 320);
+    particles.push({ x: b.x, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: rand(0.25, 0.45), age: 0, size: rand(3, 5), color: Math.random() < .5 ? '#ffffff' : '#ffe08a', drag: 6 });
+  }
+  particles.push({ x: b.x, y: cy, vx: 0, vy: 0, life: 0.35, age: 0, size: 10, grow: 260, color: 'ring', drag: 0 });
+  particles.push({ x: b.x, y: cy - 30, vx: 0, vy: -60, life: 0.9, age: 0, size: 0, color: 'text', text: `+${gained}`, drag: 1.5 });
+  sparkle(b.x + 20, cy - 20);
+}
+
+function updatePickups(dt) {
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const b = pickups[i];
+    b.t += dt; b.age += dt;
+    b.pop *= Math.exp(-7 * dt);
+    if (b.shine >= 0) {
+      b.shine += dt / BOX_SHINE_TIME;
+      if (b.shine >= 1) { b.shine = -1; b.nextShine = rand(...BOX_SHINE_EVERY); }
+    } else if ((b.nextShine -= dt) <= 0) {
+      b.shine = 0;
+      sparkle(b.x + rand(-BOX_W, BOX_W) * b.scale * 0.4, pickupCenterY(b) + rand(-BOX_H, BOX_H) * b.scale * 0.3);
+    }
+    const near = Math.hypot(player.x - b.x, player.y - b.y) < BOX_RADIUS + b.scale * 4;
+    if (near && player.reserve < RESERVE_MAX && !gameOver) { collectPickup(b); pickups.splice(i, 1); continue; }
+    if (b.age > DROP_LIFE) {
+      particles.push({ x: b.x, y: pickupCenterY(b), vx: 0, vy: -15, life: 0.4, age: 0, size: 10, grow: 25, color: 'dust', drag: 2 });
+      pickups.splice(i, 1);
+    }
+  }
+}
+
+function drawPickup(b) {
   if (!boxImg.complete) return;
-  const w = BOX_W * SCALE, h = BOX_H * SCALE;
-  const lift = boxFloat();
+  // pisca nos últimos 3 segundos
+  const left = DROP_LIFE - b.age;
+  if (left < 3 && Math.floor(left * (left < 1 ? 16 : 8)) % 2 === 0) return;
+  const w = BOX_W * b.scale, h = BOX_H * b.scale;
+  const lift = pickupFloat(b) - b.pop * 30;
 
   // sombra no chão: menor quando a caixa sobe
-  const sk = 1 - (lift + 5) / 20;
+  const sk = Math.max(0.3, 1 - (lift + 5) / 20 * 0.6);
   ctx.fillStyle = 'rgba(0,0,0,.25)';
   ctx.beginPath();
-  ctx.ellipse(box.x, box.y + h / 2 - 2, w * 0.38 * sk, 6 * sk, 0, 0, Math.PI * 2);
+  ctx.ellipse(b.x, b.y + h / 2 - 2, w * 0.38 * sk, 5 * sk, 0, 0, Math.PI * 2);
   ctx.fill();
 
   // sprite + faixa de brilho diagonal recortada pelo formato da caixa
   boxCtx.clearRect(0, 0, BOX_W, BOX_H);
   boxCtx.globalCompositeOperation = 'source-over';
   boxCtx.drawImage(boxImg, 0, 0);
-  if (box.shine >= 0) {
-    const sx = -8 + box.shine * (BOX_W + 16);
+  if (b.shine >= 0) {
+    const sx = -8 + b.shine * (BOX_W + 16);
     boxCtx.globalCompositeOperation = 'source-atop';
     boxCtx.fillStyle = 'rgba(255,255,255,.85)';
     boxCtx.beginPath();
@@ -523,12 +620,16 @@ function drawBox() {
     boxCtx.moveTo(sx + 5, 0); boxCtx.lineTo(sx + 6, 0); boxCtx.lineTo(sx + 6 - BOX_H, BOX_H); boxCtx.lineTo(sx + 5 - BOX_H, BOX_H);
     boxCtx.fill();
   }
-  const s = 1 + box.pulse * 0.25;  // "pulo" ao recarregar
-  ctx.save();
-  ctx.translate(box.x, Math.round(boxTop() + h / 2));
-  ctx.scale(s, s);
-  ctx.drawImage(boxBuf, -w / 2, -h / 2, w, h);
-  ctx.restore();
+  const cy = Math.round(pickupCenterY(b));
+  ctx.drawImage(boxBuf, Math.round(b.x - w / 2), Math.round(cy - h / 2), w, h);
+
+  // quantidade
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'center';
+  const label = `+${b.amount}`, ly = Math.round(cy - h / 2 - 6);
+  ctx.fillStyle = '#000'; ctx.fillText(label, b.x + 1, ly + 1);
+  ctx.fillStyle = b.amount >= DROP_TABLE[0].amount ? '#ffe08a' : '#f4f1de'; ctx.fillText(label, b.x, ly);
+  ctx.textAlign = 'left';
 }
 
 function impact(x, y, ang, strong) {
@@ -549,8 +650,8 @@ function inEnemy(e, x, y) {
   return Math.abs(x - e.x) < hw && Math.abs(y - e.y) < hh;
 }
 
-function hitEnemy(e, b, ang) {
-  e.hp--;
+function hitEnemy(e, b, ang, dmg = 1) {
+  e.hp -= dmg;
   if (e.hp > 0) sfx.hit();
   e.flash = 0.09;               // fica branco
   e.jiggle = 1;                 // tremidinha
@@ -570,6 +671,7 @@ function killEnemy(e) {
   sfx.kill();
   e.respawn = ENEMY_RESPAWN;
   if (mode === 'rogue') run.kills++;
+  rollDrop(e.x, e.y + ENEMY_H * SCALE / 2 - 10);
   cam.trauma = Math.min(1, cam.trauma + (mode === 'rogue' ? 0.25 : 0.5));
   for (let i = 0; i < 28; i++) {
     const a = rand(0, Math.PI * 2), sp = rand(100, 480);
@@ -651,12 +753,12 @@ function startMode(m) {
   mode = m;
   sfx.select();
   gameOver = false;
-  Object.assign(player, { hp: PLAYER_HP, ammo: AMMO_MAX, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
+  Object.assign(player, { hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
     x: WORLD_W / 2, y: WORLD_H / 2 });
   Object.assign(house, { hp: HOUSE_HP, flash: 0, shake: 0, pop: 0, active: m === 'rogue' });
   if (m === 'rogue') player.y = houseRect().b + player.h / 2 + 24;   // nasce na frente da porta
   Object.assign(run, { time: 0, kills: 0, spawnTimer: 1.0 });
-  bullets.length = 0; particles.length = 0; enemies.length = 0;
+  bullets.length = 0; particles.length = 0; enemies.length = 0; pickups.length = 0;
   ammoPop.fill(0); mouse.down = false;
   if (m === 'test') {
     enemies.push(makeEnemy(Math.round(WORLD_W * ENEMY_POS.x), Math.round(WORLD_H * ENEMY_POS.y), ENEMY_HP, 0, ENEMY_POS));
@@ -668,7 +770,7 @@ function startMode(m) {
 function menuButtons() {
   const w = Math.min(340, canvas.width - 40), h = 64, x = (canvas.width - w) / 2, cy = canvas.height / 2;
   return [
-    { id: 'test',  label: '1  ·  CAMPO DE TESTE', sub: 'inimigo parado, caixa de munição', x, y: cy - 10, w, h },
+    { id: 'test',  label: '1  ·  CAMPO DE TESTE', sub: 'inimigo parado para testar', x, y: cy - 10, w, h },
     { id: 'rogue', label: '2  ·  ROGUELIKE',       sub: 'defenda a casa das ondas de jacarés',     x, y: cy + h + 6, w, h },
   ];
 }
@@ -678,8 +780,90 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'escape') { startMode('menu'); return; }
   if (mode === 'menu') { if (k === '1') startMode('test'); if (k === '2') startMode('rogue'); return; }
-  if (gameOver && k === 'r') startMode(mode);
+  if (gameOver && k === 'r') { startMode(mode); return; }
+  if (k === 'r' && !e.repeat && mode !== 'menu') startReload();
 });
+
+// =====================================================================
+// Recarga: 1 cartucho por RELOAD_SHELL. Toque no R = 1 cartucho; segurar = continua.
+// =====================================================================
+function canReload() { return player.ammo < AMMO_MAX && player.reserve > 0 && !gameOver; }
+function startReload() {
+  if (player.reloading || !canReload()) { if (!canReload() && player.reserve === 0 && player.ammo < AMMO_MAX) emptyFlash = 1; return; }
+  player.reloading = true;
+  player.reloadT = 0;
+  sfx.reloadStart();
+}
+function updateReload(dt) {
+  if (!player.reloading) return;
+  player.reloadT += dt;
+  if (player.reloadT >= RELOAD_SHELL - 1e-6) {
+    player.ammo++;
+    player.reserve--;
+    ammoPop[player.ammo - 1] = 1;
+    sfx.shellIn();
+    // cartucho entrando: faísca dourada na arma
+    const h = hand();
+    for (let i = 0; i < 3; i++)
+      particles.push({ x: h.x + player.facing * 14, y: h.y - 10, vx: rand(-60, 60), vy: rand(-140, -60), life: 0.25, age: 0,
+        size: 3, color: '#ffe08a', drag: 5 });
+    player.reloadT = Math.max(0, player.reloadT - RELOAD_SHELL);   // mantém o resto do tempo
+    // segurando R continua; senão para depois de 1 cartucho
+    if (!(keys.has('r') && canReload())) { player.reloading = false; player.reloadT = 0; }
+  }
+}
+
+// =====================================================================
+// Melee
+// =====================================================================
+function startMelee() {
+  player.meleeT = 0;
+  player.meleeCd = MELEE_COOLDOWN;
+  player.meleeAngle = player.aim;
+  player.meleeHit = false;
+  player.reloading = false; player.reloadT = 0;   // golpe cancela a recarga
+  sfx.swing();
+}
+
+function meleeStrike() {
+  player.meleeHit = true;
+  const h = hand(), a = player.meleeAngle;
+  let hits = 0;
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    const dx = e.x - h.x, dy = e.y - h.y, dist = Math.hypot(dx, dy);
+    let diff = Math.atan2(dy, dx) - a;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    const reach = MELEE_RANGE + ENEMY_HITBOX.w * SCALE / 2;
+    if (dist < reach && (Math.abs(diff) < MELEE_ARC / 2 || dist < ENEMY_HITBOX.w * SCALE)) {
+      hits++;
+      const ang = Math.atan2(dy, dx);
+      if (!e.homeRel) { e.x += Math.cos(ang) * MELEE_KNOCKBACK; e.y += Math.sin(ang) * MELEE_KNOCKBACK; }
+      hitEnemy(e, { x: e.x - Math.cos(ang) * 20, y: e.y - Math.sin(ang) * 20 }, ang, MELEE_DAMAGE);
+    }
+  }
+  // faíscas do corte ao longo do arco
+  for (let i = 0; i < 20; i++) {
+    const t = a + rand(-MELEE_ARC / 2, MELEE_ARC / 2), r = rand(40, MELEE_RANGE);
+    particles.push({ x: h.x + Math.cos(t) * r, y: h.y + Math.sin(t) * r, vx: Math.cos(t) * 80, vy: Math.sin(t) * 80,
+      life: rand(0.1, 0.22), age: 0, size: rand(2, 4), color: '#ffffff', drag: 8 });
+  }
+  if (hits) { sfx.slash(); cam.trauma = Math.min(1, cam.trauma + 0.25); }
+}
+
+function updateMelee(dt) {
+  const wasCooling = player.meleeCd > 0;
+  player.meleeCd = Math.max(0, player.meleeCd - dt);
+  if (wasCooling && player.meleeCd === 0) { player.meleeReadyPop = 1; sfx.meleeReady(); }
+  player.meleeReadyPop *= Math.exp(-5 * dt);
+  if (mouse.rightPressed && player.meleeCd <= 0 && player.meleeT < 0 && !gameOver) startMelee();
+  mouse.rightPressed = false;
+  if (player.meleeT >= 0) {
+    player.meleeT += dt;
+    if (!player.meleeHit && player.meleeT >= MELEE_HIT_AT) meleeStrike();
+    if (player.meleeT >= MELEE_FRAME * 3) player.meleeT = -1;
+  }
+}
 
 // =====================================================================
 // Update
@@ -690,8 +874,8 @@ function update(dt) {
   if ((!map.ready || sizeChanged) && canvas.width > 0 && sandImg.complete && grassImg.complete) buildMap();
   if (!map.ready) return;
 
+  clock += dt;
   if (mode === 'menu') {
-    box.t += dt;
     if (mouse.pressed) { const b = hoveredButton(); if (b) startMode(b.id); }
     mouse.pressed = false;
     return;
@@ -726,13 +910,15 @@ function update(dt) {
 
   // tiro
   player.cooldown -= dt;
-  if (mouse.down && player.cooldown <= 0 && !gameOver) {
+  updateMelee(dt);
+  if (mouse.down && player.cooldown <= 0 && !gameOver && player.meleeT < 0) {
     if (player.ammo > 0) {
+      player.reloading = false;      // atirar cancela a recarga (o cartucho em andamento não conta)
       shoot();
       player.ammo--;
       ammoPop[player.ammo] = 1;
       player.cooldown = SHOT.cooldown;
-    } else if (mouse.pressed) {
+    } else if (mouse.pressed && !player.reloading) {
       // sem munição: "clique seco" — HUD pisca e a arma dá um tranquinho
       emptyFlash = 1;
       sfx.dry();
@@ -741,18 +927,9 @@ function update(dt) {
     }
   }
   mouse.pressed = false;
-
-  // caixa de munição: flutua, brilha de vez em quando, recarrega ao chegar perto
-  box.t += dt;
-  box.pulse *= Math.exp(-5 * dt);
-  if (box.shine >= 0) {
-    box.shine += dt / BOX_SHINE_TIME;
-    if (box.shine >= 1) { box.shine = -1; box.nextShine = rand(...BOX_SHINE_EVERY); }
-  } else if ((box.nextShine -= dt) <= 0) {
-    box.shine = 0;
-    sparkle(box.x + rand(-BOX_W, BOX_W) * SCALE * 0.4, boxTop() + rand(0, BOX_H * SCALE * 0.5));
-  }
-  if (player.ammo < AMMO_MAX && Math.hypot(player.x - box.x, player.y - box.y) < BOX_RADIUS) reload();
+  updateReload(dt);
+  updatePickups(dt);
+  reservePop *= Math.exp(-6 * dt);
 
   // roguelike: spawns cada vez mais frequentes
   if (mode === 'rogue' && !gameOver) {
@@ -890,6 +1067,32 @@ function update(dt) {
 // Render
 // =====================================================================
 function drawGun() {
+  if (player.meleeT >= 0) {
+    // golpe de faca: 3 frames do GIF, apontado para onde o golpe começou
+    const f = meleeImgs[Math.min(2, Math.floor(player.meleeT / MELEE_FRAME))];
+    if (!f.complete) return;
+    const h = hand(), a = player.meleeAngle;
+    ctx.save();
+    ctx.translate(Math.round(h.x + Math.cos(a) * 2 * SCALE), Math.round(h.y + Math.sin(a) * 2 * SCALE));
+    ctx.rotate(a);
+    if (Math.cos(a) < 0) ctx.scale(1, -1);
+    ctx.drawImage(f, -MELEE_GRIP.x * MELEE_SCALE, -MELEE_GRIP.y * MELEE_SCALE, MELEE_W * MELEE_SCALE, MELEE_H * MELEE_SCALE);
+    ctx.restore();
+    return;
+  }
+  if (player.reloading) {
+    // pose de recarga: arma de lado, inclinada para cima, animação do GIF (frame 1 -> 2)
+    const f = reloadImgs[player.reloadT < RELOAD_SHELL / 2 ? 0 : 1];
+    if (!f.complete) return;
+    const h = hand();
+    ctx.save();
+    ctx.translate(Math.round(h.x + player.facing * 8), Math.round(h.y - 2));
+    ctx.scale(player.facing, 1);
+    ctx.rotate(-0.35 + Math.sin(player.reloadT / RELOAD_SHELL * Math.PI) * 0.08);
+    ctx.drawImage(f, -RELOAD_GRIP.x * SCALE, -RELOAD_GRIP.y * SCALE, RELOAD_W * SCALE, RELOAD_H * SCALE);
+    ctx.restore();
+    return;
+  }
   if (!gunSprite.complete) return;
   const g = gunTransform();
   ctx.save();
@@ -962,6 +1165,14 @@ function drawParticles() {
       ctx.fillStyle = '#ac3232'; ctx.fillRect(-4, -2, 6, 4);   // corpo vermelho
       ctx.fillStyle = '#df9b26'; ctx.fillRect(2, -2, 3, 4);    // base de latão
       ctx.restore();
+    } else if (p.color === 'text') {
+      ctx.globalAlpha = Math.min(1, k * 2);
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#000'; ctx.fillText(p.text, p.x + 2, p.y + 2);
+      ctx.fillStyle = '#ffe08a'; ctx.fillText(p.text, p.x, p.y);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
     } else if (p.color === 'sparkle') {               // estrelinha de 4 pontas
       const r = p.size * Math.sin(Math.PI * (1 - k)); // cresce e some
       ctx.fillStyle = '#ffffff';
@@ -1050,7 +1261,7 @@ function drawMenu() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.textAlign = 'center';
   if (sprite.complete) {           // dino flutuando acima do título
-    ctx.drawImage(sprite, canvas.width / 2 - 36, canvas.height / 2 - 196 + Math.sin(box.t * 2.6) * 5, 72, 72);
+    ctx.drawImage(sprite, canvas.width / 2 - 36, canvas.height / 2 - 196 + Math.sin(clock * 2.6) * 5, 72, 72);
   }
   ctx.font = 'bold 56px monospace';
   ctx.fillStyle = '#000'; ctx.fillText('DINO', canvas.width / 2 + 4, canvas.height / 2 - 56);
@@ -1144,6 +1355,20 @@ function drawHouseBar() {
   ctx.fillText(`CASA ${house.hp}/${HOUSE_HP}`, x + 4 + sx, y + bh + 16);
 }
 
+function drawReloadHint() {
+  if (gameOver || player.reloading || player.ammo > 0) return;
+  const msg = player.reserve > 0 ? 'R  recarregar' : 'SEM MUNIÇÃO';
+  const a = 0.6 + Math.sin(clock * 8) * 0.4;
+  ctx.globalAlpha = a;
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'center';
+  const y = player.y - player.h / 2 - 14;
+  ctx.fillStyle = '#000'; ctx.fillText(msg, player.x + 1, y + 1);
+  ctx.fillStyle = player.reserve > 0 ? '#f4f1de' : '#e63946'; ctx.fillText(msg, player.x, y);
+  ctx.textAlign = 'left';
+  ctx.globalAlpha = 1;
+}
+
 function drawGameOver() {
   if (!gameOver) return;
   ctx.fillStyle = 'rgba(10,0,0,.6)';
@@ -1161,6 +1386,29 @@ function drawGameOver() {
   }
   ctx.fillText('R recomeçar  ·  ESC menu', canvas.width / 2, y);
   ctx.textAlign = 'left';
+}
+
+function drawMeleeIcon(x, y) {
+  const s = 52, ready = player.meleeCd <= 0;
+  const pop = player.meleeReadyPop, sc = 1 + pop * 0.25;
+  ctx.save();
+  ctx.translate(x + s / 2, y + s / 2);
+  ctx.scale(sc, sc);
+  ctx.translate(-s / 2, -s / 2);
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
+  if (meleeImgs[0].complete) ctx.drawImage(meleeImgs[0], 2, 4, MELEE_W * 3, MELEE_H * 3);
+  if (!ready) {   // escurece de cima para baixo conforme o tempo que falta
+    const k = player.meleeCd / MELEE_COOLDOWN;
+    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, s, Math.round(s * k));
+    ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#000'; ctx.fillText(Math.ceil(player.meleeCd), s / 2 + 1, s / 2 + 7);
+    ctx.fillStyle = '#f4f1de'; ctx.fillText(Math.ceil(player.meleeCd), s / 2, s / 2 + 6);
+    ctx.textAlign = 'left';
+  }
+  ctx.strokeStyle = ready ? '#f4f1de' : 'rgba(244,241,222,.35)'; ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, s - 2, s - 2);
+  if (pop > 0.05) { ctx.fillStyle = `rgba(255,255,255,${pop * 0.7})`; ctx.fillRect(0, 0, s, s); }
+  ctx.restore();
 }
 
 function drawAmmo() {
@@ -1187,6 +1435,26 @@ function drawAmmo() {
     ctx.lineWidth = 3;
     ctx.strokeRect(x0 - 6, y0 - 6, total + 12, h + 12);
   }
+  // barra de progresso da recarga logo acima das gauges
+  if (player.reloading) {
+    const k = player.reloadT / RELOAD_SHELL;
+    ctx.fillStyle = '#000'; ctx.fillRect(x0, y0 - 14, total, 6);
+    ctx.fillStyle = '#ffe08a'; ctx.fillRect(x0, y0 - 14, Math.round(total * k), 6);
+  }
+  drawMeleeIcon(canvas.width - AMMO_MARGIN - 52, y0 - 76);
+  // contador "pente / reserva"
+  const txt = `${player.ammo}/${player.reserve}`;
+  const sc = 1 + reservePop * 0.35;
+  ctx.save();
+  ctx.translate(x0 - 14, y0 + h / 2 + 10);
+  ctx.scale(sc, sc);
+  ctx.font = 'bold 30px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#000'; ctx.fillText(txt, 2, 2);
+  ctx.fillStyle = player.reserve === 0 ? '#e63946' : reservePop > 0.1 ? '#ffe08a' : '#f4f1de';
+  ctx.fillText(txt, 0, 0);
+  ctx.restore();
+  ctx.textAlign = 'left';
 }
 
 function render() {
@@ -1205,7 +1473,7 @@ function render() {
     drawPlayer();
     if (!gunBehind) drawGun();
   };
-  const objs = [{ y: box.y, draw: drawBox }];
+  const objs = pickups.map(b => ({ y: b.y - 30, draw: () => drawPickup(b) }));
   if (mode !== 'menu') {
     objs.push({ y: player.y, draw: drawPlayerAndGun });
     for (const e of enemies) objs.push({ y: e.y, draw: () => drawEnemy(e) });
@@ -1218,6 +1486,7 @@ function render() {
   for (const o of objs) o.draw();
   drawBullets();
   drawMuzzleFlash();
+  if (mode !== 'menu') drawReloadHint();
   ctx.restore();
 
   if (mode === 'menu') {
