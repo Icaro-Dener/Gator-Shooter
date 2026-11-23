@@ -1,0 +1,1248 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dino</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #10170f; overflow: hidden; }
+  canvas { display: block; image-rendering: pixelated; cursor: none; }
+  #hud {
+    position: fixed; bottom: 10px; left: 12px;
+    font: 14px monospace; color: #f4f1de; opacity: .85; pointer-events: none;
+    text-shadow: 1px 1px 0 #000;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud" style="display:none">WASD mover · mouse mirar · clique atirar · M som · ESC menu</div>
+<script>
+// =====================================================================
+// Config
+// =====================================================================
+const SCALE = 4;          // fator de ampliação do pixel art
+const SPEED = 360;        // pixels de tela por segundo
+const T = 16;             // tamanho do tile em px do sprite
+const TILE = T * SCALE;   // tamanho do tile na tela
+let MAP_W = 0, MAP_H = 0; // mapa em tiles — calculado para caber na tela
+
+// O sprite do dino (18x18) olha para a ESQUERDA.
+const SPRITE_FACES = -1;
+
+// Arma (16x4, cano apontando para a DIREITA)
+const GUN_W = 16, GUN_H = 4;
+const GUN_GRIP   = { x: 3, y: 2 };   // empunhadura no sprite (pivô)
+const GUN_MUZZLE = { x: 16, y: 1 };  // ponta do cano no sprite
+const GUN_HAND   = { x: 0, y: 3 };   // mão relativa ao centro do jogador
+const GUN_RADIUS = 4;                // distância da mão até a empunhadura
+const FACE_MOUSE = true;             // jogador olha para a mira (estilo Gungeon)
+
+// Shotgun
+const SHOT = {
+  cooldown: 0.42,     // segundos entre tiros (segurar o botão = automático)
+  pellets: 8,
+  spread: 0.42,       // abertura total em radianos (~24°)
+  speedMin: 1500,
+  speedMax: 1850,
+  drag: 0.25,         // desaceleração dos projéteis (baixa = atravessam a tela)
+  life: 3,            // vida máxima (s) — normalmente batem na borda antes
+  bulletScale: 6,     // tamanho do projétil (o dino usa 4)
+  shake: 0.55,        // "trauma" da tela por tiro (0..1)
+  knockback: 140,     // empurrão no jogador (px/s)
+};
+// Munição (HUD no canto inferior direito)
+const AMMO_MAX = 6;
+const AMMO_SCALE = 3;     // gauges 9x16 ampliadas
+const AMMO_GAP = 4;       // espaço entre gauges (px de tela)
+const AMMO_MARGIN = 20;   // distância das bordas da tela
+
+// Caixa de munição (17x13)
+const BOX_W = 17, BOX_H = 13;
+const BOX_POS = { x: 0.25, y: 0.35 };  // posição relativa à tela (0..1)
+const BOX_RADIUS = 60;                 // distância para pegar (px de tela)
+const BOX_SHINE_EVERY = [1.8, 3.2];    // intervalo aleatório entre brilhos (s)
+const BOX_SHINE_TIME = 0.45;           // duração da passada do brilho (s)
+
+// Inimigo (18x19, olha para a ESQUERDA)
+const ENEMY_W = 18, ENEMY_H = 19;
+const ENEMY_POS = { x: 0.72, y: 0.5 };   // posição relativa à tela (0..1)
+const ENEMY_HP = 16;                     // vida no modo teste (cada projétil tira 1; tiro de perto = 8)
+const ENEMY_RESPAWN = 2.5;               // segundos até reaparecer depois de morrer
+const ENEMY_HITBOX = { w: 12, h: 17 };   // hitbox em px do sprite (centralizada)
+
+// Modo roguelike
+const ROGUE = {
+  enemyHp: 6,            // um tiro bem dado mata
+  speedMin: 95,          // velocidade dos inimigos (px/s)
+  speedMax: 150,
+  firstInterval: 2.0,    // segundos entre spawns no início
+  minInterval: 0.28,     // intervalo mínimo (frequência máxima)
+  rampTime: 50,          // quanto menor, mais rápido a frequência sobe
+  maxEnemies: 60,
+};
+// intervalo entre spawns: cai exponencialmente com o tempo de partida
+const spawnInterval = t => Math.max(ROGUE.minInterval, ROGUE.firstInterval * Math.exp(-t / ROGUE.rampTime));
+
+// Casa (modo roguelike) — sprite 72x40
+const HOUSE_W = 72, HOUSE_H = 40;
+const HOUSE_SCALE = 3;
+const HOUSE_HP = 40;
+const HOUSE_SOLID_TOP = 12;      // px do sprite: acima disso é telhado (dá para passar "atrás")
+const BITE_EVERY = 1.0;          // cada jacaré encostado morde a casa a cada X s
+const BITE_DAMAGE = 1;
+
+// Jogador
+const PLAYER_HP = 5;
+const PLAYER_HITBOX = { w: 10, h: 14 };
+const INVULN_TIME = 1.0;                 // invencibilidade após tomar dano (s)
+const CONTACT_KNOCKBACK = 900;
+
+// O projétil (3x1) tem a ponta dourada à ESQUERDA.
+const BULLET_FACES = -1;
+
+// =====================================================================
+// Assets (embutidos; cópias em .png na pasta)
+// =====================================================================
+function img(src) { const i = new Image(); i.src = src; return i; }
+const sprite    = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAABE0lEQVQ4jWNkwAEylmj9l1DihfNf3PvMMCPmGiMu9YwNx8z/owu+uPeZAWZIg9VJCH3MHK+BTAwMDAz7dt1HEUR2CTrAJcfCwMDA4OSmiFMjzCXIrsUGmF7c+8wQKm7AgI0mBTBevZuOEUbIYPLxwxjeabA6iRFGOGOBgYGB4cBK//8MDAwMB2RfwMVwBTYLLkOQXfri+G24q/AGNjbw+swLrOK4wg6nQaImEgjO8dtw5gh0ERM+F8EwMpBQ4mWwaxDDSHs4DdJWnsmYuXg9AwMDA0MEqyrBlI43QcJsPtTwipGBAVK0MDAwMFy784YBWRyvi9AVMjAwwFN0k6YlikUEDUIPC5iLHMI3MiIb1nDM/D8A05B4xHmw7QEAAAAASUVORK5CYII=');   // dino.png
+const gunSprite = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAECAYAAACHtL/sAAAAnElEQVQYlW2OMQrCQBRE30JgG4MQtFeCjY21XsA7qL14Aes0uYHgCVJZpdMjeAZxA1aCYSWsza/WQiIh+sqZeTCKBvN+6HsdDcBks0VrjYjQRuvPRkQImlJN+RJuRUE3iqis5Xk8MMpiAC7LK4PFGoDKWoK2OM3HhMaxW+1Vs0uI/d04sqJUpOk3D2rx9HAKYGic//kMJLOz+pe/AdOINMJCT3qYAAAAAElFTkSuQmCC');   // arma.png
+const bulletImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAYAAAAb4BS0AAAAFUlEQVQImWO8P1vt/9npPAwMDAwMACZ7BBHZ3QEnAAAAAElFTkSuQmCC');   // tiro.png
+const ammoFullImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAdklEQVQokWNkYGBgUFBQ+M+AAzx48ICRBcZp05dhMODnYGBgYGDgFRJm+PzuLYPXoTsMDAwMDEy4TEAGo4qoqAgeLfI+nxiYRNghgvy/GZg+/mdgOESCSYwKCgr/l1bzMahoq6FI8PKLMHz++IbBPOoMRBEhkwDFZxgcewHZtgAAAABJRU5ErkJggg=='); // municao-cheia.png
+const ammoEmptyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAcUlEQVQoke2ROw6DQAxEn80uBQ0UOYDvf6rtIkU0lCu06xT8kkgUSCmZ7skz42IEwMycE6WUJGwwRKVVAUC1odbCK5eFzxo+dZv+aNpnCZ0j6yyijlQgX2gSM/NHL8QYvg/a4LXwHOfl3Tg5MP/kD34DQXoaYcq+77YAAAAASUVORK5CYII='); // municao-vazia.png
+const houseImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAAAoCAYAAABdGbwdAAAGMklEQVRoge1Z227bRhA9TiVSlGywdGAniAXEcSD0BwojDwXy7X0r8gdFYKcGZCN2GrG0RMlcCVAf6KGGy9mLKKVPPUAQcbg75M7OnD1DA//DioN9OTofnq0lexgEAICH7xMAQHx0CADIprPa9dvhGQDg68M3FEpBKQUACJ7nS3NM+Gt8u7d1vdiHE1Nw9omQBQoAFAsiBe5HvM/OkaaX0Xec7za/RwudzmbiWBNoXqFUwwfNj8Kg8hkGAf68/rLz+nbKIL5To4t3GF28E8cFQVArFRey6axaNGVK8fyP8Pr0pHpefHSIKCz9j7oFgDKQHz9c7pxJnbYTXWlsyoZC4BZb5lAQbsa3DR8cQRBg1C3wJh4AWY7PyxA341u8OT1Z3z18a51JrSYmcbwG6gvjJQDYS47Gvj49AQB8vv4CADg6PKz5ADbkTQHiz+HPuIyB46NBNW8yzfEp27xzW+LeusRMmaOXwD6glMLn6y/4+vCtQdIco26BdF5gMs1xdT/B1f2kshN+uXjXqty2iioPjp4h/FrfdV/oZE0+jw4PGzKBcBkDUXfDFHdZXpbZMxbL1U6Z5J1BeubYSFlHyE4vAidiE4jceWby410PDgAk/bB2HXU7O2WSF0nbCDl8XgAnXcocWoitPDhOXx4DKMtVF456VumcQ1gsVw0bJ26gDJKvBHAOkoJDO88XJMFWhgSd3Al6gDhG3QJJP0Q6LzODska/5jayU7kppeBzulkHUHBMwkxqG6QF02LptJICNJ3NGvck6JlzdT/B+1fHxvH6fTrdaLNcQTJykJ45ujCTtMvb4Vl1dEsIggCLQiGbzmqB1DNEEoqAXFY657hwfDTAZbzhNxcniRzEg0Mvalu4HqxC4x7TacZLTtJAHETIi6eicU+y2e6XxF1yUqEUzodna9Pp1jCeD8/W/MX1Psck1KQ5xFG87+KQejQpQJdx+b/OJyakc5mj+H2yuzipZiCFTH2NRK5hEDQUsClAvFF1ZQgH91W1D55YLFeNo9+GO3a6AU2dVHk6H56taWH6btOiF4WqlRMfZ+qtbKTrEpSjbmElYAmL5QpRz5+X3vdCJKwt+fjhcv37H5+qIB0AG86x9T3SJwmeTTfjW+sJdjO+dX4k45BEoA+2zSA+Tyq3ThLH62w6c36lo3JRmigkKPadhttMoD6LSk8vq3QOoF/nHUDmHn1MiqKmjXQ+Ihu/D5SbomfSAe/MXcJOEnpt7Dbfv50EokL2ges08wFxEn1w66RZdgAAvx531knc04YHSOdPSPqba4Likr5PckqT+Qb7+DHH8OdB/V7/BfLlCum8aB0gnXvaBowTdVWs6aLAwFC7Suhv/ivskhXbkDUh0dZaRSSJQowf8+o3h2RPF4U41gY+JxeCni4KJFEPk2m+sTGOaIzXuKRay7PtLstrNps+Mj2nljIXL2PxRZK+XnpNW1mKzXEuP7UXjEIk/bBWYrZyS+cFPv0tZNhcto36pT/ukzI0ijuIemFtcwDPEvPFLqU46P4kZpULT2rpNa4XdAEIbUdPVtmEWkSCHQKUL1c7zScfPxrb8lKNg9L5E4ANV5Cd22ycQ/NrNse8knfqXODbS7XBZJpbezr9urblVGK81PLlCoNup3X5SfPIp/QsAFXvFcXyM8m+WK6Af/xKrJrb7Rj9Vj4ZnCU2fsyd5OsLH45K+qF3GUifV11w+eYnH6CR9D4CYQsCbYDOV5Ty9A6+2qdNqbl8W0uMcwjnBolbTKB5OrcAmxLiHNeYPy+Qwt1/tQVlna57TMGuBYhnkM4RrhOKdBD5sGWj6R4FzucTx+KpGUgXuMbS9RVdG3VQEoXW8nDxxz50lA92bUi3nb83ocjLSc+2bQRk0g+9F5H0w61OsXRe4PiV8Lc09jyjUOT9kcQfxoeysePHXOyzfLQQx12Wi/zAtRFdbwvSQSb/VpKW+MPWYymmZ4JuxzjO1bfR7+vvGdJ58xs01y38d6tjXtBBPKuMHASYS8GnRLbtw/TxvCxNWkUvvTbHfNTzL2HAQyhKPdau34ckvlPLlbOsG4HTRJ0PXH9Xszar198z8SV5jybeF+wmPUTXnKf42IuXMa7uJ2L/tQ89xMtSykD9Gf8CKUw40CdcpzEAAAAASUVORK5CYII='); // casa.png
+const enemyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABIklEQVQ4jZ2UrW7DMBSFP1dNo5RaY1Zh0V6gcH6HhIz1LUoGQvYIYXuAPUQGiysFVRqZyqbQWUMeaJ16q52fHZLI9v18dc5NBBGVSlmAl+8vALbpkqfTScTOC1cQkoOki4RHkXTrIeAMoDEmCNqmS9JFEtz7qznAfZZFD/id9GkGcLfZEHpOkajyPOoRwOd+f7MW8iiaAsBOawuQHY+DoHkIUEhpH7S+dsU1kJifQRDAR9t27/EoIqBCys6vlZQAvNX1CMzIjiaDXtu2M7G6dLfSOpjcvzqa7JEv5xGcUxtS7xyVSlmzXp+78mapMeaXDXD5RGJqjOH9cOC5rm8u9BMeBPnyp9kNayGl7fsN9d7sCnda2yrP7ShYIaX1QaVS0aIfLPtlq/rW0sIAAAAASUVORK5CYII='); // inimigo.png
+const boxImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAANCAYAAABPeYUaAAAAuElEQVQokaWTMQrCQBBF/19ShYC94CKk0IPkHB7EWjyI58gpUmkRkAgWAUUhSSWMRVxxNxjW9Td/YeY/ZgaWACAigkCRJA1gsVr+DDjs9j1IRGSWacTTGN258waY/lNeIXKL22iO8t4gnSRfff04WhnlAnzk9g0mQQagAqBHPLcjygWUVYNUJ6OOzIZYk2yKun/cOj//hLR1O9jKRyanAOBaXIIgJqdIMojwEkm+bxK6EgAQ+P/vPAHyqFpEdVYUZwAAAABJRU5ErkJggg=='); // caixa-municao.png
+const sandImg   = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAv0lEQVQ4jZ2SMRbCIBBEJzw7eupoqwfwKJ7AQ+QAeV4ivafQS2gL1KlNHRtIILssPqfLCzP8WbZ5DdcZANr9Af9ISWbvbNHonYV3Foo1awNowwZ39zfSS5vP4zYTc9Q0yvwIFRbcipmrtAREpG545uZQB9qgPZ1JAK2QKiUqkCl6QjAzKgf8qHyINU0jOZcPUXqF8L3djbWCNssNhEbYh10NuaaVIEHkVrg0I8UiB8W9j8HbQO+s/Iz95Vj8FwO/gYBP80k5sV8AAAAASUVORK5CYII=');  // areia.png
+const grassImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA2klEQVQ4jY1TMRICIQxcGW/uaqCw8EN+xF/4Rxsb6yuuOK1hKLTQZSAmzqVjQ9jsJuzOl9ML31jmFYdj5BEhejzWJwAgp4JxGiqWUwEAOF7OqXTFMsZpUDGn3MUyrwBQ2UP0PxgfdGxFY5AyJA4A+3EaOn2yE2KWPNeyt0w0tDVRk+cIMtEGi6wI0X8eaNvjy7JlSiROQnUK0ljNG8pzLLBMCtHjdr2bMroOQvQI0Vdm6YuUl1PZPoW/HVhTkDuQU+n8qKu8ZQoyr07BWhZilNruR/0LFqOV5/kNRImUf82DvQAAAAAASUVORK5CYII=');  // grama.png
+
+// =====================================================================
+// Setup
+// =====================================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const rand = (a, b) => a + Math.random() * (b - a);
+
+// =====================================================================
+// SFX sintetizados (Web Audio, sem arquivos) — M liga/desliga
+// =====================================================================
+const sfx = (() => {
+  let ac = null, master = null, noiseBuf = null, muted = false;
+  const last = {};
+  function init() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = 0.45;
+    const comp = ac.createDynamicsCompressor();       // evita estourar com muitos sons juntos
+    master.connect(comp); comp.connect(ac.destination);
+    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  // o navegador só libera áudio depois de uma interação
+  ['mousedown', 'keydown'].forEach(ev => window.addEventListener(ev, init));
+  window.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'm') muted = !muted; });
+
+  const ok = (name, gap = 0) => {           // limita repetições muito próximas
+    if (!ac || muted) return false;
+    const t = ac.currentTime;
+    if (last[name] !== undefined && t - last[name] < gap) return false;
+    last[name] = t; return true;
+  };
+  function env(g, t, a, peak, dur) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  }
+  // ruído filtrado
+  function noise({ dur, peak = 0.5, type = 'lowpass', f0 = 2000, f1 = f0, q = 0.8, attack = 0.002, delay = 0 }) {
+    const t = ac.currentTime + delay;
+    const src = ac.createBufferSource(); src.buffer = noiseBuf;
+    src.playbackRate.value = rand(0.9, 1.1);
+    const flt = ac.createBiquadFilter(); flt.type = type; flt.Q.value = q;
+    flt.frequency.setValueAtTime(f0, t); flt.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+    const g = ac.createGain(); env(g, t, attack, peak, dur);
+    src.connect(flt); flt.connect(g); g.connect(master);
+    src.start(t, rand(0, 0.5)); src.stop(t + dur + 0.05);
+  }
+  // tom com glide de frequência
+  function tone({ dur, peak = 0.3, wave = 'square', f0 = 440, f1 = f0, attack = 0.003, delay = 0 }) {
+    const t = ac.currentTime + delay;
+    const o = ac.createOscillator(); o.type = wave;
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const g = ac.createGain(); env(g, t, attack, peak, dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  return {
+    shot() {          // estouro de ruído + "thump" grave + cauda
+      if (!ok('shot')) return;
+      noise({ dur: 0.09, peak: 0.9, type: 'highpass', f0: 1200, f1: 400 });
+      noise({ dur: 0.35, peak: 0.7, type: 'lowpass', f0: 3000, f1: 150 });
+      tone({ dur: 0.18, peak: 0.6, wave: 'sine', f0: 140, f1: 40 });
+      tone({ dur: 0.06, peak: 0.15, wave: 'square', f0: 900, f1: 300, delay: 0.16 }); // "chk" da bomba
+      noise({ dur: 0.05, peak: 0.25, type: 'bandpass', f0: 2500, q: 3, delay: 0.17 });
+    },
+    dry() {           // clique seco sem munição
+      if (!ok('dry', 0.05)) return;
+      noise({ dur: 0.03, peak: 0.35, type: 'bandpass', f0: 3500, q: 4 });
+      tone({ dur: 0.03, peak: 0.12, wave: 'square', f0: 1800, f1: 1200 });
+    },
+    shell() {         // cápsula quicando
+      if (!ok('shell', 0.04)) return;
+      tone({ dur: 0.05, peak: 0.06, wave: 'triangle', f0: rand(2600, 3400), f1: 2000 });
+    },
+    reload() {        // "clack-clack" + arpejo curto
+      if (!ok('reload', 0.2)) return;
+      noise({ dur: 0.04, peak: 0.4, type: 'bandpass', f0: 1800, q: 3 });
+      noise({ dur: 0.05, peak: 0.45, type: 'bandpass', f0: 1200, q: 3, delay: 0.09 });
+      [523, 659, 784, 1047].forEach((f, i) => tone({ dur: 0.09, peak: 0.12, wave: 'square', f0: f, delay: 0.14 + i * 0.05 }));
+    },
+    hit() {           // impacto no inimigo
+      if (!ok('hit', 0.025)) return;
+      tone({ dur: 0.07, peak: 0.22, wave: 'square', f0: rand(320, 380), f1: 120 });
+      noise({ dur: 0.05, peak: 0.25, type: 'lowpass', f0: 1800, f1: 400 });
+    },
+    kill() {          // inimigo explode
+      if (!ok('kill', 0.03)) return;
+      noise({ dur: 0.3, peak: 0.6, type: 'lowpass', f0: 2200, f1: 100 });
+      tone({ dur: 0.25, peak: 0.35, wave: 'sawtooth', f0: 260, f1: 50 });
+      tone({ dur: 0.08, peak: 0.12, wave: 'square', f0: 880, f1: 1320, delay: 0.02 });
+    },
+    hurt() {          // jogador toma dano
+      if (!ok('hurt', 0.1)) return;
+      tone({ dur: 0.3, peak: 0.4, wave: 'square', f0: 520, f1: 90 });
+      noise({ dur: 0.15, peak: 0.4, type: 'lowpass', f0: 1500, f1: 200 });
+    },
+    gameOver() {      // descida triste
+      if (!ok('over', 1)) return;
+      [392, 330, 262, 196].forEach((f, i) => tone({ dur: 0.28, peak: 0.18, wave: 'triangle', f0: f, f1: f * 0.97, delay: 0.25 + i * 0.22 }));
+    },
+    bite() {          // jacaré mordendo a casa (madeira rachando)
+      if (!ok('bite', 0.06)) return;
+      noise({ dur: 0.12, peak: 0.45, type: 'bandpass', f0: rand(500, 800), q: 2 });
+      tone({ dur: 0.1, peak: 0.25, wave: 'square', f0: rand(150, 190), f1: 70 });
+    },
+    houseDown() {     // casa desabando
+      if (!ok('houseDown', 1)) return;
+      noise({ dur: 1.4, peak: 0.9, type: 'lowpass', f0: 1800, f1: 60 });
+      tone({ dur: 1.0, peak: 0.6, wave: 'sawtooth', f0: 110, f1: 30 });
+      for (let i = 0; i < 5; i++) noise({ dur: 0.1, peak: 0.4, type: 'bandpass', f0: rand(400, 1200), q: 2, delay: 0.1 + i * 0.15 });
+    },
+    select() {        // menu
+      if (!ok('select', 0.1)) return;
+      tone({ dur: 0.07, peak: 0.15, wave: 'square', f0: 660 });
+      tone({ dur: 0.12, peak: 0.15, wave: 'square', f0: 990, delay: 0.07 });
+    },
+    get muted() { return muted; },
+  };
+})();
+
+// =====================================================================
+// Input
+// =====================================================================
+const keys = new Set();
+window.addEventListener('keydown', e => keys.add(e.key.toLowerCase()));
+window.addEventListener('keyup',   e => keys.delete(e.key.toLowerCase()));
+
+const mouse = { x: 0, y: 0, down: false };
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('mousedown', e => { if (e.button === 0) { mouse.down = true; mouse.pressed = true; } });
+window.addEventListener('mouseup',   e => { if (e.button === 0) mouse.down = false; });
+window.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('blur', () => { keys.clear(); mouse.down = false; });
+
+// =====================================================================
+// Mapa: grama com clareiras/trilhas de areia (gerado com seed fixa)
+// =====================================================================
+const map = { canvas: document.createElement('canvas'), ready: false };
+
+function buildMap() {
+  // o mundo é exatamente a área visível; o mapa cobre a tela (último tile pode ficar cortado)
+  map.builtW = canvas.width; map.builtH = canvas.height;
+  WORLD_W = canvas.width; WORLD_H = canvas.height;
+  MAP_W = Math.ceil(WORLD_W / TILE); MAP_H = Math.ceil(WORLD_H / TILE);
+  if (!map.ready) { player.x = WORLD_W / 2; player.y = WORLD_H / 2; } // nasce no centro
+  box.x = Math.round(WORLD_W * BOX_POS.x); box.y = Math.round(WORLD_H * BOX_POS.y);
+  house.x = Math.round(WORLD_W / 2); house.y = Math.round(WORLD_H / 2);
+  for (const e of enemies) if (e.homeRel) { e.x = Math.round(WORLD_W * e.homeRel.x); e.y = Math.round(WORLD_H * e.homeRel.y); }
+
+  // PRNG com seed para o mapa ser sempre o mesmo
+  let seed = 1337;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+
+  // value noise suave
+  const G = 8, gw = Math.ceil(MAP_W / G) + 2, gh = Math.ceil(MAP_H / G) + 2;
+  const grid = Array.from({ length: gw * gh }, rnd);
+  const smooth = t => t * t * (3 - 2 * t);
+  function noise(x, y) {
+    const gx = x / G, gy = y / G, ix = Math.floor(gx), iy = Math.floor(gy);
+    const fx = smooth(gx - ix), fy = smooth(gy - iy);
+    const v = (i, j) => grid[(iy + j) * gw + (ix + i)];
+    const a = v(0, 0) + (v(1, 0) - v(0, 0)) * fx;
+    const b = v(0, 1) + (v(1, 1) - v(0, 1)) * fx;
+    return a + (b - a) * fy;
+  }
+
+  const cx = MAP_W / 2, cy = MAP_H / 2;
+  map.tiles = [];
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      // clareira central + manchas do noise + trilha em cruz levemente ondulada
+      const d = Math.hypot((x - cx) / (MAP_W * 0.18), (y - cy) / (MAP_H * 0.2));
+      const path = Math.abs(y - cy - Math.sin(x * 0.35) * 2) < 1.6 ||
+                   Math.abs(x - cx - Math.sin(y * 0.4) * 2) < 1.4;
+      const sand = d < 1 || path || noise(x, y) > 0.72;
+      map.tiles.push(sand ? 1 : 0);
+    }
+  }
+
+  // pré-renderiza em resolução nativa (16px por tile), com rotação aleatória para quebrar repetição
+  const c = map.canvas; c.width = MAP_W * T; c.height = MAP_H * T;
+  const m = c.getContext('2d');
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const tile = map.tiles[y * MAP_W + x] ? sandImg : grassImg;
+      m.save();
+      m.translate(x * T + T / 2, y * T + T / 2);
+      m.rotate(Math.floor(rnd() * 4) * Math.PI / 2);
+      m.drawImage(tile, -T / 2, -T / 2);
+      m.restore();
+    }
+  }
+  // borda escura do mundo
+  m.strokeStyle = 'rgba(0,0,0,.45)'; m.lineWidth = 2;
+  m.strokeRect(1, 1, c.width - 2, c.height - 2);
+  map.ready = true;
+}
+let WORLD_W = 0, WORLD_H = 0;   // definidos em buildMap() = tamanho da tela
+
+// =====================================================================
+// Estado
+// =====================================================================
+const player = {
+  x: WORLD_W / 2, y: WORLD_H / 2,
+  vx: 0, vy: 0,              // velocidade extra (knockback)
+  w: 18 * SCALE, h: 18 * SCALE,
+  facing: SPRITE_FACES,
+  aim: 0,
+  cooldown: 0,
+  ammo: AMMO_MAX,
+  hp: PLAYER_HP,
+  invuln: 0,                 // tempo restante de invencibilidade
+  hurt: 0,                   // flash do dano (1 -> 0)
+  kick: 0,                 // recuo da arma (px do sprite)
+  kickRot: 0,                // rotação do recuo (rad)
+  flash: 0,                  // tempo restante do clarão do cano
+  flashAngle: 0,
+};
+const cam = { x: 0, y: 0, trauma: 0, sx: 0, sy: 0, init: false };
+const bullets = [];
+const particles = [];
+let crossPulse = 0;
+const ammoPop = new Array(AMMO_MAX).fill(0); // animação da gauge que acabou de esvaziar
+let emptyFlash = 0;                          // pisca as gauges ao tentar atirar sem munição
+
+let heartPop = 0;
+let gameOver = false;
+let mode = 'menu';                 // 'menu' | 'test' | 'rogue'
+const run = { time: 0, kills: 0, spawnTimer: 0 };
+
+const enemies = [];
+
+// casa: x/y = centro do sprite; o retângulo sólido é a parte das paredes
+const house = { x: 0, y: 0, hp: HOUSE_HP, flash: 0, shake: 0, pop: 0, active: false };
+function houseRect() {
+  const w = HOUSE_W * HOUSE_SCALE, h = HOUSE_H * HOUSE_SCALE;
+  const left = house.x - w / 2, top = house.y - h / 2;
+  return { l: left + 2 * HOUSE_SCALE, r: left + w - 3 * HOUSE_SCALE, t: top + HOUSE_SOLID_TOP * HOUSE_SCALE, b: top + h };
+}
+// empurra um corpo (centro x,y; meia-largura hw, meia-altura hh) para fora da casa
+function pushOutOfHouse(o, hw, hh) {
+  if (!house.active) return false;
+  const R = houseRect();
+  const l = R.l - hw, r = R.r + hw, t = R.t - hh, b = R.b + hh;
+  if (o.x <= l || o.x >= r || o.y <= t || o.y >= b) return false;
+  const pen = [o.x - l, r - o.x, o.y - t, b - o.y];
+  const m = Math.min(...pen);
+  if (m === pen[0]) o.x = l; else if (m === pen[1]) o.x = r; else if (m === pen[2]) o.y = t; else o.y = b;
+  return true;
+}
+// homeRel: posição fixa relativa à tela (inimigo do modo teste, que reaparece). speed 0 = estático.
+function makeEnemy(x, y, hp, speed, homeRel = null) {
+  return { x, y, hp, maxHp: hp, speed, homeRel, alive: true, respawn: 0,
+    flash: 0, jiggle: 0, hpShow: 0, facing: -1, walk: rand(0, 10), bite: rand(0.3, BITE_EVERY), lunge: 0, attacking: false };
+}
+
+// silhueta branca de um sprite (para o flash de dano)
+const whiteCache = new Map();
+function whiteOf(image) {
+  if (whiteCache.has(image)) return whiteCache.get(image);
+  const c = document.createElement('canvas');
+  c.width = image.width; c.height = image.height;
+  const g = c.getContext('2d');
+  g.drawImage(image, 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, c.width, c.height);
+  whiteCache.set(image, c);
+  return c;
+}
+
+const box = { x: 0, y: 0, t: 0, shine: -1, nextShine: 1, pulse: 0 };
+const boxBuf = document.createElement('canvas');   // buffer em resolução nativa p/ o brilho
+boxBuf.width = BOX_W; boxBuf.height = BOX_H;
+const boxCtx = boxBuf.getContext('2d');
+
+const mouseWorld = () => ({ x: mouse.x + cam.x, y: mouse.y + cam.y });
+const hand = () => ({ x: player.x + GUN_HAND.x * SCALE, y: player.y + GUN_HAND.y * SCALE });
+
+// posição/orientação da arma (já com recuo) — usada para desenhar e para achar o cano
+function gunTransform() {
+  const a = player.aim, h = hand();
+  const flip = Math.cos(a) < 0 ? -1 : 1;
+  const r = (GUN_RADIUS - player.kick) * SCALE;
+  return { x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r, rot: a - player.kickRot * flip, flip };
+}
+function muzzlePos() {
+  const g = gunTransform();
+  const lx = (GUN_MUZZLE.x - GUN_GRIP.x) * SCALE, ly = (GUN_MUZZLE.y - GUN_GRIP.y) * SCALE * g.flip;
+  const c = Math.cos(g.rot), s = Math.sin(g.rot);
+  return { x: g.x + lx * c - ly * s, y: g.y + lx * s + ly * c };
+}
+
+// =====================================================================
+// Tiro
+// =====================================================================
+function shoot() {
+  sfx.shot();
+  const m = muzzlePos(), a = player.aim;
+
+  for (let i = 0; i < SHOT.pellets; i++) {
+    // distribuição uniforme + jitter, para o leque ficar cheio mas orgânico
+    const t = SHOT.pellets === 1 ? 0 : i / (SHOT.pellets - 1) - 0.5;
+    const ang = a + t * SHOT.spread + rand(-0.05, 0.05);
+    const sp = rand(SHOT.speedMin, SHOT.speedMax);
+    bullets.push({
+      x: m.x, y: m.y, px: m.x, py: m.y,
+      vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+      life: SHOT.life * rand(0.75, 1), age: 0,
+    });
+  }
+
+  // clarão do cano
+  player.flash = 0.07; player.flashAngle = a;
+  for (let i = 0; i < 10; i++) {           // faíscas
+    const ang = a + rand(-0.6, 0.6), sp = rand(250, 700);
+    particles.push({ x: m.x, y: m.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+      life: rand(0.08, 0.18), age: 0, size: rand(2, 4), color: Math.random() < .5 ? '#ffe08a' : '#ff9f3b', drag: 8 });
+  }
+  for (let i = 0; i < 6; i++) {            // fumaça
+    const ang = a + rand(-0.5, 0.5), sp = rand(30, 130);
+    particles.push({ x: m.x, y: m.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 20,
+      life: rand(0.35, 0.7), age: 0, size: rand(6, 12), grow: 18, color: 'smoke', drag: 3 });
+  }
+  // cápsula ejetada (cai e quica)
+  const side = Math.cos(a) < 0 ? 1 : -1;
+  const h = hand();
+  particles.push({ x: h.x, y: h.y - 6, vx: -Math.cos(a) * rand(60, 140) + side * rand(10, 40), vy: rand(-320, -220),
+    life: 1.4, age: 0, size: 0, color: 'shell', gravity: 1100, floor: h.y + player.h / 2 - 8, rot: 0, vr: rand(-20, 20), drag: 0.5 });
+
+  // sensação: recuo da arma, tranco na tela, empurrão no jogador, mira pulsando
+  player.kick = 2.5;
+  player.kickRot = 0.35;
+  cam.trauma = Math.min(1, cam.trauma + SHOT.shake);
+  player.vx -= Math.cos(a) * SHOT.knockback;
+  player.vy -= Math.sin(a) * SHOT.knockback;
+  crossPulse = 1;
+}
+
+// =====================================================================
+// Caixa de munição
+// =====================================================================
+const boxFloat = () => Math.sin(box.t * 2.6) * 5;               // deslocamento vertical (px)
+const boxTop = () => box.y - BOX_H * SCALE / 2 - 14 + boxFloat(); // topo do sprite flutuando
+
+function sparkle(x, y) {
+  particles.push({ x, y, vx: 0, vy: -10, life: 0.5, age: 0, size: 10, color: 'sparkle', drag: 0 });
+}
+
+function reload() {
+  sfx.reload();
+  player.ammo = AMMO_MAX;
+  ammoPop.fill(1);                 // todas as gauges pulam e brilham
+  emptyFlash = 0;
+  box.pulse = 1;
+  box.shine = 0;
+  const cy = boxTop() + BOX_H * SCALE / 2;
+  for (let i = 0; i < 16; i++) {   // explosão de faíscas
+    const a = (i / 16) * Math.PI * 2, sp = rand(150, 320);
+    particles.push({ x: box.x, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: rand(0.25, 0.45), age: 0, size: rand(3, 5), color: Math.random() < .5 ? '#ffffff' : '#ffe08a', drag: 6 });
+  }
+  particles.push({ x: box.x, y: cy, vx: 0, vy: 0, life: 0.35, age: 0, size: 10, grow: 260, color: 'ring', drag: 0 });
+  sparkle(box.x + 20, cy - 20);
+  sparkle(box.x - 24, cy + 6);
+}
+
+function drawBox() {
+  if (!boxImg.complete) return;
+  const w = BOX_W * SCALE, h = BOX_H * SCALE;
+  const lift = boxFloat();
+
+  // sombra no chão: menor quando a caixa sobe
+  const sk = 1 - (lift + 5) / 20;
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.beginPath();
+  ctx.ellipse(box.x, box.y + h / 2 - 2, w * 0.38 * sk, 6 * sk, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // sprite + faixa de brilho diagonal recortada pelo formato da caixa
+  boxCtx.clearRect(0, 0, BOX_W, BOX_H);
+  boxCtx.globalCompositeOperation = 'source-over';
+  boxCtx.drawImage(boxImg, 0, 0);
+  if (box.shine >= 0) {
+    const sx = -8 + box.shine * (BOX_W + 16);
+    boxCtx.globalCompositeOperation = 'source-atop';
+    boxCtx.fillStyle = 'rgba(255,255,255,.85)';
+    boxCtx.beginPath();
+    boxCtx.moveTo(sx, 0); boxCtx.lineTo(sx + 3, 0); boxCtx.lineTo(sx + 3 - BOX_H, BOX_H); boxCtx.lineTo(sx - BOX_H, BOX_H);
+    boxCtx.fill();
+    boxCtx.fillStyle = 'rgba(255,255,255,.45)';
+    boxCtx.beginPath();
+    boxCtx.moveTo(sx + 5, 0); boxCtx.lineTo(sx + 6, 0); boxCtx.lineTo(sx + 6 - BOX_H, BOX_H); boxCtx.lineTo(sx + 5 - BOX_H, BOX_H);
+    boxCtx.fill();
+  }
+  const s = 1 + box.pulse * 0.25;  // "pulo" ao recarregar
+  ctx.save();
+  ctx.translate(box.x, Math.round(boxTop() + h / 2));
+  ctx.scale(s, s);
+  ctx.drawImage(boxBuf, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+function impact(x, y, ang, strong) {
+  const n = strong ? 6 : 3;
+  for (let i = 0; i < n; i++) {
+    const a = ang + Math.PI + rand(-1, 1), sp = rand(60, strong ? 260 : 140);
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.15, 0.35), age: 0,
+      size: rand(2, 4), color: strong ? '#ffe08a' : '#d8c3a0', drag: 6 });
+  }
+  particles.push({ x, y, vx: 0, vy: -15, life: 0.3, age: 0, size: 5, grow: 20, color: 'dust', drag: 2 });
+}
+
+// =====================================================================
+// Inimigo / dano
+// =====================================================================
+function inEnemy(e, x, y) {
+  const hw = ENEMY_HITBOX.w * SCALE / 2, hh = ENEMY_HITBOX.h * SCALE / 2;
+  return Math.abs(x - e.x) < hw && Math.abs(y - e.y) < hh;
+}
+
+function hitEnemy(e, b, ang) {
+  e.hp--;
+  if (e.hp > 0) sfx.hit();
+  e.flash = 0.09;               // fica branco
+  e.jiggle = 1;                 // tremidinha
+  e.hpShow = 2;                 // mostra a barra de vida por um tempo
+  if (!e.homeRel) { e.x += Math.cos(ang) * 6; e.y += Math.sin(ang) * 6; }  // leve empurrão do impacto
+  cam.trauma = Math.min(1, cam.trauma + 0.06);
+  for (let i = 0; i < 4; i++) { // respingo vermelho na direção do tiro
+    const a = ang + rand(-0.7, 0.7), sp = rand(120, 320);
+    particles.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: rand(0.2, 0.4), age: 0, size: rand(3, 5), color: Math.random() < .6 ? '#ac3232' : '#ffffff', drag: 7 });
+  }
+  if (e.hp <= 0) killEnemy(e);
+}
+
+function killEnemy(e) {
+  e.alive = false;
+  sfx.kill();
+  e.respawn = ENEMY_RESPAWN;
+  if (mode === 'rogue') run.kills++;
+  cam.trauma = Math.min(1, cam.trauma + (mode === 'rogue' ? 0.25 : 0.5));
+  for (let i = 0; i < 28; i++) {
+    const a = rand(0, Math.PI * 2), sp = rand(100, 480);
+    particles.push({ x: e.x + rand(-15, 15), y: e.y + rand(-20, 20), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: rand(0.3, 0.7), age: 0, size: rand(4, 8), color: Math.random() < .7 ? '#ac3232' : '#ffffff', drag: 5 });
+  }
+  particles.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0.35, age: 0, size: 12, grow: 300, color: 'ring', drag: 0 });
+}
+
+// nasce fora da tela, numa borda aleatória, e caminha até o jogador
+function spawnEdgeEnemy() {
+  const m = 50, side = Math.floor(Math.random() * 4);
+  let x, y;
+  if (side === 0)      { x = rand(0, WORLD_W); y = -m; }
+  else if (side === 1) { x = WORLD_W + m; y = rand(0, WORLD_H); }
+  else if (side === 2) { x = rand(0, WORLD_W); y = WORLD_H + m; }
+  else                 { x = -m; y = rand(0, WORLD_H); }
+  enemies.push(makeEnemy(x, y, ROGUE.enemyHp, rand(ROGUE.speedMin, ROGUE.speedMax)));
+}
+
+function damageHouse(e) {
+  if (gameOver) return;
+  house.hp = Math.max(0, house.hp - BITE_DAMAGE);
+  house.flash = 0.08;
+  house.shake = 1;
+  house.pop = 1;
+  e.lunge = 1;
+  sfx.bite();
+  cam.trauma = Math.min(1, cam.trauma + 0.12);
+  const R = houseRect();
+  const px = Math.max(R.l, Math.min(R.r, e.x)), py = Math.max(R.t, Math.min(R.b, e.y));
+  for (let i = 0; i < 6; i++) {    // lascas de madeira/tijolo
+    const a = Math.atan2(e.y - py, e.x - px) + rand(-0.9, 0.9), sp = rand(80, 260);
+    particles.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.25, 0.5), age: 0,
+      size: rand(3, 6), color: Math.random() < .5 ? '#7a3b2e' : '#4a2a20', drag: 5 });
+  }
+  if (house.hp <= 0) destroyHouse();
+}
+
+function destroyHouse() {
+  gameOver = true; mouse.down = false;
+  sfx.houseDown();
+  cam.trauma = 1;
+  const R = houseRect();
+  for (let i = 0; i < 60; i++) {
+    const x = rand(R.l, R.r), y = rand(R.t - 30, R.b), a = rand(0, Math.PI * 2), sp = rand(80, 520);
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, life: rand(0.5, 1.2), age: 0,
+      size: rand(4, 10), color: ['#7a3b2e', '#4a2a20', '#2f2f3a', '#9c5a3c'][i % 4], drag: 3 });
+  }
+  for (let i = 0; i < 10; i++)
+    particles.push({ x: rand(R.l, R.r), y: rand(R.t, R.b), vx: rand(-30, 30), vy: rand(-60, -20), life: rand(0.8, 1.6), age: 0,
+      size: rand(12, 22), grow: 30, color: 'smoke', drag: 1 });
+}
+
+function hurtPlayer(src) {
+  if (player.invuln > 0 || gameOver) return;
+  player.hp--;
+  sfx.hurt();
+  player.invuln = INVULN_TIME;
+  player.hurt = 1;
+  heartPop = 1;
+  cam.trauma = Math.min(1, cam.trauma + 0.7);
+  // empurra para longe de quem encostou
+  const a = Math.atan2(player.y - src.y, player.x - src.x);
+  player.vx = Math.cos(a) * CONTACT_KNOCKBACK;
+  player.vy = Math.sin(a) * CONTACT_KNOCKBACK;
+  for (let i = 0; i < 10; i++) {
+    const pa = rand(0, Math.PI * 2), sp = rand(100, 300);
+    particles.push({ x: player.x, y: player.y, vx: Math.cos(pa) * sp, vy: Math.sin(pa) * sp,
+      life: rand(0.2, 0.4), age: 0, size: rand(3, 5), color: Math.random() < .5 ? '#ffffff' : '#e63946', drag: 6 });
+  }
+  if (player.hp <= 0) { gameOver = true; mouse.down = false; sfx.gameOver(); }
+}
+
+// =====================================================================
+// Modos
+// =====================================================================
+function startMode(m) {
+  mode = m;
+  sfx.select();
+  gameOver = false;
+  Object.assign(player, { hp: PLAYER_HP, ammo: AMMO_MAX, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
+    x: WORLD_W / 2, y: WORLD_H / 2 });
+  Object.assign(house, { hp: HOUSE_HP, flash: 0, shake: 0, pop: 0, active: m === 'rogue' });
+  if (m === 'rogue') player.y = houseRect().b + player.h / 2 + 24;   // nasce na frente da porta
+  Object.assign(run, { time: 0, kills: 0, spawnTimer: 1.0 });
+  bullets.length = 0; particles.length = 0; enemies.length = 0;
+  ammoPop.fill(0); mouse.down = false;
+  if (m === 'test') {
+    enemies.push(makeEnemy(Math.round(WORLD_W * ENEMY_POS.x), Math.round(WORLD_H * ENEMY_POS.y), ENEMY_HP, 0, ENEMY_POS));
+  }
+  document.getElementById('hud').style.display = m === 'menu' ? 'none' : '';
+}
+
+// botões do menu (em coordenadas de tela)
+function menuButtons() {
+  const w = Math.min(340, canvas.width - 40), h = 64, x = (canvas.width - w) / 2, cy = canvas.height / 2;
+  return [
+    { id: 'test',  label: '1  ·  CAMPO DE TESTE', sub: 'inimigo parado, caixa de munição', x, y: cy - 10, w, h },
+    { id: 'rogue', label: '2  ·  ROGUELIKE',       sub: 'defenda a casa das ondas de jacarés',     x, y: cy + h + 6, w, h },
+  ];
+}
+const hoveredButton = () => menuButtons().find(b => mouse.x >= b.x && mouse.x <= b.x + b.w && mouse.y >= b.y && mouse.y <= b.y + b.h);
+
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'escape') { startMode('menu'); return; }
+  if (mode === 'menu') { if (k === '1') startMode('test'); if (k === '2') startMode('rogue'); return; }
+  if (gameOver && k === 'r') startMode(mode);
+});
+
+// =====================================================================
+// Update
+// =====================================================================
+function update(dt) {
+  // (re)constrói o mapa quando os tiles carregam ou a janela muda de tamanho
+  const sizeChanged = map.builtW !== canvas.width || map.builtH !== canvas.height;
+  if ((!map.ready || sizeChanged) && canvas.width > 0 && sandImg.complete && grassImg.complete) buildMap();
+  if (!map.ready) return;
+
+  if (mode === 'menu') {
+    box.t += dt;
+    if (mouse.pressed) { const b = hoveredButton(); if (b) startMode(b.id); }
+    mouse.pressed = false;
+    return;
+  }
+
+  // movimento
+  let dx = 0, dy = 0;
+  if (keys.has('a')) dx -= 1;
+  if (keys.has('d')) dx += 1;
+  if (keys.has('w')) dy -= 1;
+  if (keys.has('s')) dy += 1;
+  const len = Math.hypot(dx, dy);
+  if (len > 0) { dx /= len; dy /= len; }
+  if (gameOver) { dx = 0; dy = 0; }
+
+  const kd = Math.exp(-12 * dt);           // knockback some rápido
+  player.vx *= kd; player.vy *= kd;
+  player.x += (dx * SPEED + player.vx) * dt;
+  player.y += (dy * SPEED + player.vy) * dt;
+  player.x = Math.max(player.w / 2, Math.min(WORLD_W - player.w / 2, player.x));
+  player.y = Math.max(player.h / 2, Math.min(WORLD_H - player.h / 2, player.y));
+  pushOutOfHouse(player, PLAYER_HITBOX.w * SCALE / 2, PLAYER_HITBOX.h * SCALE / 2);
+
+  // câmera fixa: o cenário inteiro cabe na tela (só o tremor desloca)
+  cam.x = 0; cam.y = 0;
+
+  // mira
+  const mw = mouseWorld(), h = hand();
+  player.aim = Math.atan2(mw.y - h.y, mw.x - h.x);
+  if (FACE_MOUSE) player.facing = Math.cos(player.aim) < 0 ? -1 : 1;
+  else if (dx !== 0) player.facing = dx;
+
+  // tiro
+  player.cooldown -= dt;
+  if (mouse.down && player.cooldown <= 0 && !gameOver) {
+    if (player.ammo > 0) {
+      shoot();
+      player.ammo--;
+      ammoPop[player.ammo] = 1;
+      player.cooldown = SHOT.cooldown;
+    } else if (mouse.pressed) {
+      // sem munição: "clique seco" — HUD pisca e a arma dá um tranquinho
+      emptyFlash = 1;
+      sfx.dry();
+      player.kick = 0.8;
+      player.cooldown = 0.15;
+    }
+  }
+  mouse.pressed = false;
+
+  // caixa de munição: flutua, brilha de vez em quando, recarrega ao chegar perto
+  box.t += dt;
+  box.pulse *= Math.exp(-5 * dt);
+  if (box.shine >= 0) {
+    box.shine += dt / BOX_SHINE_TIME;
+    if (box.shine >= 1) { box.shine = -1; box.nextShine = rand(...BOX_SHINE_EVERY); }
+  } else if ((box.nextShine -= dt) <= 0) {
+    box.shine = 0;
+    sparkle(box.x + rand(-BOX_W, BOX_W) * SCALE * 0.4, boxTop() + rand(0, BOX_H * SCALE * 0.5));
+  }
+  if (player.ammo < AMMO_MAX && Math.hypot(player.x - box.x, player.y - box.y) < BOX_RADIUS) reload();
+
+  // roguelike: spawns cada vez mais frequentes
+  if (mode === 'rogue' && !gameOver) {
+    run.time += dt;
+    run.spawnTimer -= dt;
+    if (run.spawnTimer <= 0) {
+      if (enemies.length < ROGUE.maxEnemies) spawnEdgeEnemy();
+      run.spawnTimer = spawnInterval(run.time);
+    }
+  }
+
+  // inimigos: perseguem (speed > 0) ou ficam parados; dano por contato
+  const ox = (ENEMY_HITBOX.w + PLAYER_HITBOX.w) * SCALE / 2;
+  const oy = (ENEMY_HITBOX.h + PLAYER_HITBOX.h) * SCALE / 2;
+  for (const e of enemies) {
+    e.flash -= dt;
+    e.jiggle *= Math.exp(-12 * dt);
+    e.hpShow -= dt;
+    if (!e.alive) {
+      if (e.homeRel && (e.respawn -= dt) <= 0) {   // inimigo de teste reaparece
+        Object.assign(e, { alive: true, hp: e.maxHp, flash: 0.15, hpShow: 0 });
+        particles.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0.3, age: 0, size: 60, grow: -180, color: 'ring', drag: 0 });
+      }
+      continue;
+    }
+    e.lunge *= Math.exp(-10 * dt);
+    if (e.speed > 0 && !gameOver) {
+      // alvo: o ponto mais próximo da casa (roguelike) ou o jogador
+      let tx = player.x, ty = player.y;
+      if (house.active) {
+        const R = houseRect();
+        tx = Math.max(R.l, Math.min(R.r, e.x)); ty = Math.max(R.t, Math.min(R.b, e.y));
+      }
+      const ddx = tx - e.x, ddy = ty - e.y, dist = Math.hypot(ddx, ddy) || 1;
+      if (Math.abs(ddx) > 4) e.facing = ddx < 0 ? -1 : 1;
+      if (!e.attacking) {
+        e.x += ddx / dist * e.speed * dt;
+        e.y += ddy / dist * e.speed * dt;
+        e.walk += dt * e.speed * 0.09;
+      }
+      e.dirX = ddx / dist; e.dirY = ddy / dist;
+    }
+    if (house.active) {
+      // encostou na casa: para e morde
+      const hw = ENEMY_HITBOX.w * SCALE / 2, hh = ENEMY_HITBOX.h * SCALE / 2;
+      e.attacking = pushOutOfHouse(e, hw + 1, hh + 1) || (() => {
+        const R = houseRect();
+        return e.x > R.l - hw - 3 && e.x < R.r + hw + 3 && e.y > R.t - hh - 3 && e.y < R.b + hh + 3;
+      })();
+      if (e.attacking && !gameOver && (e.bite -= dt) <= 0) { e.bite = BITE_EVERY; damageHouse(e); }
+    } else if (Math.abs(player.x - e.x) < ox && Math.abs(player.y - e.y) < oy) hurtPlayer(e);
+  }
+  // separação simples para não empilharem
+  const minD = ENEMY_HITBOX.w * SCALE * 0.9;
+  for (let i = 0; i < enemies.length; i++) {
+    const a = enemies[i]; if (!a.alive || a.homeRel) continue;
+    for (let j = i + 1; j < enemies.length; j++) {
+      const b = enemies[j]; if (!b.alive || b.homeRel) continue;
+      const ddx = b.x - a.x, ddy = b.y - a.y, d = Math.hypot(ddx, ddy);
+      if (d > 0 && d < minD) {
+        const push = (minD - d) / 2, nx = ddx / d, ny = ddy / d;
+        a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+      }
+    }
+  }
+  if (house.active) for (const e of enemies) if (e.alive) pushOutOfHouse(e, ENEMY_HITBOX.w * SCALE / 2, ENEMY_HITBOX.h * SCALE / 2);
+  house.flash -= dt;
+  house.shake *= Math.exp(-10 * dt);
+  house.pop *= Math.exp(-5 * dt);
+
+  // remove mortos que não reaparecem
+  for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive && !enemies[i].homeRel) enemies.splice(i, 1);
+
+  player.invuln -= dt;
+  player.hurt *= Math.exp(-8 * dt);
+  heartPop *= Math.exp(-6 * dt);
+
+  emptyFlash *= Math.exp(-6 * dt);
+  for (let i = 0; i < AMMO_MAX; i++) ammoPop[i] *= Math.exp(-10 * dt);
+
+  // recuperação do recuo / efeitos
+  const rk = Math.exp(-14 * dt);
+  player.kick *= rk; player.kickRot *= rk;
+  player.flash -= dt;
+  crossPulse *= Math.exp(-9 * dt);
+  cam.trauma = Math.max(0, cam.trauma - dt * 2.2);
+  const shake = cam.trauma * cam.trauma * 14;
+  cam.sx = rand(-1, 1) * shake; cam.sy = rand(-1, 1) * shake;
+
+  // projéteis
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.age += dt;
+    b.px = b.x; b.py = b.y;
+    const d = Math.exp(-SHOT.drag * dt);
+    b.vx *= d; b.vy *= d;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    const ang = Math.atan2(b.vy, b.vx);
+    const out = b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H;
+    // testa o ponto atual e o meio do passo (projéteis rápidos não atravessam o inimigo)
+    const mx = (b.x + b.px) / 2, my = (b.y + b.py) / 2;
+    const target = enemies.find(e => e.alive && (inEnemy(e, b.x, b.y) || inEnemy(e, mx, my)));
+    if (target) {
+      hitEnemy(target, b, ang);
+      bullets.splice(i, 1);
+    } else if (out) {
+      impact(Math.max(0, Math.min(WORLD_W, b.x)), Math.max(0, Math.min(WORLD_H, b.y)), ang, true);
+      bullets.splice(i, 1);
+    } else if (b.age >= b.life) {
+      impact(b.x, b.y, ang, false);
+      bullets.splice(i, 1);
+    }
+  }
+
+  // partículas
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.age += dt;
+    if (p.age >= p.life) { particles.splice(i, 1); continue; }
+    const d = Math.exp(-(p.drag || 0) * dt);
+    p.vx *= d; p.vy *= d;
+    if (p.gravity) p.vy += p.gravity * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.grow) p.size += p.grow * dt;
+    if (p.rot !== undefined) p.rot += p.vr * dt;
+    if (p.floor !== undefined && p.y > p.floor && p.vy > 0) {   // quique da cápsula
+      if (Math.abs(p.vy) > 120) sfx.shell();
+      p.y = p.floor; p.vy *= -0.35; p.vx *= 0.6; p.vr *= 0.5;
+      if (Math.abs(p.vy) < 40) { p.vy = 0; p.gravity = 0; p.drag = 10; }
+    }
+  }
+}
+
+// =====================================================================
+// Render
+// =====================================================================
+function drawGun() {
+  if (!gunSprite.complete) return;
+  const g = gunTransform();
+  ctx.save();
+  ctx.translate(Math.round(g.x), Math.round(g.y));
+  ctx.rotate(g.rot);
+  if (g.flip < 0) ctx.scale(1, -1);  // mirando à esquerda: não fica de cabeça para baixo
+  ctx.drawImage(gunSprite, -GUN_GRIP.x * SCALE, -GUN_GRIP.y * SCALE, GUN_W * SCALE, GUN_H * SCALE);
+  ctx.restore();
+}
+
+function drawMuzzleFlash() {
+  if (player.flash <= 0) return;
+  const m = muzzlePos(), a = player.flashAngle, k = player.flash / 0.07;
+  ctx.save();
+  ctx.translate(m.x, m.y); ctx.rotate(a);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = `rgba(255,200,80,${0.35 * k})`;
+  ctx.beginPath(); ctx.arc(8, 0, 34 * k + 10, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff3c4';
+  ctx.beginPath();                                  // cone do clarão
+  ctx.moveTo(0, -7 * k); ctx.lineTo(44 * k + 12, 0); ctx.lineTo(0, 7 * k);
+  ctx.moveTo(4, 0); ctx.lineTo(18, -16 * k); ctx.lineTo(14, 0); ctx.lineTo(18, 16 * k);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPlayer() {
+  const px = Math.round(player.x), py = Math.round(player.y);
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + player.h / 2 - 2, player.w * 0.35, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (!sprite.complete) return;
+  ctx.save();
+  ctx.translate(px, py);
+  if (player.facing !== SPRITE_FACES) ctx.scale(-1, 1);
+  // invencível: pisca; logo após o dano: fica branco
+  if (player.invuln > 0 && Math.floor(player.invuln * 14) % 2 === 0) ctx.globalAlpha = 0.35;
+  ctx.drawImage(player.hurt > 0.5 ? whiteOf(sprite) : sprite, -player.w / 2, -player.h / 2, player.w, player.h);
+  ctx.restore();
+}
+
+function drawBullets() {
+  ctx.lineCap = 'round';
+  for (const b of bullets) {
+    const k = 1 - b.age / b.life, s = SHOT.bulletScale;
+    // rastro
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 * k})`;
+    ctx.lineWidth = s * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(b.x - (b.x - b.px) * 2.5, b.y - (b.y - b.py) * 2.5);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    // projétil: mesmo formato 3x1 do tiro.png, pintado de branco
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(Math.atan2(b.vy, b.vx));
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-1.5 * s, -0.5 * s, 3 * s, 1 * s);
+    ctx.restore();
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const k = 1 - p.age / p.life;
+    if (p.color === 'shell') {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.min(1, k * 3);
+      ctx.fillStyle = '#ac3232'; ctx.fillRect(-4, -2, 6, 4);   // corpo vermelho
+      ctx.fillStyle = '#df9b26'; ctx.fillRect(2, -2, 3, 4);    // base de latão
+      ctx.restore();
+    } else if (p.color === 'sparkle') {               // estrelinha de 4 pontas
+      const r = p.size * Math.sin(Math.PI * (1 - k)); // cresce e some
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(Math.round(p.x - 1), Math.round(p.y - r), 2, Math.round(r * 2));
+      ctx.fillRect(Math.round(p.x - r), Math.round(p.y - 1), Math.round(r * 2), 2);
+    } else if (p.color === 'ring') {
+      ctx.strokeStyle = `rgba(255,240,180,${k})`;
+      ctx.lineWidth = 3 * k + 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.stroke();
+    } else if (p.color === 'smoke' || p.color === 'dust') {
+      ctx.fillStyle = p.color === 'smoke' ? `rgba(220,220,210,${0.35 * k})` : `rgba(230,200,150,${0.4 * k})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.globalAlpha = k;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawCrosshair() {
+  const x = Math.round(mouse.x), y = Math.round(mouse.y);
+  const g = 3 + crossPulse * 9, r = 9 + crossPulse * 9;
+  ctx.strokeStyle = '#f4f1de';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - r, y); ctx.lineTo(x - g, y);
+  ctx.moveTo(x + g, y); ctx.lineTo(x + r, y);
+  ctx.moveTo(x, y - r); ctx.lineTo(x, y - g);
+  ctx.moveTo(x, y + g); ctx.lineTo(x, y + r);
+  ctx.stroke();
+  ctx.fillStyle = '#e63946';
+  ctx.fillRect(x - 1, y - 1, 2, 2);
+}
+
+function drawEnemy(e) {
+  if (!e.alive || !enemyImg.complete) return;
+  const w = ENEMY_W * SCALE, h = ENEMY_H * SCALE;
+  const lx = (e.dirX || 0) * e.lunge * 14, ly = (e.dirY || 0) * e.lunge * 14;   // bote na mordida
+  const ex = Math.round(e.x + lx + rand(-1, 1) * e.jiggle * 4), ey = Math.round(e.y + ly);
+  // andando: pulinhos + balanço (só temos 1 frame de sprite)
+  const moving = e.speed > 0 && !gameOver && !e.attacking;
+  const hop = moving ? Math.abs(Math.sin(e.walk)) * 6 : 0;
+  const tilt = moving ? Math.sin(e.walk) * 0.08 : 0;
+
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath();
+  ctx.ellipse(e.x, ey + h / 2 - 2, w * 0.35 * (1 - hop / 30), 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const sq = 1 + e.jiggle * 0.08;  // "squash" rápido ao ser atingido
+  ctx.save();
+  ctx.translate(ex, ey + h / 2 - hop);
+  ctx.rotate(tilt);
+  ctx.scale(sq * (e.facing === -1 ? 1 : -1), 1 / sq);   // sprite olha para a esquerda
+  ctx.drawImage(e.flash > 0 ? whiteOf(enemyImg) : enemyImg, -w / 2, -h, w, h);
+  ctx.restore();
+
+  // barra de vida (aparece depois de tomar dano)
+  if (e.hpShow > 0) {
+    const bw = 56, bh = 6, bx = e.x - bw / 2, by = ey - h / 2 - 16;
+    ctx.globalAlpha = Math.min(1, e.hpShow * 2);
+    ctx.fillStyle = '#000'; ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+    ctx.fillStyle = '#3a1414'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = '#e63946'; ctx.fillRect(bx, by, Math.round(bw * e.hp / e.maxHp), bh);
+    ctx.globalAlpha = 1;
+  }
+}
+
+const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+function drawRunHud() {
+  if (mode !== 'rogue') return;
+  const text = `${fmtTime(run.time)}   ·   ABATES ${run.kills}`;
+  ctx.font = 'bold 22px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#000'; ctx.fillText(text, canvas.width - 14, 38);
+  ctx.fillStyle = '#f4f1de'; ctx.fillText(text, canvas.width - 16, 36);
+  ctx.textAlign = 'left';
+}
+
+function drawMenu() {
+  ctx.fillStyle = 'rgba(8,12,8,.62)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = 'center';
+  if (sprite.complete) {           // dino flutuando acima do título
+    ctx.drawImage(sprite, canvas.width / 2 - 36, canvas.height / 2 - 196 + Math.sin(box.t * 2.6) * 5, 72, 72);
+  }
+  ctx.font = 'bold 56px monospace';
+  ctx.fillStyle = '#000'; ctx.fillText('DINO', canvas.width / 2 + 4, canvas.height / 2 - 56);
+  ctx.fillStyle = '#7bd04a'; ctx.fillText('DINO', canvas.width / 2, canvas.height / 2 - 60);
+  const hov = hoveredButton();
+  for (const b of menuButtons()) {
+    const on = hov === b;
+    ctx.fillStyle = on ? '#f4f1de' : 'rgba(20,28,20,.9)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = '#f4f1de'; ctx.lineWidth = 2;
+    ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+    ctx.fillStyle = on ? '#10170f' : '#f4f1de';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText(b.label, b.x + b.w / 2, b.y + 28);
+    ctx.font = '13px monospace';
+    ctx.fillStyle = on ? '#3a4a3a' : '#a9b8a0';
+    ctx.fillText(b.sub, b.x + b.w / 2, b.y + 48);
+  }
+  ctx.font = '13px monospace';
+  ctx.fillStyle = '#a9b8a0';
+  ctx.fillText('clique ou aperte 1 / 2  ·  ESC volta para este menu', canvas.width / 2, canvas.height - 24);
+  ctx.textAlign = 'left';
+}
+
+// coração em pixel art (7x6)
+const HEART = ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'];
+function drawHeart(x, y, s, full) {
+  for (let r = 0; r < HEART.length; r++)
+    for (let c = 0; c < 7; c++) if (HEART[r][c] === '#') {
+      ctx.fillStyle = full ? (r === 1 && c === 1 ? '#ffb3b3' : '#e63946') : '#3a2a2a';
+      ctx.fillRect(x + c * s, y + r * s, s, s);
+    }
+}
+
+function drawHearts() {
+  const s = 4, gap = 6, x0 = 16, y0 = 16;
+  for (let i = 0; i < PLAYER_HP; i++) {
+    const lost = i === player.hp;                // o coração que acabou de ser perdido pula
+    const pop = lost ? heartPop : 0;
+    const x = x0 + i * (7 * s + gap) + (pop ? rand(-1, 1) * pop * 4 : 0);
+    const y = y0 - pop * 8;
+    // contorno
+    ctx.fillStyle = '#000';
+    for (let r = 0; r < HEART.length; r++)
+      for (let c = 0; c < 7; c++) if (HEART[r][c] === '#') ctx.fillRect(x + c * s - 2, y + r * s - 2, s + 4, s + 4);
+    drawHeart(x, y, s, i < player.hp);
+    if (pop > 0.05) { ctx.globalAlpha = pop; drawHeart(x, y, s, true); ctx.globalAlpha = 1; }
+  }
+}
+
+function drawHouse() {
+  if (!house.active || !houseImg.complete) return;
+  const w = HOUSE_W * HOUSE_SCALE, h = HOUSE_H * HOUSE_SCALE;
+  const sx = rand(-1, 1) * house.shake * 4;
+  const x = Math.round(house.x - w / 2 + sx), y = Math.round(house.y - h / 2);
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.fillRect(x + 6, y + h - 6, w - 6, 12);
+  if (house.hp <= 0) {                       // destruída: escombros escuros
+    ctx.globalAlpha = 0.45;
+    ctx.drawImage(houseImg, x, y + h * 0.45, w, h * 0.55);
+    ctx.globalAlpha = 1;
+    return;
+  }
+  ctx.drawImage(house.flash > 0 ? whiteOf(houseImg) : houseImg, x, y, w, h);
+  // rachaduras conforme perde vida
+  const dmg = 1 - house.hp / HOUSE_HP;
+  if (dmg > 0.33) {
+    ctx.fillStyle = 'rgba(20,10,10,.7)';
+    const cracks = [[0.22, 0.55], [0.7, 0.62], [0.45, 0.8], [0.85, 0.45], [0.12, 0.85]];
+    const n = Math.floor(dmg * cracks.length);
+    for (let i = 0; i < n; i++) {
+      const [cx, cy] = cracks[i], X = x + cx * w, Y = y + cy * h, s = HOUSE_SCALE;
+      ctx.fillRect(X, Y, s, s * 3); ctx.fillRect(X + s, Y + s * 2, s, s * 3); ctx.fillRect(X - s, Y + s * 4, s, s * 2);
+    }
+  }
+}
+
+function drawHouseBar() {
+  const bw = Math.max(80, Math.min(280, canvas.width - 400)), bh = 16, x = 70, y = 22;
+  const k = house.hp / HOUSE_HP, pop = house.pop;
+  if (houseImg.complete) ctx.drawImage(houseImg, 14, 14, 44, 24);        // ícone
+  const sx = rand(-1, 1) * pop * 3;
+  ctx.fillStyle = '#000'; ctx.fillRect(x - 3 + sx, y - 3, bw + 6, bh + 6);
+  ctx.fillStyle = '#3a1414'; ctx.fillRect(x + sx, y, bw, bh);
+  ctx.fillStyle = k > 0.5 ? '#7bd04a' : k > 0.25 ? '#e9c46a' : '#e63946';
+  ctx.fillRect(x + sx, y, Math.round(bw * k), bh);
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(x + sx, y, Math.round(bw * k), 4);  // brilho
+  if (pop > 0.05) { ctx.fillStyle = `rgba(255,255,255,${pop * 0.6})`; ctx.fillRect(x + sx, y, bw, bh); }
+  ctx.font = 'bold 12px monospace';
+  ctx.fillStyle = '#f4f1de';
+  ctx.fillText(`CASA ${house.hp}/${HOUSE_HP}`, x + 4 + sx, y + bh + 16);
+}
+
+function drawGameOver() {
+  if (!gameOver) return;
+  ctx.fillStyle = 'rgba(10,0,0,.6)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e63946';
+  ctx.font = 'bold 48px monospace';
+  ctx.fillText(mode === 'rogue' ? 'A CASA CAIU' : 'VOCÊ MORREU', canvas.width / 2, canvas.height / 2);
+  ctx.fillStyle = '#f4f1de';
+  ctx.font = '18px monospace';
+  let y = canvas.height / 2 + 36;
+  if (mode === 'rogue') {
+    ctx.fillText(`sobreviveu ${fmtTime(run.time)}  ·  ${run.kills} abates`, canvas.width / 2, y);
+    y += 28;
+  }
+  ctx.fillText('R recomeçar  ·  ESC menu', canvas.width / 2, y);
+  ctx.textAlign = 'left';
+}
+
+function drawAmmo() {
+  if (!ammoFullImg.complete || !ammoEmptyImg.complete) return;
+  const w = 9 * AMMO_SCALE, h = 16 * AMMO_SCALE;
+  const total = AMMO_MAX * w + (AMMO_MAX - 1) * AMMO_GAP;
+  const x0 = canvas.width - AMMO_MARGIN - total;
+  const y0 = canvas.height - AMMO_MARGIN - h;
+  // gasta da direita para a esquerda
+  for (let i = 0; i < AMMO_MAX; i++) {
+    const full = i < player.ammo;
+    const pop = ammoPop[i];
+    const shakeX = emptyFlash > 0.05 ? rand(-1, 1) * emptyFlash * 3 : 0;
+    const x = Math.round(x0 + i * (w + AMMO_GAP) + shakeX);
+    const y = Math.round(y0 - pop * 10);               // gauge "pula" ao esvaziar
+    ctx.drawImage(full ? ammoFullImg : ammoEmptyImg, x, y, w, h);
+    if (pop > 0.05) {                                  // brilho branco no instante do tiro
+      ctx.fillStyle = `rgba(255,255,255,${pop * 0.8})`;
+      ctx.fillRect(x, y, w, h);
+    }
+  }
+  if (emptyFlash > 0.05) {                             // sem munição: contorno vermelho
+    ctx.strokeStyle = `rgba(230,57,70,${emptyFlash})`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x0 - 6, y0 - 6, total + 12, h + 12);
+  }
+}
+
+function render() {
+  ctx.fillStyle = '#10170f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(-Math.round(cam.x + cam.sx), -Math.round(cam.y + cam.sy));
+  if (map.ready) ctx.drawImage(map.canvas, 0, 0, WORLD_W, WORLD_H);
+
+  // objetos ordenados por profundidade (y): quem está mais abaixo fica na frente
+  const drawPlayerAndGun = () => {
+    if (player.hp <= 0) return;
+    const gunBehind = Math.sin(player.aim) < 0;   // mirando para cima: arma atrás do corpo
+    if (gunBehind) drawGun();
+    drawPlayer();
+    if (!gunBehind) drawGun();
+  };
+  const objs = [{ y: box.y, draw: drawBox }];
+  if (mode !== 'menu') {
+    objs.push({ y: player.y, draw: drawPlayerAndGun });
+    for (const e of enemies) objs.push({ y: e.y, draw: () => drawEnemy(e) });
+    // casa ordenada pela base das paredes (centro equivalente dos personagens)
+    if (house.active) objs.push({ y: houseRect().b - 36, draw: drawHouse });
+  }
+  objs.sort((a, b) => a.y - b.y);
+
+  drawParticles();
+  for (const o of objs) o.draw();
+  drawBullets();
+  drawMuzzleFlash();
+  ctx.restore();
+
+  if (mode === 'menu') {
+    drawMenu();
+  } else {
+    drawAmmo();
+    if (mode === 'rogue') drawHouseBar(); else drawHearts();
+    drawRunHud();
+    drawGameOver();
+  }
+  drawCrosshair();
+}
+
+// =====================================================================
+// Loop
+// =====================================================================
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
