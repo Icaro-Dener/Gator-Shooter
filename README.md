@@ -45,11 +45,13 @@ No campo de treino, digite **0806** para abrir o painel de testes (digite de nov
 
 - mudar o nível de cada upgrade (passe o mouse no nome para ver o que ele faz);
 - adicionar jacarés, tanks e ranges, que atacam a casa do campo de treino (ela ganha vida enquanto houver inimigos de teste);
-- ligar munição infinita e casa invencível, encher a munição e curar a casa.
+- ligar munição infinita, casa invencível e noite, encher a munição e curar a casa.
 
 ## Cenário
 
-A partida acontece numa clareira cercada de mata. As árvores balançam com o vento, soltam folhas e tremem quando um jacaré passa por elas. As bordas ficam na sombra das árvores, o centro tem luz de sol, e alguns vagalumes piscam perto da mata. O jacaré anima as pernas ao andar e pisca de vez em quando.
+A partida acontece numa clareira cercada de mata, num mapa maior que a tela: a câmera acompanha o jacaré com zoom (puxando um pouco na direção da mira), e quanto mais longe da casa, mais densa fica a mata. Quando a casa sai da tela, uma seta na borda aponta para ela e fica vermelha quando ela está sendo atacada. As árvores balançam com o vento, soltam folhas e tremem quando um jacaré passa por elas. As bordas ficam na sombra das árvores, o centro tem luz de sol, e alguns vagalumes piscam perto da mata. O jacaré anima as pernas ao andar e pisca de vez em quando.
+
+**Dia e noite (modo horda):** 5 waves de dia, 5 de noite, e assim por diante (noite nas waves 6–10, 16–20…). A noite cai aos poucos no intervalo antes da wave 6 e o banner avisa ("A NOITE CAIU" / "AMANHECEU"). À noite tudo fica escuro e azulado, aparecem muitos vagalumes, o jogador ilumina em volta, os tiros (seus e dos ranges) iluminam o caminho, a casa acende as janelas e os jacarés ficam com um ponto vermelho brilhando nos olhos.
 
 ## Música
 

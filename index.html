@@ -140,10 +140,10 @@ const BOX_SHINE_EVERY = [1.8, 3.2];    // intervalo aleatório entre brilhos (s)
 const BOX_SHINE_TIME = 0.45;           // duração da passada do brilho (s)
 
 // Inimigo (18x19, olha para a ESQUERDA)
-const ENEMY_POSITIONS = [                // campo de treino: em coluna à direita (0..1 da tela)
-  { x: 0.86, y: 0.20 },
-  { x: 0.86, y: 0.44 },
-  { x: 0.86, y: 0.68 },
+const ENEMY_POSITIONS = [                // campo de treino: em coluna à direita da casa (px a partir do centro dela)
+  { dx: 330, dy: -160 },
+  { dx: 330, dy: 0 },
+  { dx: 330, dy: 160 },
 ];
 const ENEMY_HP = 160;                    // vida no campo de treino (cada projétil tira 10)
 const ENEMY_RESPAWN = 2.5;               // segundos até reaparecer depois de morrer
@@ -171,10 +171,11 @@ function waveConfig(n) {
 }
 
 // Casa (modo roguelike) — sprite 72x40
-const HOUSE_W = 72, HOUSE_H = 40;
-const HOUSE_SCALE = 3;
+const HOUSE_W = 86, HOUSE_H = 60;
+const HOUSE_SCALE = 5;
 const HOUSE_HP = 200;            // vida base da casa
-const HOUSE_SOLID_TOP = 12;      // px do sprite: acima disso é telhado (dá para passar "atrás")
+const HOUSE_SOLID_TOP = 31;
+const HOUSE_DOOR_X = 19;        // px do sprite: porta à direita do centro      // px do sprite: acima disso é telhado (dá para passar "atrás")
 const BITE_EVERY = 1.0;          // cada jacaré encostado morde a casa a cada X s
 const BITE_DAMAGE = 5;
 
@@ -223,7 +224,7 @@ const gunSprite = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAECAY
 const bulletImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAYAAAAb4BS0AAAAFUlEQVQImWO8P1vt/9npPAwMDAwMACZ7BBHZ3QEnAAAAAElFTkSuQmCC');   // tiro.png
 const ammoFullImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAdklEQVQokWNkYGBgUFBQ+M+AAzx48ICRBcZp05dhMODnYGBgYGDgFRJm+PzuLYPXoTsMDAwMDEy4TEAGo4qoqAgeLfI+nxiYRNghgvy/GZg+/mdgOESCSYwKCgr/l1bzMahoq6FI8PKLMHz++IbBPOoMRBEhkwDFZxgcewHZtgAAAABJRU5ErkJggg=='); // municao-cheia.png
 const ammoEmptyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAcUlEQVQoke2ROw6DQAxEn80uBQ0UOYDvf6rtIkU0lCu06xT8kkgUSCmZ7skz42IEwMycE6WUJGwwRKVVAUC1odbCK5eFzxo+dZv+aNpnCZ0j6yyijlQgX2gSM/NHL8QYvg/a4LXwHOfl3Tg5MP/kD34DQXoaYcq+77YAAAAASUVORK5CYII='); // municao-vazia.png
-const houseImg = img('data:image/png;base64,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'); // casa.png
+const houseImg = img('data:image/png;base64,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'); // casa.png
 const reloadImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAjklEQVR4nGNgwAEajpn/z1ii9Z+BAGDCJfHi3meGkJoPDBSBPQpSBF3AiMxxF+X9L8LDDmYvvf8GTHd1dWFoYmeHqPn58ycDI7ImGHjz5SeDakgMA7+QEMPHd+8Y3u9YDRYDAZBahah0MBskh2IASJHlRi2w/2fEXENxHS7AAtO48/VnsAbFe58J+hsZAAC6jzdlywokngAAAABJRU5ErkJggg=='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAf0lEQVR4nGNgGLSg4Zj5/4wlWv8JqWNB5riL8v4X4WEHs1/c+8wQUvOBQamrC8MQdnaImp8/fzIwImuCgTdffjKohsQw8AsJMXx8947h/Y7VYDEQAKlViEoHs0FyKAaAFFlu1ALbPiPmGiMxXgV7AaRx5+vPYA2K9z4T9DcyAAAbmzOYUhqsPgAAAABJRU5ErkJggg==')]; // arma-recarga.gif (16x7, 2 frames)
 const RELOAD_W = 16, RELOAD_H = 7, RELOAD_GRIP = { x: 3, y: 5 };
 const meleeImgs = [1, 2, 3].map(i => null);
@@ -236,6 +237,7 @@ const enemyBlinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAA
 const enemyLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAMUlEQVR4nGNgIAEwInPChIX/g2gdTk4wv+7JExR5JlJMxgAw05tkZMA0TpPxKQTJAwCagApuem+CewAAAABJRU5ErkJggg=='),   // pernas juntas
                       img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAKUlEQVR4nGNgIAeECQv/B2FksSYZmf8gDOMzkWUyzHR0MawmE1IIUgMAA0QM1ZbYkDUAAAAASUVORK5CYII=')];  // pernas abertas
 const titleImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIsAAAAzCAYAAACngPvnAAAJcklEQVR4nO2cQUgcWRrH/z0MBKrj4iEZ+hKJvQHBoQUHoXFz2EWiIAjJabLgeEhgkuviIbkYxsVc4iH3zYA5ZDxkTyMEAiqye3BFaEboZoUG04bMpVk9BNQCTzUH873+3lfvvapqe6Pl1A+KtF31Xr167/++73tfvQ6QkZGRkZGRkXH+ySW5uOx5gev8pu8nqi8jXVgHtxsI+jwv9P2To0kAQGWjCgB4e6umnY8SjKy3HYF1A5poPyYUPZU3PV8meDvGjpEDSgLhkFgILhpTh9vEZ7veBhdKO6LjQhlfLWFoeEA7P5dfzARjQeuUKJGQQJqNg1BFhWKXEozs7G4g+Cn4XqsDiBaYhA/04IvrAICtB+9j10Hl//afsvpOigWwC8Ym+E3fz/0eXLR6AJdQKhtVrC3vWivpv3EFQGvgeMdwoVBdEpvIJNRGsghvFtexvbOP4/nD2OX/+lM/CsUu43kuHCkYk9CajQNNrLzP3iyuA0gm5vPOF6Yv+UPP/33JKpSRsV71uV2hDA0PqPuZZmfZ84JuIOBibjYOUNmoolDsUkKNwuUGTe17cjQZas/A7FdaXxSKXcrCja+WtLomJm9iYvKm0YWnlS/pA3WkFAqHZjDxdv7EImwhPLPl4FQ2qiH3xWf4+GopFCyXPS/gAfXa8q5qA1mBN411XHp0GQAwO1ZSgzv7p01tFnPXBbRcKblPGmwSDIl4IvcjJGvLu9pE4fXyOqiewRfXsfXgPcqeF6TZuhgtC6A/8PH8YUgowIk4+MHP9XleaFZt7+xj68F7bD14j+2dfU08NPg0m7lQiJGxXiUMwuRShoYH8Cb4Xgmn7HmBLAecWEMSqBQqwesx9YHp/mvLu8oCkQWUgkojmlhMJtPUQUTZ8wJ+0PdyaSutAtW7vbOv1cdNed33Yz+EDdkOwhSgA7pg+GSheuq+ryaOdEdUprJRVc/J72OLk9KE1bLYGF8tGQ/AnbSzxRamOIbq+S73oxoAG6bVTGWjirn8ovM5eODJsQkmbi6HRMTd1EXhy+hLWgy+uG6NO54cTWIuv2idzYViVygIlAwNDwCr+oDRZ152e2cfE6Ls8fyhiqE4vD3bO/vov3FFm+XkPl1C7/M8bH6ydHXfV/EdFyoJi6zK21s1zfXY3Fya0MRS2ahqHTAy1mscAE6zcRASjKwTMFsAfl7yEch1AwENDu/sS48ua23tv3FFBdmmOpwP8AlbrkRaF9WmeQA/6NdKQUjrlebgFmBuqO77RvXzwHB7Z187ONSpFPckWTLK1QNBpr/u+1oMI+MoUzzQqYGRIje5I95+GfTbFgBpRLMsfECGhgdQ2ahiZKwXazjxw8fzh0o8x/OH2MKhMrU2y0G44g7J+GoJuFULNn0/xweHXEHZ84Jm4wAYbrX1LeyJvbrvYwAt0TcbB6GlelQGViJXN66k5UUhFLPM5RdDVmFkrBdry7uhZatpOcrr4XGGzHZyBl9cRwXVSMF1mvHVEgYbBwEQzrfYsLk1myu8SIRWQ3XfV3GHjF84NqG4LIhLXJSVTWKBklxLrku6T3JhzcZBZC6EhDIw+1XonG0iXCSUWKQv5oIh0YyM9aL/xhV1jIz1olDs0kTlivpty2c5gO1gswg87uHIHAgdEtdbaCnuixCXuNAsi+zYufxiSDQTkzedHcvhwpHLVR70uRJ/nYCeqzr7PwAtcdqSc4RJ+FHvly4y1v0sgLljnhxNOveymKBZb3q7zANL13UcKsOtSZw31/x91aVHl50vIW0vRqm8vPdFtypAxE45oL2ZFLW/Q3as6dqozm+nDJDsuUz1tXvfi0CszUKujuWxwKdMp9FqEFHWwnVNJ8rYysdp4++d2DMR0EVjetFnSliddkAzzg+pHTxbviPp5u2M+CR6kXhesFk7oJXlNZHGeIPaXPf9M58IibconCW0vZL+NsVScm8N/54+L9Sm8OzlqKrz/9Pa01P2vGChNoWVo6cAzr6tqbEsUiTUgZLR/AwAWLcwLtSm1OeVo6foyU13vK2doOx5AQkaAD4Ez9GTm0Y3EJyVhUmVZSFIKL826uqQ59JM0pean4vUWBbiQ/BcEwchBTOan4m9QfosZ2uaSJ1l+eWf/9b+3qs0sVdpat+ZxCS5OlToaLs6RdSOvbMkdZaFs1dp4vG9FQBQAet5FUEcbELh4u/zPNR9/0wsYWrEwrdI7lWaIVE8vreCZy9HNQElIa7L4gPKE5OuwTOtYmzZbh6ASxZqU7hW7AMA9OSmEwvmtKmDVPnpbiD4+fVtACcWhNzPN9/+Wa2COKZ3UHwwrhX71GqITLyr80ydHSWYsucFrp+1UBm++nFZRxILAPTkprXypjbRPdoJmmVuJzWWhbhzdwk/v74dsi58FWQSjg0KmGkQRvMzRgvz33cPVWfzASNMy1oqY7reViYK3lZCTgJ5z9H8jJZjIu6XXqnPUqh0jrcvdQEuhyyLafm8cvQ0cgnKy9G/pnL/en07sJUjPgTPAbRcjixjQpYh90lBuwzcAXA3BCCcj+FtlMjrSDgmi7ZQmwoF1KkSCyn8zt0l43mZd4kjGBO8nKu8FA0NvizD22UrQ67j8b0VdXCuFftwv/QKPblpJZROBLkkGJPrkzmrVLkhHijeubuklG+aGSZzHYUsYxMKmWhXMJrkXpSdjdoHZIuP6LllcE/XUz/RIoCXM1kvG6mxLFwo6+8eYv3dQ3WOZmI7+Za9SlPz3UScTLCpnOtaOlzti1qdfARy0qLw516oTalj/d1DfAieo+77ql5psa4OFUJxCmCOs1IjFoKLRM5sk2BcmK61CcxVbxxRcpKIDLAHyJKoHJNNMLxNJOjR/EzovVmq3JAJU3DXDvdLr07lVkyY8kGA2X3x31N/DlzCsrm7VImFfC8fBNdDx7UyMlawxTt0X5eobCn5TgnRttSmtvG4xZbfkRNM9pMtcE6NG6IHIHNpW1p2CnIt7WyO2vT9HF8Gxy2T9D4SLmYeswCdeZOdGrEAus/lKwA5IPRdnLQ/v4bHEvzzX+4uqYG0iZSWxNRGPvguYf/aqOMPuelTCYU/g0ucJsHIfnKJNlXpfkI+tDSrtoeX719IEK4lKy/vSrRdHSrg6z/+I9SfrjKP761E/tqBt9W2tZKulctioPVKg7vHZy9HQyugOJYtlWIh2vm/Z2UZ109X4v5uyHbtacrIcnH24Mr7yED1tD99SbVYMpITZ0JkZGRkfD5+A9fWHKB86J+uAAAAAElFTkSuQmCC'); // titulo.png (139x51)
+const houseNightImg = img('data:image/png;base64,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'); // casa-noite.png (janelas acesas)
 const tankBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAXCAYAAAAP6L+eAAABzklEQVQ4ja1VIU/DQBh9t6yZaWoOEtxEkyEQNYBf5rAj+wHgMPwAAgRQzGFI8AtiATO/BIGCmqHYkglck3KmmWkqDsG+W3e7Yx3wzF2/Xt/37n13XxksaLiu5JUKAECkKfqTCbOtNYG1OJd6UKQpiDQfW4W8BADDJJkL5km7QqhYw3UXRPxIvOl51gUtzo0JlxJ3hWAiTWEaTR8UVV3qteuyP5kwfQS+fdVRVHXZb9bwVPXk+vbGwggAcRjh9ui5ENmcYgAgEn3U54QidpS3/LsFLxuuK4/PdtTzMElUgU32mGAl9Zs1FYvDCMlHgtOTZ6xpHtvOdpkmgeNIANBJAbMdy1AmQoJX9RCHkXHxWqWC/DUHZn7rylleLQDcvx9YVYwfR+hcvwEAukIwGykwtWKQZSxwHDnIMhaHkbXifrMGTIkJSz0eZBkDivvZ4lzabuccMWH8OIJXNfeOfNJlx86YsdeuS/1kUFLymFqrTbV1K/olubl8BTDrFcMkUafERG4lph/A+cu+il3sPqg5EVOyn/xeCb12XQaOIwPHkQ3XlS3OZb6HlH5L7DdruOnsAQA+01QVk3b6J/lU5DiMcHXYn3v3L7702nVlARX5C8yX3B9+OCP9AAAAAElFTkSuQmCC'); // tank-corpo.png (22x23)
 const tankLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAOUlEQVR4nGNgIAEwInP0WVn/w9jqfHxw8VVv34LVMSErvvj7N1wzTAEyQFFMCKAoRnZGmLAwnA0DAPtjDAjTPs6EAAAAAElFTkSuQmCC'),    // pernas juntas (tank-pernas.gif quadro 2)
                      img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAO0lEQVR4nGNgIAEwggh9Vtb/MIGLv3+DxUAgTFgYLr7q7VtGJnQFyACkAJkPVkwsACtGdgYyQHYGiA8AgZAQCECjU/oAAAAASUVORK5CYII=')];   // pernas abertas (quadro 1)
@@ -253,7 +255,7 @@ const RANGE = {
   aimTime: 0.45,           // para e abre o olho antes de atirar
   bulletSpeed: 560,        // px/s
   bulletScale: 9,          // bala branca grande (maior que a da escopeta do jogador, que é 6)
-  orbitX: 0.36, orbitY: 0.33,   // círculo onde ele fica rondando (fração da tela, em volta da casa)
+  orbitX: 0.3, orbitY: 0.25,    // círculo onde ele fica rondando (fração do mundo, em volta da casa)
   dualChance: 0.15,        // 15%: dois revólveres (atira duas vezes seguidas)
   shotgunChance: 0.05,     // 5%: escopeta
   shotgun: { pellets: 5, spread: 0.35, damage: 6, scale: 6 },
@@ -264,13 +266,13 @@ const RANGE = {
 // tipos de inimigo. Vida e velocidade são FIXAS; as waves só mudam a quantidade.
 const ENEMY_TYPES = {
   basic: { id: 'basic', name: 'JACARÉ', sc: SCALE, w: 18, h: 19, hitbox: { w: 12, h: 17 }, legOffset: { x: 5, y: 13 },
-           stepLen: 15, knockMul: 1, body: enemyBodyImg, blink: enemyBlinkImg, legs: enemyLegImgs },
+           eye: { x: 7, y: 1 }, stepLen: 15, knockMul: 1, body: enemyBodyImg, blink: enemyBlinkImg, legs: enemyLegImgs },
   // tank: sc 5 = desenhado 25% maior que o básico (escala inteira, pixel art nítido)
   tank:  { id: 'tank', name: 'TANK', desc: 'muita vida  ·  lento', sc: 5, w: 22, h: 23, hitbox: { w: 16, h: 21 }, legOffset: { x: 4, y: 17 },
-           stepLen: 11, knockMul: 0.3, body: tankBodyImg, blink: null, legs: tankLegImgs,
+           eye: { x: 8, y: 2 }, stepLen: 11, knockMul: 0.3, body: tankBodyImg, blink: null, legs: tankLegImgs,
            hp: 300, speed: 35, bite: 20 },
   range: { id: 'range', name: 'RANGE', sc: SCALE, w: 22, h: 19, hitbox: { w: 10, h: 15 }, legOffset: { x: 8, y: 15 },
-           stepLen: 15, knockMul: 1, body: rangeBodyImg, blink: rangePeekImg, legs: rangeLegImgs,
+           eye: { x: 10, y: 1 }, stepLen: 15, knockMul: 1, body: rangeBodyImg, blink: rangePeekImg, legs: rangeLegImgs,
            blinkEvery: [2, 5], blinkDur: 0.45,   // aqui o "piscar" é abrir o olho para espiar
            hp: 90, speed: 60, ranged: true },    // 3x o básico (30), bem menos que o tank (300); atira de longe   // 10x a vida do básico; quase metade da velocidade; mordida 4x; empurrões fazem 30% do efeito
 };
@@ -299,7 +301,9 @@ const tuftSmallImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAG
 const tuftBigImg   = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAOCAYAAAD0f5bSAAAA5UlEQVR4nGNgIAACmkL+o4sx4dOg7G/w//HTlwwkadI1VmH48OIzhjgLNudcPnuH4e7GC4zotoBsBhmEoenx05dgGxgYGP5j0wCSZ8TmLON02/8gZwlI8MKdB2KDwNmZhxlZQApkpcUZQE4CAZCzsBkEMwTsJ5BOhnTb/yABkGYBCV64sx5fec3AK8KBYiMIMKK7W0CCF6zYyl2H4djOK2Aa5A+QJpgr8Aa5rI4oVnEUTSCTQE5EVwwSQ/Yrhk0b6tYwgpwCcxIIgJyJ0yYY+PzmB5yNLRlhBC8oMGAaQSGHzIY5EQDIxXArOqxCYQAAAABJRU5ErkJggg=='); // tufo-grande.png
 const TUFT = {
   scale: 4,          // tamanho na tela
-  density: 0.65,     // chance de um tile de grama ganhar tufo
+  density: 0.85,     // chance de um tile de grama ganhar uma moita de tufos
+  clump: 0.6,        // chance de a moita ter tufos extras (até 4)
+  sandChance: 0.22,  // tufinhos ralos na terra perto da borda
   bigChance: 0.4,    // fração de tufos grandes
   windAmp: 2.2,      // balanço do vento (px de tela no topo do tufo)
   pushRadius: 34,    // distância em que um corpo dobra o tufo
@@ -329,13 +333,37 @@ const LIGHT = {
   sun: 0.09,                // brilho quente no meio da clareira
   rays: 0.045,              // intensidade dos raios de sol
   playerLight: 0.45,        // o jogador "abre" um pouco a sombra em volta dele
-  fireflies: 9,             // quantidade de vagalumes
+  fireflies: 22,            // quantidade de vagalumes (no mundo todo)
 };
 const fireflies = [];
+// ciclo dia/noite do modo horda: 5 waves de dia, 5 de noite, e assim por diante
+const NIGHT = {
+  every: 5,                 // waves por período
+  fade: 3,                  // segundos da transição
+  color: [5, 9, 26],        // cor da escuridão (azul bem escuro)
+  dark: 0.74,               // quanto escurece (0..1)
+  playerR: 240, playerLight: 0.9,   // luz em volta do jogador à noite
+  shotR: 80, shotLight: 0.55,       // cada bala ilumina em volta
+  fireflies: 48,            // vagalumes extras que só aparecem à noite
+};
+let nightK = 0;             // 0 = dia, 1 = noite (anima entre os dois)
+const isNightWave = n => n > 0 && Math.floor((n - 1) / NIGHT.every) % 2 === 1;
+function nightTarget() {
+  if (mode === 'test' && typeof dev !== 'undefined' && dev.night) return 1;
+  if (mode !== 'rogue') return 0;
+  return isNightWave(run.phase === 'fight' ? run.wave : run.wave + 1) ? 1 : 0;   // escurece já no intervalo antes da wave
+}
+// janelas da casa (px do sprite), acesas à noite
+const HOUSE_WINDOWS = [[13.5, 40.5], [28.5, 44.5], [59.5, 15.5]];
+function houseWindowPts() {
+  const w = HOUSE_W * HOUSE_SCALE, h = HOUSE_H * HOUSE_SCALE, x = house.x - w / 2, y = house.y - h / 2;
+  return HOUSE_WINDOWS.map(([a, b]) => ({ x: x + a * HOUSE_SCALE, y: y + b * HOUSE_SCALE }));
+}
+const houseLit = () => (house.active || house.decor) && house.hp > 0 && mode !== 'menu';
 const LEAF_COLORS = ['#7da64a', '#658a36', '#4b6930', '#8fb85a'];
 const trees = [];
 const leaves = [];
-const SAND_RADIUS = 0.36;      // raio do círculo de terra, em fração do lado menor da tela
+const SAND_R = 390;            // raio do círculo de terra (px de mundo)
 
 // =====================================================================
 // Setup
@@ -343,9 +371,15 @@ const SAND_RADIUS = 0.36;      // raio do círculo de terra, em fração do lado
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// mundo fixo, maior que a tela; a câmera acompanha o jogador com zoom
+const WORLD = { w: 2240, h: 1408 };    // tamanho do mundo (px de mundo)
+const VIEW = { h: 760, w: 1250 };      // área mínima visível (px de mundo): define o zoom
+let ZOOM = 1;
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  // zoom em passos de 0.25: com SCALE 4 cada pixel do sprite vira um número inteiro de pixels na tela
+  ZOOM = Math.max(1, Math.floor(Math.min(canvas.height / VIEW.h, canvas.width / VIEW.w) * 4) / 4);
   ctx.imageSmoothingEnabled = false;
 }
 window.addEventListener('resize', resize);
@@ -617,13 +651,11 @@ window.addEventListener('blur', () => {
 const map = { canvas: document.createElement('canvas'), ready: false };
 
 function buildMap() {
-  // o mundo é exatamente a área visível; o mapa cobre a tela (último tile pode ficar cortado)
-  map.builtW = canvas.width; map.builtH = canvas.height;
-  WORLD_W = canvas.width; WORLD_H = canvas.height;
+  // mundo de tamanho fixo (a câmera mostra só um pedaço)
+  WORLD_W = WORLD.w; WORLD_H = WORLD.h;
   MAP_W = Math.ceil(WORLD_W / TILE); MAP_H = Math.ceil(WORLD_H / TILE);
   if (!map.ready) { player.x = WORLD_W / 2; player.y = WORLD_H / 2; } // nasce no centro
   house.x = Math.round(WORLD_W / 2); house.y = Math.round(WORLD_H / 2);
-  for (const e of enemies) if (e.homeRel) { e.x = Math.round(WORLD_W * e.homeRel.x); e.y = Math.round(WORLD_H * e.homeRel.y); }
 
   // PRNG com seed para o mapa ser sempre o mesmo
   let seed = 1337;
@@ -632,8 +664,8 @@ function buildMap() {
   // terra só num círculo no meio, desenhado pixel a pixel (resolução nativa: 16 px por tile)
   const c = map.canvas; c.width = MAP_W * T; c.height = MAP_H * T;
   const m = c.getContext('2d');
-  const ccx = WORLD_W / 2 / SCALE, ccy = WORLD_H / 2 / SCALE;            // centro = centro da tela
-  const R = SAND_RADIUS * Math.min(WORLD_W, WORLD_H) / SCALE;
+  const ccx = WORLD_W / 2 / SCALE, ccy = WORLD_H / 2 / SCALE;            // centro do mundo
+  const R = SAND_R / SCALE;
   const edge = (px, py) => {                                              // >0 fora (grama), <0 dentro (terra)
     const a = Math.atan2(py - ccy, px - ccx);
     const wob = Math.sin(a * 5 + 1.3) * 1.3 + Math.sin(a * 9 + 0.4) * 0.8 + Math.sin(a * 17) * 0.5;
@@ -699,39 +731,66 @@ function buildMap() {
     if (rnd() < TREE.innerChance) addTree(28 + jit(16), y + jit(40), 'left');
     if (rnd() < TREE.innerChance) addTree(WORLD_W - 28 + jit(16), y + jit(40), 'right');
   }
+  // mata espalhada: fica mais densa quanto mais longe da clareira
+  for (let y = 120; y < WORLD_H - 60; y += 150) {
+    for (let x = 90; x < WORLD_W - 60; x += 150) {
+      const tx = x + jit(110), ty = y + jit(110);
+      const dx = (tx - WORLD_W / 2) / (WORLD_W / 2), dy = (ty - WORLD_H / 2) / (WORLD_H / 2);
+      const r = Math.hypot(dx, dy), d = Math.hypot(tx - WORLD_W / 2, ty - WORLD_H / 2);
+      if (d < SAND_R + 150 || r < 0.42) continue;
+      if (rnd() < Math.min(0.85, 0.15 + (r - 0.42) * 1.8)) addTree(tx, ty, 'inner');
+    }
+  }
   leaves.length = 0;
   buildLightCache();
   // vagalumes: vagando perto da mata (fora da clareira)
   fireflies.length = 0;
   for (let i = 0; i < LIGHT.fireflies; i++) {
     const a = rnd() * Math.PI * 2;
-    const rr = 0.36 + rnd() * 0.12;
+    const rr = 0.3 + rnd() * 0.16;
     fireflies.push({ bx: WORLD_W / 2 + Math.cos(a) * WORLD_W * rr, by: WORLD_H / 2 + Math.sin(a) * WORLD_H * rr,
       ax: 30 + rnd() * 50, ay: 20 + rnd() * 40, sx: 0.15 + rnd() * 0.25, sy: 0.12 + rnd() * 0.22,
       ph: rnd() * 6.28, blink: 0.6 + rnd() * 0.9 });
   }
+  for (let i = 0; i < NIGHT.fireflies; i++) {          // só à noite: muitos, inclusive perto da clareira
+    const a = rnd() * Math.PI * 2, rr = 0.2 + rnd() * 0.3;
+    fireflies.push({ bx: WORLD_W / 2 + Math.cos(a) * WORLD_W * rr, by: WORLD_H / 2 + Math.sin(a) * WORLD_H * rr,
+      ax: 40 + rnd() * 70, ay: 30 + rnd() * 50, sx: 0.15 + rnd() * 0.3, sy: 0.12 + rnd() * 0.25,
+      ph: rnd() * 6.28, blink: 0.7 + rnd() * 1.1, night: true });
+  }
 
-  // tufos de grama: só em tiles de grama com grama dos 4 lados (longe das bordas) e fora da casa
+  // tufos de grama: em moitas de 1 a 4 por tile, até a franja da terra, fora da casa e dos troncos
   tufts.length = 0;
   const HR = houseRect();
+  const addTuft = (tx, ty, big) => {
+    if (tx > HR.l - 40 && tx < HR.r + 40 && ty > HR.t - 70 && ty < HR.b + 30) return;
+    if (trees.some(tr => Math.abs(tr.x - tx) < 50 && ty < tr.baseY + 24 && ty > tr.baseY - 40)) return;
+    tufts.push({ x: tx, y: ty, big, flip: rnd() < 0.5, phase: rnd() * Math.PI * 2, bend: 0, vel: 0, touched: false });
+  };
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
+      const cx = (x + 0.5) * TILE, cy = (y + 0.5) * TILE;
+      const e = edge(cx / SCALE, cy / SCALE) * SCALE;                     // distância até a borda da terra (px de mundo)
+      if (e < -70 || e > -10 && e < 18) continue;                         // nem no meio da terra, nem em cima da franja
+      if (e < 0) {                                                        // terra perto da borda: tufinhos ralos
+        if (rnd() < TUFT.sandChance) addTuft(cx + (rnd() - 0.5) * TILE, cy + (rnd() - 0.5) * TILE, false);
+        continue;
+      }
       if (rnd() > TUFT.density) continue;
-      if (at(x, y) !== 0 || at(x - 1, y) === 1 || at(x + 1, y) === 1 || at(x, y - 1) === 1 || at(x, y + 1) === 1) continue;
-      const tx = (x + 0.2 + rnd() * 0.6) * TILE, ty = (y + 0.35 + rnd() * 0.55) * TILE;
-      if (tx > HR.l - 40 && tx < HR.r + 40 && ty > HR.t - 70 && ty < HR.b + 30) continue;
-      if (trees.some(tr => Math.abs(tr.x - tx) < 50 && ty < tr.baseY + 24 && ty > tr.baseY - 40)) continue;
-      tufts.push({ x: tx, y: ty, big: rnd() < TUFT.bigChance, flip: rnd() < 0.5, phase: rnd() * Math.PI * 2,
-        bend: 0, vel: 0, touched: false });
+      const n = 1 + (rnd() < TUFT.clump ? 1 : 0) + (rnd() < TUFT.clump * 0.5 ? 1 : 0) + (rnd() < TUFT.clump * 0.2 ? 1 : 0);
+      const bx = (x + 0.2 + rnd() * 0.6) * TILE, by = (y + 0.35 + rnd() * 0.55) * TILE;
+      for (let k = 0; k < n; k++)
+        addTuft(bx + (k ? (rnd() - 0.5) * 46 : 0), by + (k ? (rnd() - 0.5) * 24 : 0), rnd() < TUFT.bigChance);
     }
   }
+  tufts.sort((a, b) => a.y - b.y);
 
   // borda escura do mundo
   m.strokeStyle = 'rgba(0,0,0,.45)'; m.lineWidth = 2;
   m.strokeRect(1, 1, c.width - 2, c.height - 2);
   map.ready = true;
 }
-let WORLD_W = 0, WORLD_H = 0;   // definidos em buildMap() = tamanho da tela
+let WORLD_W = 0, WORLD_H = 0;   // definidos em buildMap() = WORLD
 
 // =====================================================================
 // Estado
@@ -789,7 +848,7 @@ const house = { x: 0, y: 0, hp: 0, flash: 0, shake: 0, pop: 0, active: false };
 function houseRect() {
   const w = HOUSE_W * HOUSE_SCALE, h = HOUSE_H * HOUSE_SCALE;
   const left = house.x - w / 2, top = house.y - h / 2;
-  return { l: left + 2 * HOUSE_SCALE, r: left + w - 3 * HOUSE_SCALE, t: top + HOUSE_SOLID_TOP * HOUSE_SCALE, b: top + h };
+  return { l: left + 5 * HOUSE_SCALE, r: left + w - 3 * HOUSE_SCALE, t: top + HOUSE_SOLID_TOP * HOUSE_SCALE, b: top + h };
 }
 // empurra um corpo (centro x,y; meia-largura hw, meia-altura hh) para fora da casa
 function pushOutOfHouse(o, hw, hh) {
@@ -802,7 +861,7 @@ function pushOutOfHouse(o, hw, hh) {
   if (m === pen[0]) o.x = l; else if (m === pen[1]) o.x = r; else if (m === pen[2]) o.y = t; else o.y = b;
   return true;
 }
-// homeRel: posição fixa relativa à tela (inimigo do campo de treino, que reaparece). speed 0 = estático.
+// homeRel: posição fixa (relativa à casa) (inimigo do campo de treino, que reaparece). speed 0 = estático.
 function makeEnemy(x, y, hp, speed, homeRel = null, type = 'basic') {
   return { x, y, hp, maxHp: hp, speed, homeRel, alive: true, respawn: 0, T: ENEMY_TYPES[type],
     blinkNext: rand(...ENEMY_BLINK.every), blinkT: 0,
@@ -852,7 +911,25 @@ const pickupBuf = document.createElement('canvas');
 const pickupCtx = pickupBuf.getContext('2d');
 const pickups = [];                                // caixas de munição dropadas
 
-const mouseWorld = () => ({ x: mouse.x + cam.x, y: mouse.y + cam.y });
+const mouseWorld = () => ({ x: mouse.x / ZOOM + cam.x, y: mouse.y / ZOOM + cam.y });
+const viewW = () => canvas.width / ZOOM, viewH = () => canvas.height / ZOOM;
+// câmera: segue o jogador (com um leve avanço na direção da mira), presa nas bordas do mundo
+function updateCamera(dt) {
+  const vw = viewW(), vh = viewH();
+  let tx = house.x, ty = house.y;                                   // menu: mostra a clareira
+  if (mode !== 'menu') {
+    tx = player.x + (mouse.x - canvas.width / 2) / ZOOM * CAM.lead;
+    ty = player.y + (mouse.y - canvas.height / 2) / ZOOM * CAM.lead;
+  }
+  const clampC = (c, v, W) => v >= W ? W / 2 : Math.max(v / 2, Math.min(W - v / 2, c));
+  tx = clampC(tx, vw, WORLD_W); ty = clampC(ty, vh, WORLD_H);
+  if (!cam.init) { cam.cx = tx; cam.cy = ty; cam.init = true; }
+  const k = 1 - Math.exp(-CAM.follow * dt);
+  cam.cx += (tx - cam.cx) * k; cam.cy += (ty - cam.cy) * k;
+  cam.cx = clampC(cam.cx, vw, WORLD_W); cam.cy = clampC(cam.cy, vh, WORLD_H);
+  cam.x = cam.cx - vw / 2; cam.y = cam.cy - vh / 2;
+}
+const CAM = { follow: 7, lead: 0.14 };   // suavidade do seguir; quanto a mira puxa a câmera
 const hand = () => ({ x: player.x + GUN_HAND.x * SCALE, y: player.y + GUN_HAND.y * SCALE });
 
 // posição/orientação da arma (já com recuo) — usada para desenhar e para achar o cano
@@ -1340,6 +1417,7 @@ function hurtPlayer(src) {
 function startMode(m) {
   mode = m;
   paused = false;
+  cam.init = false;
   if (m !== 'test' && typeof dev !== 'undefined' && dev.on) { dev.on = false; devRender(); }
   resetStats();
   cards.list = [];
@@ -1349,7 +1427,7 @@ function startMode(m) {
     x: WORLD_W / 2, y: WORLD_H / 2 });
   // roguelike: casa de verdade (vida, alvo dos jacarés). Campo de treino: só cosmética.
   Object.assign(house, { hp: houseMax(), flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test' });
-  if (m === 'rogue' || m === 'test') player.y = houseRect().b + player.h / 2 + 24;   // nasce na frente da porta
+  if (m === 'rogue' || m === 'test') { player.y = houseRect().b + player.h / 2 + 24; player.x = house.x + HOUSE_DOOR_X * HOUSE_SCALE; }   // nasce na frente da porta
   const startWaveParam = parseInt(new URLSearchParams(location.search).get('wave')) || 1;   // teste: ?wave=10
   Object.assign(run, { time: 0, kills: 0, spawnTimer: 0, wave: Math.max(0, startWaveParam - 1), phase: 'break', phaseT: ROGUE.firstBreak,
     toSpawn: 0, cfg: null, banner: null });
@@ -1357,8 +1435,9 @@ function startMode(m) {
   ammoPop.fill(0); mouse.down = false;
   if (m === 'test') {
     for (const pos of ENEMY_POSITIONS)
-      enemies.push(makeEnemy(Math.round(WORLD_W * pos.x), Math.round(WORLD_H * pos.y), ENEMY_HP, 0, pos));
+      enemies.push(makeEnemy(house.x + pos.dx, house.y + pos.dy, ENEMY_HP, 0, pos));
   }
+  nightK = nightTarget();
 }
 
 // botões do menu (em coordenadas de tela)
@@ -1414,7 +1493,7 @@ function pauseAction(id) {
 // Dev mode: digite 0806 no campo de treino para abrir o painel de testes
 // =====================================================================
 const DEV_CODE = '0806';
-const dev = { on: false, typed: '', infAmmo: false, godHouse: false };
+const dev = { on: false, typed: '', infAmmo: false, godHouse: false, night: false };
 const devEl = document.getElementById('dev');
 function devSpawn(type, n = 1, weapon = null) {
   if (!house.active) { house.active = true; house.hp = houseMax(); }   // a casa do treino vira alvo de verdade
@@ -1447,6 +1526,7 @@ function devRender() {
     <h4>TRAPAÇAS</h4>
     <label><input type="checkbox" data-a="inf" ${dev.infAmmo ? 'checked' : ''}> munição infinita</label>
     <label><input type="checkbox" data-a="god" ${dev.godHouse ? 'checked' : ''}> casa invencível</label>
+    <label><input type="checkbox" data-a="night" ${dev.night ? 'checked' : ''}> noite</label>
     <div class="grid">
       <button data-a="ammo">encher munição</button>
       <button data-a="heal">curar casa</button>
@@ -1468,6 +1548,7 @@ devEl.addEventListener('click', e => {
   if (a === 'clear') { for (const en of enemies) if (!en.homeRel) en.alive = false; enemyBullets.length = 0; }
   if (a === 'inf') dev.infAmmo = b.checked;
   if (a === 'god') dev.godHouse = b.checked;
+  if (a === 'night') dev.night = b.checked;
   if (a === 'ammo') { player.ammo = AMMO_MAX; player.reserve = reserveMax(); }
   if (a === 'heal') house.hp = houseMax();
   sfx.hover();
@@ -1554,7 +1635,8 @@ function startWave() {
   run.spawnTimer = 0.3;
   run.phase = 'fight';
   const novo = NEW_ENEMY_AT[run.wave];
-  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés`, '#e9c46a', novo ? 3.6 : 2.0, true);
+  const turn = isNightWave(run.wave) !== isNightWave(run.wave - 1) ? (isNightWave(run.wave) ? '   ·   A NOITE CAIU' : '   ·   AMANHECEU') : '';
+  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés${turn}`, isNightWave(run.wave) ? '#9db4ff' : '#e9c46a', novo ? 3.6 : 2.0, true);
   if (novo) { run.banner.threat = ENEMY_TYPES[novo]; sfx.threat(); }
   sfx.waveStart();
 }
@@ -1692,12 +1774,14 @@ function updateMelee(dt) {
 // Update
 // =====================================================================
 function update(dt) {
-  // (re)constrói o mapa quando os tiles carregam ou a janela muda de tamanho
-  const sizeChanged = map.builtW !== canvas.width || map.builtH !== canvas.height;
-  if ((!map.ready || sizeChanged) && canvas.width > 0 && sandSet.complete && grassSet.complete) buildMap();
+  // constrói o mapa quando os tiles carregam
+  if (!map.ready && sandSet.complete && grassSet.complete) buildMap();
   if (!map.ready) return;
 
   clock += dt;
+  updateCamera(dt);
+  const nt = nightTarget();
+  nightK += Math.sign(nt - nightK) * Math.min(Math.abs(nt - nightK), dt / NIGHT.fade);
   if (mode === 'menu') {
     updateTrees(dt);
     hoverSfx(menuButtons(), 'menu:');
@@ -1740,9 +1824,6 @@ function update(dt) {
   player.y = Math.max(player.h / 2, Math.min(WORLD_H - player.h / 2, player.y));
   pushOutOfHouse(player, PLAYER_HITBOX.w * SCALE / 2, PLAYER_HITBOX.h * SCALE / 2);
   updateWalk(dt, len > 0, Math.hypot(player.x - prevX, player.y - prevY), dx);
-
-  // câmera fixa: o cenário inteiro cabe na tela (só o tremor desloca)
-  cam.x = 0; cam.y = 0;
 
   // mira
   const mw = mouseWorld(), h = hand();
@@ -2005,8 +2086,8 @@ const shadeCache = document.createElement('canvas');   // sombra estática (reca
 
 function buildLightCache() {
   const W = WORLD_W, H = WORLD_H, [r, g, b] = LIGHT.shade;
-  shadeCache.width = lightCanvas.width = W;
-  shadeCache.height = lightCanvas.height = H;
+  shadeCache.width = W;
+  shadeCache.height = H;
   const c = shadeCache.getContext('2d');
   c.clearRect(0, 0, W, H);
   // radial: clara no meio, escura perto das árvores (elíptica, acompanha a tela)
@@ -2044,37 +2125,54 @@ function fireflyPos(f) {
            y: f.by + Math.cos(clock * f.sy + f.ph) * f.ay + Math.sin(clock * 1.7 + f.ph) * 4 };
 }
 // pisca devagar e às vezes "apaga" (curva pontuda)
-const fireflyGlow = f => Math.pow(Math.max(0, Math.sin(clock * f.blink + f.ph)), 3);
+const fireflyGlow = f => Math.pow(Math.max(0, Math.sin(clock * f.blink + f.ph)), 3) * (f.night ? nightK : 1);
 
 function drawLighting() {
   if (!WORLD_W) return;
-  // 1) sombra: cópia da sombra estática, com luzes recortadas
+  // 1) sombra: recorte da sombra estática só na área visível, com luzes recortadas
+  const lw = Math.ceil(viewW()) + 4, lh = Math.ceil(viewH()) + 4;
+  if (lightCanvas.width !== lw || lightCanvas.height !== lh) { lightCanvas.width = lw; lightCanvas.height = lh; }
+  const ox = Math.floor(cam.x + cam.sx) - 2, oy = Math.floor(cam.y + cam.sy) - 2;
+  lightCtx.setTransform(1, 0, 0, 1, 0, 0);
   lightCtx.globalCompositeOperation = 'source-over';
-  lightCtx.clearRect(0, 0, lightCanvas.width, lightCanvas.height);
-  lightCtx.drawImage(shadeCache, 0, 0);
+  lightCtx.clearRect(0, 0, lw, lh);
+  lightCtx.drawImage(shadeCache, -ox, -oy);
+  if (nightK > 0) {                                        // noite: escuridão azulada por cima de tudo
+    const [r, g, b] = NIGHT.color;
+    lightCtx.fillStyle = `rgba(${r},${g},${b},${NIGHT.dark * nightK})`;
+    lightCtx.fillRect(0, 0, lw, lh);
+  }
+  lightCtx.translate(-ox, -oy);
   lightCtx.globalCompositeOperation = 'destination-out';
-  if (mode !== 'menu' && player.hp > 0) punchLight(player.x, player.y, 150, LIGHT.playerLight);
+  const nk = nightK;
+  if (mode !== 'menu' && player.hp > 0)
+    punchLight(player.x, player.y, 150 + (NIGHT.playerR - 150) * nk, LIGHT.playerLight + (NIGHT.playerLight - LIGHT.playerLight) * nk);
+  if (nk > 0.01) {
+    for (const b of bullets) punchLight(b.x, b.y, NIGHT.shotR, NIGHT.shotLight * nk);         // os tiros iluminam o caminho
+    for (const b of enemyBullets) punchLight(b.x, b.y, NIGHT.shotR, NIGHT.shotLight * nk);
+    if (houseLit()) for (const q of houseWindowPts()) punchLight(q.x, q.y + 20, 110, 0.75 * nk);   // luz das janelas
+  }
   if (player.flash > 0) {                                  // clarão do tiro ilumina em volta
     const m = muzzlePos(), k = player.flash / 0.07;
     punchLight(m.x, m.y, 260, 0.9 * k);
   }
-  for (const f of fireflies) { const q = fireflyPos(f); punchLight(q.x, q.y, 34, 0.5 * fireflyGlow(f)); }
+  for (const f of fireflies) { const gl = fireflyGlow(f); if (gl < 0.02) continue; const q = fireflyPos(f); punchLight(q.x, q.y, 34 + 26 * nk, (0.5 + 0.3 * nk) * gl); }
   for (const p of particles) if (p.color === 'ring' && p.size > 20) punchLight(p.x, p.y, p.size * 1.2, 0.35 * (1 - p.age / p.life));
-  ctx.drawImage(lightCanvas, 0, 0);
+  ctx.drawImage(lightCanvas, ox, oy);
 
   // 2) luz quente da clareira + raios de sol (aditivo, bem sutil)
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  const cx = WORLD_W / 2, cy = WORLD_H / 2, R = SAND_RADIUS * Math.min(WORLD_W, WORLD_H) * 1.35;
-  const pulse = 1 + Math.sin(clock * 0.4) * 0.12;
+  const cx = WORLD_W / 2, cy = WORLD_H / 2, R = SAND_R * 1.35;
+  const pulse = 1 + Math.sin(clock * 0.4) * 0.12, dayK = 1 - nightK;
   const sun = ctx.createRadialGradient(cx, cy - R * 0.15, 0, cx, cy, R);
-  sun.addColorStop(0, `rgba(255,225,150,${LIGHT.sun * pulse})`);
+  sun.addColorStop(0, `rgba(255,225,150,${LIGHT.sun * pulse * dayK})`);
   sun.addColorStop(1, 'rgba(255,225,150,0)');
   ctx.fillStyle = sun;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
   // raios diagonais vindos de cima à esquerda, oscilando devagar
   for (let i = 0; i < 4; i++) {
-    const a = LIGHT.rays * (0.6 + 0.4 * Math.sin(clock * (0.25 + i * 0.07) + i * 2));
+    const a = dayK * LIGHT.rays * (0.6 + 0.4 * Math.sin(clock * (0.25 + i * 0.07) + i * 2));
     const x = cx - R * 0.9 + i * R * 0.5 + Math.sin(clock * 0.15 + i) * 20, w = 26 + i * 9;
     const g = ctx.createLinearGradient(x, 0, x + WORLD_H * 0.45, WORLD_H);
     g.addColorStop(0, `rgba(255,240,190,${a})`);
@@ -2085,6 +2183,19 @@ function drawLighting() {
     ctx.moveTo(x, 0); ctx.lineTo(x + w, 0);
     ctx.lineTo(x + w + WORLD_H * 0.45, WORLD_H); ctx.lineTo(x + WORLD_H * 0.45, WORLD_H);
     ctx.fill();
+  }
+  if (nightK > 0.01) {
+    // luar frio bem fraco na clareira
+    const moon = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.3);
+    moon.addColorStop(0, `rgba(110,140,230,${0.07 * nightK})`); moon.addColorStop(1, 'rgba(110,140,230,0)');
+    ctx.fillStyle = moon; ctx.fillRect(cx - R * 1.3, cy - R * 1.3, R * 2.6, R * 2.6);
+    // brilho quente saindo das janelas
+    if (houseLit()) for (const q of houseWindowPts()) {
+      const flick = 0.9 + Math.sin(clock * 7 + q.x) * 0.05 + Math.sin(clock * 13 + q.y) * 0.05;
+      const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, 70);
+      g.addColorStop(0, `rgba(255,190,80,${0.32 * nightK * flick})`); g.addColorStop(1, 'rgba(255,190,80,0)');
+      ctx.fillStyle = g; ctx.fillRect(q.x - 70, q.y - 70, 140, 140);
+    }
   }
   ctx.restore();
 }
@@ -2147,6 +2258,28 @@ function updateTufts(dt) {
   }
 }
 
+// quadros do tufo já inclinados, em cache (1 drawImage por tufo em vez de 1 por linha)
+const tuftCache = new Map();
+const TUFT_PAD = 16;                 // folga lateral (px de tela) para a inclinação
+function tuftFrame(im, flip, swayQ) {
+  const key = (im === tuftBigImg ? 'b' : 's') + (flip ? 'f' : '') + swayQ;
+  let c = tuftCache.get(key);
+  if (c) return c;
+  const S = TUFT.scale, w = im.width, h = im.height, sway = swayQ / 2;
+  c = document.createElement('canvas'); c.width = w * S + TUFT_PAD * 2; c.height = h * S;
+  const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  // linha a linha: o topo se desloca mais que a base (base fica presa no chão)
+  for (let r = 0; r < h; r++) {
+    const off = Math.round(sway * Math.pow(1 - r / h, 1.6));
+    if (flip) {
+      g.save(); g.translate(TUFT_PAD + w * S + off, 0); g.scale(-1, 1);
+      g.drawImage(im, 0, r, w, 1, 0, r * S, w * S, S);
+      g.restore();
+    } else g.drawImage(im, 0, r, w, 1, TUFT_PAD + off, r * S, w * S, S);
+  }
+  tuftCache.set(key, c);
+  return c;
+}
 function drawTuft(t) {
   const im = t.big ? tuftBigImg : tuftSmallImg;
   if (!im.complete) return;
@@ -2154,20 +2287,9 @@ function drawTuft(t) {
   // vento: onda que atravessa a tela + rajadas lentas
   const wind = Math.sin(clock * 1.7 + t.x * 0.011 + t.phase * 0.3) * 0.65
              + Math.sin(clock * 0.53 + t.x * 0.004) * 0.35;
-  const sway = wind * TUFT.windAmp * (t.big ? 1.2 : 0.8) + t.bend;
+  const sway = Math.max(-TUFT_PAD, Math.min(TUFT_PAD, wind * TUFT.windAmp * (t.big ? 1.2 : 0.8) + t.bend));
   const x0 = Math.round(t.x - (w * S) / 2), y0 = Math.round(t.y - h * S);
-  // desenha linha a linha: o topo se desloca mais que a base (base fica presa no chão)
-  for (let r = 0; r < h; r++) {
-    const k = Math.pow(1 - r / h, 1.6);
-    const off = Math.round(sway * k);
-    if (t.flip) {
-      ctx.save(); ctx.translate(x0 + w * S + off, 0); ctx.scale(-1, 1);
-      ctx.drawImage(im, 0, r, w, 1, 0, y0 + r * S, w * S, S);
-      ctx.restore();
-    } else {
-      ctx.drawImage(im, 0, r, w, 1, x0 + off, y0 + r * S, w * S, S);
-    }
-  }
+  ctx.drawImage(tuftFrame(im, t.flip, Math.round(sway * 2)), x0 - TUFT_PAD, y0);
 }
 
 function drawGun() {
@@ -2414,6 +2536,12 @@ function drawEnemy(e) {
   ctx.rotate(tilt);
   ctx.scale(sq * (e.facing === -1 ? 1 : -1), 1 / sq);   // sprite olha para a esquerda
   ctx.drawImage(e.flash > 0 ? whiteOf(fr) : fr, -w / 2, -h - T.sc, w, h + T.sc);
+  if (T.eye && nightK > 0.01) {          // guarda onde o olho ficou na tela (desenhado depois, por cima da escuridão)
+    const open = T.id === 'range' ? e.blinkT > 0 : !(e.blinkT > 0 && T.blink);
+    const fy = T.eye.y + (frameName === 'pass' ? 0 : 1);
+    const q = ctx.getTransform().transformPoint(new DOMPoint(-w / 2 + (T.eye.x + 0.5) * T.sc, -h - T.sc + (fy + 0.5) * T.sc));
+    e.eye = { x: q.x, y: q.y, on: open && e.flash <= 0, n: renderN };
+  }
   if (T.ranged && e.weapon === 'dual') drawRangedWeapon(e, w, h, frameName, true);   // segundo revólver, mais baixo, à mostra
   if (T.ranged) drawRangedWeapon(e, w, h, frameName, false);   // arma da mão da frente (por cima do corpo)
   ctx.restore();
@@ -2798,6 +2926,9 @@ function drawHouse() {
     return;
   }
   ctx.drawImage(house.flash > 0 ? whiteOf(houseImg) : houseImg, x, y, w, h);
+  if (nightK > 0 && house.flash <= 0 && houseNightImg.complete) {      // à noite: janelas acesas
+    ctx.globalAlpha = nightK; ctx.drawImage(houseNightImg, x, y, w, h); ctx.globalAlpha = 1;
+  }
   // rachaduras conforme perde vida
   const dmg = 1 - house.hp / houseMax();
   if (dmg > 0.33) {
@@ -2811,11 +2942,35 @@ function drawHouse() {
   }
 }
 
+// seta na borda da tela apontando para a casa quando ela não está visível (pisca ao ser atacada)
+function drawHouseMarker() {
+  if (!house.active || house.hp <= 0 || gameOver) return;
+  const sx = (house.x - cam.x - cam.sx) * ZOOM, sy = (house.y - cam.y - cam.sy) * ZOOM;
+  const W = canvas.width, H = canvas.height, hw = HOUSE_W * HOUSE_SCALE * ZOOM / 2, hh = HOUSE_H * HOUSE_SCALE * ZOOM / 2;
+  if (sx + hw > 0 && sx - hw < W && sy + hh > 0 && sy - hh < H) return;
+  const cx = W / 2, cy = H / 2, a = Math.atan2(sy - cy, sx - cx);
+  const k = Math.min((W / 2 - 60) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - 100) / Math.abs(Math.sin(a) || 1e-6));   // longe do HUD
+  const x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k;
+  const hit = house.flash > 0 || house.shake > 0.05;
+  const pulse = 1 + Math.sin(clock * 6) * 0.06 + (hit ? 0.15 : 0);
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = 'rgba(10,16,10,.75)';
+  ctx.beginPath(); ctx.arc(0, 0, 26 * pulse, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = hit ? '#e63946' : '#e9c46a'; ctx.lineWidth = 3; ctx.stroke();
+  if (houseImg.complete) ctx.drawImage(houseImg, -16, -12, 32, 22);
+  ctx.rotate(a);                                   // seta para fora do círculo
+  ctx.fillStyle = hit ? '#e63946' : '#e9c46a';
+  ctx.beginPath(); ctx.moveTo(38 * pulse, 0); ctx.lineTo(28 * pulse, -8); ctx.lineTo(28 * pulse, 8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
 function drawHouseBar() {
   const bw = Math.max(80, Math.min(240, canvas.width - 420)), bh = 14;
   const x = 66, y = canvas.height - 34;                                    // canto inferior esquerdo
   const k = house.hp / houseMax(), pop = house.pop;
-  if (houseImg.complete) ctx.drawImage(houseImg, 14, y - 6, 44, 24);       // ícone
+  if (houseImg.complete) ctx.drawImage(houseImg, 16, y - 12, 40, 28);       // ícone
   const sx = rand(-1, 1) * pop * 3;
   ctx.fillStyle = '#000'; ctx.fillRect(x - 3 + sx, y - 3, bw + 6, bh + 6);
   ctx.fillStyle = '#3a1414'; ctx.fillRect(x + sx, y, bw, bh);
@@ -2931,13 +3086,41 @@ function drawAmmo() {
   ctx.textAlign = 'left';
 }
 
+let renderN = 0;
+// olhos dos jacarés: ponto vermelho com brilho, em coordenadas de tela, por cima da escuridão
+function drawEnemyEyes() {
+  if (nightK <= 0.01) return;
+  ctx.save();
+  for (const e of enemies) {
+    const q = e.eye;
+    if (!e.alive || !q || !q.on || q.n !== renderN) continue;
+    const px = e.T.sc * ZOOM, k = nightK * (0.85 + Math.sin(clock * 5 + e.x * 0.1) * 0.15);
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, px * 3.2);
+    g.addColorStop(0, `rgba(255,40,30,${0.6 * k})`); g.addColorStop(1, 'rgba(255,40,30,0)');
+    ctx.fillStyle = g; ctx.fillRect(q.x - px * 3.2, q.y - px * 3.2, px * 6.4, px * 6.4);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(255,70,55,${k})`;
+    ctx.fillRect(Math.round(q.x - px / 2), Math.round(q.y - px / 2), Math.round(px), Math.round(px));
+  }
+  ctx.restore();
+}
+
 function render() {
+  renderN++;
   ctx.fillStyle = '#10170f';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  ctx.translate(-Math.round(cam.x + cam.sx), -Math.round(cam.y + cam.sy));
-  if (map.ready) ctx.drawImage(map.canvas, 0, 0, WORLD_W, WORLD_H);
+  ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round((cam.x + cam.sx) * ZOOM), -Math.round((cam.y + cam.sy) * ZOOM));
+  const vw = viewW(), vh = viewH();
+  if (map.ready) {                       // só o pedaço do mapa que aparece
+    const mx = Math.max(0, Math.floor(cam.x / SCALE) - 2), my = Math.max(0, Math.floor(cam.y / SCALE) - 2);
+    const mw = Math.min(map.canvas.width - mx, Math.ceil(vw / SCALE) + 5), mh = Math.min(map.canvas.height - my, Math.ceil(vh / SCALE) + 5);
+    if (mw > 0 && mh > 0) ctx.drawImage(map.canvas, mx, my, mw, mh, mx * SCALE, my * SCALE, mw * SCALE, mh * SCALE);
+  }
+  // fora da tela não desenha (margem para copas, sombras e sprites grandes)
+  const inView = (x, y, mx, top, bot) => x > cam.x - mx && x < cam.x + vw + mx && y > cam.y - top && y < cam.y + vh + bot;
 
   // objetos ordenados por profundidade (y): quem está mais abaixo fica na frente
   const drawPlayerAndGun = () => {
@@ -2949,12 +3132,12 @@ function render() {
   };
   const objs = pickups.map(b => ({ y: b.y - 30, draw: () => drawPickup(b) }));
   // tufos ordenados pela base: o dino fica atrás quando está acima deles
-  for (const t of tufts) objs.push({ y: t.y - 36, draw: () => drawTuft(t) });
+  for (const t of tufts) if (inView(t.x, t.y, 40, 10, 70)) objs.push({ y: t.y - 36, draw: () => drawTuft(t) });
   // árvores ordenadas pela base do tronco: quem passa atrás fica escondido pela copa
-  for (const t of trees) objs.push({ y: t.baseY - 36, draw: () => drawTree(t) });
+  for (const t of trees) if (inView(t.x, t.baseY, 110, 30, 170)) objs.push({ y: t.baseY - 36, draw: () => drawTree(t) });
   if (mode !== 'menu') {
     objs.push({ y: player.y, draw: drawPlayerAndGun });
-    for (const e of enemies) objs.push({ y: e.y, draw: () => drawEnemy(e) });
+    for (const e of enemies) if (inView(e.x, e.y, 120, 120, 140)) objs.push({ y: e.y, draw: () => drawEnemy(e) });
     // casa ordenada pela base das paredes (centro equivalente dos personagens)
     if (house.active || house.decor) objs.push({ y: houseRect().b - 36, draw: drawHouse });
   }
@@ -2971,10 +3154,12 @@ function render() {
   drawFireflies();
   if (mode !== 'menu') drawReloadHint();
   ctx.restore();
+  drawEnemyEyes();
 
   if (mode === 'menu') {
     drawMenu();
   } else {
+    drawHouseMarker();
     drawAmmo();
     if (house.active) drawHouseBar(); else drawHearts();
     drawStats();
