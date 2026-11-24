@@ -9,11 +9,13 @@ Abra `index.html` no navegador.
 | Controle | Ação |
 |---|---|
 | WASD | mover |
-| Shift (segurar) | correr (60% mais rápido, sem limite) |
+| Shift (segurar) | correr (60% mais rápido, sem limite). No começo da partida aparece uma dica de SHIFT e BOTÃO DIREITO, e o HUD tem os ícones de corrida e faca com a tecla escrita |
 | Mouse | mirar |
 | Clique esquerdo | atirar (shotgun) |
-| Clique direito | faca (melee, recarga de 1 s) |
+| Clique direito | faca (melee: dano 28, recarga de 0,85 s) |
 | R | recarregar até encher (atirar interrompe) |
+| 1 / 2 / 3 ou roda do mouse | trocar de arma (escopeta, uzi, revólveres — depois de comprar) |
+| Q / F / C | dinamite / pimenta / cubo de gelo (consumíveis da loja) |
 | M | liga/desliga o som |
 | Ctrl | mostra/esconde os stats |
 | 1 / 2 / 3 | escolher carta de upgrade |
@@ -30,17 +32,20 @@ Abra `index.html` no navegador.
 ## Modos
 
 - **Campo de treino**: três jacarés parados em coluna à direita (que reaparecem) e a casa só de enfeite, para treinar o tiro e a faca. Se a munição acabar de vez, aparece uma caixa ao lado da casa.
-- **Roguelike**: defenda a casa no centro, wave após wave. Os jacarés vêm das bordas e mordem a casa; se a vida dela chegar a zero, você perde.
+- **Roguelike**: defenda a casa no centro, wave após wave. A partida começa com o aviso grande "DEFENDA SUA CASA" e a casa contornada. Os jacarés vêm das bordas e mordem a casa; se a vida dela chegar a zero, você perde.
   - O jacaré básico é lento e frágil, com vida e velocidade fixas. O que cresce a cada wave é a quantidade: mais jacarés, chegando mais seguidos e em grupos maiores.
-  - A cada 5 waves entra um inimigo novo, anunciado com "UMA NOVA AMEAÇA SURGE". Wave 5: **Tank** (maior que o básico, 300 de vida, bem lento, mordida de 20 na casa contra 5 do básico, quase não é empurrado). A partir daí aparecem tanks misturados na horda, um a mais a cada 2 waves. Wave 10: **Range**, um gavial armado (90 de vida). Ele não chega perto da casa: fica rondando em volta da clareira, sempre virado para ela, para, abre o olho para mirar e atira de longe (bala branca grande, 10 de dano). 15% dos ranges vêm com **dois revólveres** (atiram duas vezes seguidas) e 5% com **escopeta** (5 chumbos de 6). Aparecem 3 ranges na wave 10, um a mais a cada wave, até no máximo 5 por wave. A mira deles erra bastante no começo e vai ficando mais precisa a cada wave.
+  - A cada 5 waves entra um inimigo novo, anunciado com "UMA NOVA AMEAÇA SURGE". Wave 5: **Tank** (maior que o básico, 300 de vida, bem lento, mordida de 20 na casa contra 5 do básico, quase não é empurrado). A partir daí aparecem tanks misturados na horda, um a mais a cada 2 waves. Wave 10: **Range**, um gavial armado (90 de vida). Ele não chega perto da casa: fica rondando em volta da clareira, sempre virado para ela, para, abre o olho para mirar e atira de longe (bala branca grande, 10 de dano). 15% dos ranges vêm com **dois revólveres** (atiram duas vezes seguidas) e 5% com **escopeta** (5 chumbos de 6). Aparecem 3 ranges na wave 10, um a mais a cada wave, até no máximo 5 por wave. A mira deles erra bastante no começo e vai ficando mais precisa a cada wave. Wave 15: **Rusher**, uma jacarezinha de lacinho que corre muito (175 contra 60 do básico) e tem pouca vida (12). A mordida dela é fraca (2), mas vem a cada 0,3 s (o básico morde a cada 1 s). São 4 na wave 15 e +2 por wave, até 12. Wave 20: **Healer**, um jacaré curandeiro com uma chama verde na mão, que brilha bastante (de dia e de noite). Ele não ataca e nunca se aproxima da casa: anda num anel em volta da clareira, puxando para o lado onde há jacarés machucados, e a cada 1,2 s solta uma onda de cura que cura todos os machucados num raio de 340 px (14 + 5% da vida máxima de cada um), com raios verdes e os curados brilhando verde. Tem 70 de vida. É 1 na wave 20, +1 a cada 2 waves, até 4.
   - Para testar uma wave específica, abra o jogo com `?wave=N` no fim do endereço (ex.: `index.html?wave=10`).
-  - **Dentes** são o dinheiro do jogo. Há dois dentes: o pequeno vale 1 e o grande (que brilha) vale 5. Os jacarés deixam cair dentes de vez em quando: o básico raramente (12%, vale 1), o range quase sempre (70%, vale 1–2) e o tank sempre (vale 2–6, às vezes um dente grande). Os dentes quicam no chão, voam até você quando chega perto e somem depois de 14 s. O total fica no canto inferior esquerdo.
+  - **Dentes** são o dinheiro do jogo. Há dois dentes: o pequeno vale 1 e o grande (que brilha) vale 5. Os jacarés deixam cair dentes de vez em quando: o básico às vezes (20%, vale 1), o range quase sempre (80%, vale 1–3) e o tank sempre (vale 3–7, às vezes um dente grande). Os dentes quicam no chão, voam até você quando chega perto e somem depois de 14 s. O total fica no canto inferior esquerdo.
   - **Velho Bill**: depois das waves 5, 10, 15… (antes de virar dia ou noite) um jacaré velho mercador chega correndo pela direita com o carrinho de loja e estaciona do lado direito da casa; ao ir embora dá meia-volta e sai pela direita. Na primeira vez rola uma cutscene em que ele se apresenta. Chegue perto do carrinho e aperte **E** para abrir a loja (o jogo para enquanto ela está aberta). A visita dura 45 s com a loja fechada, ou aperte **Enter** para dispensar o Bill e seguir para a próxima wave.
-  - Itens da loja: caixa de cartuchos (+15, 4 dentes), kit de reparo (40% da casa, 6), carta misteriosa (escolhe 1 de 3 upgrades; 10, +5 a cada compra), botas de corrida (+10% de velocidade andando e correndo, até 3 níveis; 8/13/18) e ímã de dentes (puxa os dentes de mais longe, até 2 níveis; 6/12).
+  - Loja com 3 abas (1/2/3 trocam de aba). Cada nível custa mais que o anterior; tudo vale só para a partida atual.
+    - **Armas**: Escopeta (+1 cartucho por nível, de 6 até 12), **Uzi** (tiros rápidos, dano 7, bom contra grupos; 3 níveis) e **Revólveres** (dois revólveres que atiram um de cada vez, dano 20, precisos e atravessam 3 inimigos; 3 níveis). A escopeta usa cartuchos (caixa verde). A Uzi (pente 30) e os revólveres (pente 12) usam a mesma munição de 9 mm (caixa azul, reserva até 150). Caixas de 9 mm só caem dos jacarés e só aparecem no fim da wave se você tiver uma dessas armas.
+    - **Defesa**: Cabana (+10% de defesa da casa contra mordidas e tiros por nível, até 50%), Mina terrestre (+1 mina plantada perto da casa a cada wave, até 6; explode quando um jacaré passa) e Primo Antony (jacaré aliado que fica na frente da casa atirando nos inimigos; 3 níveis, no último espalha 3 tiros). Ele tem vida (120, +40 por nível, recupera 30% a cada wave): jacarés que passam perto mordem ele e os tiros dos ranges acertam ele no caminho. Se morrer, só volta comprando de novo (do nível 1) na próxima loja do Bill.
+    - **Consumíveis** (ficam na mochila): Dinamite (Q, arremessa na mira e explode em área), Pimenta dedo-de-moça (F, por 15 s os tiros incendeiam: os inimigos pegam fogo e levam dano por 3 s) e Cubo de gelo (C, arremessa na mira e congela os inimigos em área por 4 s).
   - Ao fim de cada wave aparecem na frente da porta uma caixa de munição (12 + 4 por wave) e um curativo que recupera 20% da vida da casa. Somem em 5 s; com a casa em 100%, o curativo some na hora.
   - Entre uma wave e outra há uma pausa de 4 s.
   - Ao fim de cada wave o jogo congela e aparecem 3 cartas de upgrade; escolha 1 (clique ou teclas 1/2/3). Os upgrades acumulam durante a partida:
-    crítico +5%, vampirismo +2% (o dano causado cura a casa), velocidade de ataque +10%, dano da escopeta +10%, velocidade de recarga +10%, vida máxima da casa +15%, recarga da faca −10%, dano da faca +10, balas 10% maiores, +2 projéteis, empurrão da faca +15% e alcance da faca +5%.
+    crítico +5%, vampirismo +2% (o dano causado cura a casa), velocidade de ataque +10%, dano +10%, velocidade de recarga +10% (estas três e Calibre Maior valem para todas as armas), vida máxima da casa +15%, recarga da faca −10%, dano da faca +10, balas 10% maiores, +2 projéteis, empurrão da faca +15%, alcance da faca +5%, Arrancador (+5% de chance dos inimigos dropar dentes) e Pernas Ligeiras (+5% de velocidade de movimento).
   - Os stats aparecem discretos à esquerda da tela e mudam em tempo real (Ctrl mostra/esconde).
 
 ## Dev mode

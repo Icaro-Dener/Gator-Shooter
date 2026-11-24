@@ -45,11 +45,12 @@ let MAP_W = 0, MAP_H = 0; // mapa em tiles — calculado para caber na tela
 const SPRITE_FACES = -1;
 
 // Arma (16x4, cano apontando para a DIREITA)
-const GUN_W = 16, GUN_H = 4;
-const GUN_GRIP   = { x: 3, y: 2 };   // empunhadura no sprite (pivô)
-const GUN_MUZZLE = { x: 16, y: 1 };  // ponta do cano no sprite
-const GUN_HAND   = { x: 0, y: 3 };   // mão relativa ao centro do jogador
-const GUN_RADIUS = 4;                // distância da mão até a empunhadura
+const GUN_W = 24, GUN_H = 8;
+const GUN_GRIP   = { x: 6.5, y: 4.5 };   // mão de trás (gatilho) no sprite (pivô)
+const GUN_MUZZLE = { x: 24, y: 1.5 };    // ponta do cano no sprite
+const GUN_HAND   = { x: 0, y: 2 };       // ombro relativo ao centro do jogador
+const GUN_RADIUS = 3;                    // distância do ombro até a mão do gatilho
+const PLAYER_SPR = { w: 23, h: 20 };     // corpo do jogador (px do sprite)
 const FACE_MOUSE = true;             // jogador olha para a mira (estilo Gungeon)
 
 // tremor de tela: multiplicador geral (1 = forte, 0 = desligado)
@@ -71,16 +72,16 @@ const SHOT = {
   knockback: 140,     // empurrão no jogador (px/s)
 };
 // Melee (faca, botão direito) — melee.gif: 16x13, 3 frames de 100 ms, lâmina para a DIREITA
-const MELEE_W = 16, MELEE_H = 13;
-const MELEE_GRIP = { x: 3, y: 9 };   // mão no sprite (pivô)
-const MELEE_SCALE = 9;              // tamanho da faca na tela (o resto do jogo usa 4)
+const MELEE_W = 41, MELEE_H = 27;
+const MELEE_GRIP = { x: 14, y: 15 };     // pivô entre as posições da mão nos 3 quadros (ombro)
+const MELEE_SCALE = 5;              // tamanho do golpe na tela (o resto do jogo usa 4)
 const MELEE_FRAME = 0.1;             // segundos por frame
 const MELEE_HIT_AT = 0.1;            // o golpe acerta no início do frame 2
-const MELEE_COOLDOWN = 1;            // segundos
-const MELEE_DAMAGE = 20;             // dano base da faca (um projétil tira 10)
+const MELEE_COOLDOWN = 0.85;         // segundos
+const MELEE_DAMAGE = 28;             // dano base da faca (um projétil tira 10)
 const MELEE_RANGE = 190;             // alcance a partir da mão (px de tela)
 const MELEE_ARC = 2.2;               // abertura do golpe em radianos (~125°)
-const MELEE_KNOCKBACK = 46;          // empurrão nos inimigos que andam (px)
+const MELEE_KNOCKBACK = 52;          // empurrão nos inimigos que andam (px)
 
 // =====================================================================
 // Stats do personagem (upgrades do modo roguelike). Cada upgrade soma 1 "nível".
@@ -91,16 +92,18 @@ const lv = {};                      // níveis de cada upgrade
 const UPGRADES = [
   { id: 'crit',      title: 'Olho de Jacaré',  desc: '+5% de chance de crítico',            cat: 'geral'   },
   { id: 'vamp',      title: 'Vampirismo',      desc: '+2% do dano causado vira vida da casa', cat: 'geral' },
-  { id: 'atkSpd',    title: 'Gatilho Leve',    desc: '+10% de velocidade de ataque',         cat: 'shotgun' },
-  { id: 'shotDmg',   title: 'Chumbo Grosso',   desc: '+10% de dano da escopeta',             cat: 'shotgun' },
-  { id: 'reload',    title: 'Mãos Rápidas',    desc: '+10% de velocidade de recarga',        cat: 'shotgun' },
+  { id: 'atkSpd',    title: 'Gatilho Leve',    desc: '+10% de velocidade de ataque (todas as armas)', cat: 'armas' },
+  { id: 'shotDmg',   title: 'Chumbo Grosso',   desc: '+10% de dano (todas as armas)',        cat: 'armas'   },
+  { id: 'reload',    title: 'Mãos Rápidas',    desc: '+10% de velocidade de recarga (todas as armas)', cat: 'armas' },
   { id: 'houseHp',   title: 'Tábuas Extras',   desc: '+15% de vida máxima da casa',          cat: 'casa'    },
   { id: 'meleeCd',   title: 'Lâmina Ágil',     desc: '-10% de recarga da faca',              cat: 'faca'    },
   { id: 'meleeDmg',  title: 'Fio Afiado',      desc: '+10 de dano da faca',                  cat: 'faca'    },
-  { id: 'bulletSz',  title: 'Calibre Maior',   desc: 'balas da escopeta 10% maiores',        cat: 'shotgun' },
+  { id: 'bulletSz',  title: 'Calibre Maior',   desc: 'balas 10% maiores (todas as armas)',   cat: 'armas'   },
   { id: 'pellets',   title: 'Cartucho Cheio',  desc: '+2 projéteis por tiro',                cat: 'shotgun' },
   { id: 'meleeKb',   title: 'Golpe Pesado',    desc: '+15% de empurrão da faca',             cat: 'faca'    },
   { id: 'meleeRng',  title: 'Braço Longo',     desc: '+5% de alcance da faca',               cat: 'faca'    },
+  { id: 'teeth',     title: 'Arrancador',      desc: '+5% de chance dos inimigos dropar dentes', cat: 'geral' },
+  { id: 'moveSpd',   title: 'Pernas Ligeiras', desc: '+5% de velocidade de movimento',       cat: 'geral'   },
 ];
 // ícones das cartas (recortados de icones-upgrades.png)
 const UPGRADE_ICONS = {
@@ -124,8 +127,8 @@ const ICON_BADGE_IMGS = {
   relogio: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAJCAYAAAD+WDajAAAAhklEQVR4nGNggIL/i0T+/z+h+v//6/D/MDEUAFKAzGdCkVATxFDAADLq+Pm7/yct3Amm4UaD7AELIAEw/4Tqf7Cxpy/dAStMK5nM4OybD+ErGzGwgAhTdhW4FXs3T2Q4ceEeA8PdcwyMMKNPsO8A6zDVU2Gw+OnBwGhxGywHtxvkEBANEwMAzihb2d8wQckAAAAASUVORK5CYII='),   // icone-relogio.png
 };
 const ICON_BADGE = { crit: '+', vamp: '+', atkSpd: '+', shotDmg: '+', reload: 'cd', houseHp: '+', meleeCd: 'cd',
-  meleeDmg: '+', bulletSz: '+', pellets: '+', meleeKb: '+', meleeRng: '+' };
-const CAT_COLOR = { geral: '#e9c46a', shotgun: '#f4a261', faca: '#8ecae6', casa: '#7bd04a' };
+  meleeDmg: '+', bulletSz: '+', pellets: '+', meleeKb: '+', meleeRng: '+', teeth: '+', moveSpd: '+' };
+const CAT_COLOR = { geral: '#e9c46a', shotgun: '#f4a261', armas: '#ef8354', faca: '#8ecae6', casa: '#7bd04a' };
 function resetStats() { for (const u of UPGRADES) lv[u.id] = 0; }
 resetStats();
 // valores derivados (usados pelo jogo no lugar das constantes)
@@ -137,6 +140,8 @@ const reloadShell   = () => RELOAD_SHELL / (1 + 0.1 * lv.reload);
 const houseMax      = () => HOUSE_HP * (1 + 0.15 * lv.houseHp);
 const meleeCooldown = () => MELEE_COOLDOWN * Math.pow(0.9, lv.meleeCd);
 const meleeDamage   = () => MELEE_DAMAGE + 10 * lv.meleeDmg;
+const teethBonus    = () => 0.05 * lv.teeth;            // +5 pontos percentuais na chance de dropar dentes
+const moveMul       = () => 1 + 0.05 * lv.moveSpd;
 const bulletMul     = () => 1 + 0.1 * lv.bulletSz;
 const pelletCount   = () => SHOT.pellets + 2 * lv.pellets;
 const meleeKnock    = () => MELEE_KNOCKBACK * (1 + 0.15 * lv.meleeKb);
@@ -144,7 +149,8 @@ const meleeRangeMul = () => 1 + 0.05 * lv.meleeRng;
 const meleeRange    = () => MELEE_RANGE * meleeRangeMul();
 
 // Munição (HUD no canto inferior direito)
-const AMMO_MAX = 6;          // cartuchos na escopeta
+const AMMO_MAX = 6;          // base; a loja aumenta até AMMO_CAP
+const AMMO_CAP = 12;          // cartuchos na escopeta
 const RESERVE_START = 12;    // cartuchos de reserva no início
 const RESERVE_MAX = 30;      // limite da reserva (no modo horda cresce +5 por wave, para a caixa da wave caber)
 const reserveMax = () => mode === 'rogue' ? Math.min(150, RESERVE_MAX + 5 * run.wave) : RESERVE_MAX;
@@ -182,7 +188,7 @@ const ROGUE = {
   enemyHp: 30,           // morre com 3 projéteis (meio tiro de perto)
   enemySpeed: 60,        // lento (o jogador anda a 360 px/s)
   maxEnemies: 150,       // limite de jacarés vivos ao mesmo tempo
-  firstBreak: 1.5,       // segundos antes da wave 1
+  firstBreak: 4,         // segundos antes da wave 1 (dá tempo do aviso DEFENDA SUA CASA)
   breakTime: 4,          // pausa entre waves (para pegar as recompensas)
   rewardAmmo: 12,        // caixa de munição ao fim de cada wave: 12 + 4 por wave (acompanha o tamanho das waves)
   rewardHeal: 0.2,       // curativo: recupera 20% da vida máxima da casa
@@ -195,6 +201,8 @@ function waveConfig(n) {
     group: 1 + Math.floor((n - 1) / 2),                       // wave 3: duplas, 5: trios, 7: grupos de 4...
     tanks: n >= 5 ? 1 + Math.floor((n - 5) / 2) : 0,          // wave 5-6: 1 tank, 7-8: 2, 9-10: 3...
     ranges: n >= 10 ? Math.min(RANGE.maxPerWave, 3 + (n - 10)) : 0,   // wave 10: 3, 11: 4, 12+: 5 (teto)
+    rushers: n >= 15 ? Math.min(12, 4 + 2 * (n - 15)) : 0,           // wave 15: 4, 16: 6... (teto 12)
+    healers: n >= 20 ? Math.min(4, 1 + Math.floor((n - 20) / 2)) : 0, // wave 20-21: 1, 22-23: 2... (teto 4)
   };
 }
 
@@ -222,18 +230,18 @@ const BULLET_FACES = -1;
 function img(src) { const i = new Image(); i.src = src; return i; }
 const sprite    = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAABE0lEQVQ4jWNkwAEylmj9l1DihfNf3PvMMCPmGiMu9YwNx8z/owu+uPeZAWZIg9VJCH3MHK+BTAwMDAz7dt1HEUR2CTrAJcfCwMDA4OSmiFMjzCXIrsUGmF7c+8wQKm7AgI0mBTBevZuOEUbIYPLxwxjeabA6iRFGOGOBgYGB4cBK//8MDAwMB2RfwMVwBTYLLkOQXfri+G24q/AGNjbw+swLrOK4wg6nQaImEgjO8dtw5gh0ERM+F8EwMpBQ4mWwaxDDSHs4DdJWnsmYuXg9AwMDA0MEqyrBlI43QcJsPtTwipGBAVK0MDAwMFy784YBWRyvi9AVMjAwwFN0k6YlikUEDUIPC5iLHMI3MiIb1nDM/D8A05B4xHmw7QEAAAAASUVORK5CYII=');   // dino.png
 // caminhada: corpo sem pernas (18x18) + pernas em 2 frames (11x5, de pernas.gif)
-const bodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAA/0lEQVQ4jWNkwAEylmj9l1DihfNf3PvMMCPmGiMu9YwNx8z/owu+uPeZAWZIg9VJCH3MHK+BTAwMDAz7dt1HEUR2CTrAJcfCwMDA4OSmiFMjzCXIrsUGmF7c+8wQKm7AgI0mBTBevZuOEUbIYPLxwxjeabA6iRFGOGOBgYGB4cBK//8MDAwMB2RfwMVwBTYLLkOQXfri+G24q/AGNjbw+swLrOK4wg6nQaImEgjO8dtw5gh0ERM+F8EwMpBQ4mWwaxDDSHs4DdJWnsmorTyTkYGBgSGCVZXklE4UsGsQ+4/uKpwuwgeaNC3hBsLE8GYRfODASv//ddePMzAwQEoPALs2Z5UzM4egAAAAAElFTkSuQmCC'); // corpo.png
-const legImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAMUlEQVR4nGNgIAEwInPsGsT+g2gtFREwf0bMNRR5JlJMxgAw0zOWaIFpnCbjUwiSBwDuJgwWveZFegAAAABJRU5ErkJggg=='),   // pernas juntas
-                 img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAKUlEQVR4nGNgIAfYNYj9B2FksYwlWv9BGMZnIstkmOnoYlhNJqQQpAYATbMQJWbnUooAAAAASUVORK5CYII=')];  // pernas abertas
-const blinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAA7klEQVR4nGNkwAEylmj9l1DihfNf3PvMMCPmGiMu9YwNx8z/owuCNMEMeXHvM5hG5mMzkAlE7Nt1H0UQ2SUzYq6BMTY5ZMACIpzcFHG5mKHhmDmGa7EBJpBEqLgBAzaaFMB49W46Rhghg8nHD2N4p8HqJEYY4YwFEDiw0h9syQHZF3AxXIENDiNsANmlL47fhrsKb2BjA6/PIFyBDHCFHU6DRE0kEJzjt+HMEegiJnwugmFkAHKRXYPYf6IN0laeyQjCDAwMDBGsqiSndKIAyEXorsLpInygSdMSbiBMDG8WwQdA2afu+nEwG1R6AACXymspRG5I9wAAAABJRU5ErkJggg=='); // olho fechado (quadro 2 de piscar.gif)
+const bodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAUCAYAAABmvqYOAAABMklEQVR4nGP8z+DAgA+ICF/+jy725q0uIwMRgAWfISCg0GrBoK4LV8Zw8/IfBpHqE/+JsYQR5HKQwe6bbDAkb17+Azd4p98RMA1TB5J7UH0CrwVMyJwjq1DVqSO5GB3gk4MBFBU2YVhDBgzQfQZyOSHAhKx4KfM1rDS5AB7mb7YK4VVockENIyhA8YAvzBGpxfsdToPf3HBhOKPMwBB96wdcjBgfgQ3HZbsIzEd3z0ENRLgeRD8gxnC8QNkIwb7whXSX4wV3Ia6GADU4a9TlDOSGORNRYX4XipEAKMxBhRquAo+g4W/e6jKC0j8sD5wJ5kFx8evrrIRzKDFABIsLuWNsGUQ1f+MsHYk2nAGLZaCcK9/yE24BCCBbQrbh6BaAALovCGciPAAcJxp74MH1FU0eAAa+oxYBv945AAAAAElFTkSuQmCC');   // jogador-corpo.png (23x20, olha para a ESQUERDA)
+const legImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAQElEQVR4nGP8z+DAQCxggjFEhC//l88XAGMQO/ooPxiD2BiKSTL5zVtdxq9LDsMldvodwe8M7hhbuIT7JhsMxQCR+hjKz9/G7gAAAABJRU5ErkJggg=='),
+                 img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAARklEQVR4nGP8z+DAQCxgAhEiwpf/y+cLgDGIDROLPsoPxjAxsGKSTH7zVpfx65LDKBIgsZ1+R7A7gzvGFkUCJOa+yQZFDAB3vB7DYKbazQAAAABJRU5ErkJggg==')];   // jogador-pernas.gif
+const blinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAUCAYAAABmvqYOAAABMUlEQVR4nGP8z+DAgA+ICF/+jy725q0uIwMRgAWfISCg0GrBoK4LV8Zw8/IfBpHqE/+JsYQR5HKQwe6bbDAkb17+AzcYxAYBZP6D6hN4LWBC5hxZhapOHcnFIINAGJscLoCiwiYMa8iAAbrPYD7BB5iQFS9lvoaVJhfAw/zNViG8Ck0uqGEExU6/I3jDHJFavN/hNPjNDReGM8oMDNG3fsDFiPER2HBctovAfHT3HNRAhOtB9ANiDMcLlI0Q7AtfSHc5XnAX4moIUIOzRl3OQG6YMxEV5nehGAmAwhxUqOEq8Aga/uatLiMo/cPywJlgHhQXv77OSjiHEgNEsLiQO8aWQVTzN87SkWjDGbBYBsq58i0/4RaAALIlZBuObgEIoPuCcCbCA8BxorEHHlxf0eQBt5OnXJ1bLtIAAAAASUVORK5CYII=');   // jogador-piscar.png
 const BLINK = { every: [3, 7], dur: 0.11, doubleChance: 0.2 };   // piscadas eventuais
-const LEG_OFFSET = { x: 5, y: 13 };   // onde as pernas encaixam no corpo (px do sprite)
+const LEG_OFFSET = { x: 6, y: 15 };   // onde as pernas encaixam no corpo (px do sprite); ficam na frente do rabo
 const WALK = {
   stepLen: 34,       // px andados por quadro da caminhada (sincroniza a passada com a velocidade)
   tilt: 0.06,        // inclinação do corpo andando (rad)
   dust: true,        // poeirinha a cada passo
 };
-// quadros 18x19 (1 px de folga em cima para o corpo subir):
+// quadros 23x21 (1 px de folga em cima para o corpo subir):
 //   'stand' / 'step' = pernas abertas (parado e passo), 'pass' = pernas juntas com o corpo 1 px acima,
 //   'breath' = parado respirando (pernas abertas, corpo 1 px acima)
 const walkFrames = {};
@@ -241,51 +249,61 @@ function walkFrame(name, blink = false) {
   const key = blink ? name + '_b' : name;
   if (walkFrames[key]) return walkFrames[key];
   if (!bodyImg.complete || !blinkImg.complete || !legImgs[0].complete || !legImgs[1].complete) return null;
-  const c = document.createElement('canvas'); c.width = 18; c.height = 19;
+  const c = document.createElement('canvas'); c.width = PLAYER_SPR.w; c.height = PLAYER_SPR.h + 1;
   const g = c.getContext('2d');
   const leg = name === 'pass' ? legImgs[0] : legImgs[1];
-  g.drawImage(leg, LEG_OFFSET.x, LEG_OFFSET.y + 1);
   g.drawImage(blink ? blinkImg : bodyImg, 0, name === 'pass' || name === 'breath' ? 0 : 1);
+  g.drawImage(leg, LEG_OFFSET.x, LEG_OFFSET.y + 1);
   return (walkFrames[key] = c);
 }
-const gunSprite = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAECAYAAACHtL/sAAAAnElEQVQYlW2OMQrCQBRE30JgG4MQtFeCjY21XsA7qL14Aes0uYHgCVJZpdMjeAZxA1aCYSWsza/WQiIh+sqZeTCKBvN+6HsdDcBks0VrjYjQRuvPRkQImlJN+RJuRUE3iqis5Xk8MMpiAC7LK4PFGoDKWoK2OM3HhMaxW+1Vs0uI/d04sqJUpOk3D2rx9HAKYGic//kMJLOz+pe/AdOINMJCT3qYAAAAAElFTkSuQmCC');   // arma.png
+const gunSprite = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAICAYAAADjoT9jAAAAuElEQVR4nGNkwAGEhYX/45IjBTDiMthLUpThzuefDJFNMxhM9VTAcqcv3YGz0QG6HIjfWBTFwILNYBAAGY6sGBsbBJbXZTDc+vIJzFbj4QPTIEfBfYBuMMxwmCZigEKrBZh+UH0CbM6256/B/Ldv3zKyINuMbDiyprdv32IEJQzAHKiuy8LwgIEBbDiyengQIRsOAzBN+ADYsOoT/0HqsDkEHEQgH8AMhimCuQyf64kCIIOolSSxAQDMYWEdWjO5bAAAAABJRU5ErkJggg==');   // escopeta.png (24x8, já com as duas mãos)
 const bulletImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAYAAAAb4BS0AAAAFUlEQVQImWO8P1vt/9npPAwMDAwMACZ7BBHZ3QEnAAAAAElFTkSuQmCC');   // tiro.png
 const ammoFullImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAdklEQVQokWNkYGBgUFBQ+M+AAzx48ICRBcZp05dhMODnYGBgYGDgFRJm+PzuLYPXoTsMDAwMDEy4TEAGo4qoqAgeLfI+nxiYRNghgvy/GZg+/mdgOESCSYwKCgr/l1bzMahoq6FI8PKLMHz++IbBPOoMRBEhkwDFZxgcewHZtgAAAABJRU5ErkJggg=='); // municao-cheia.png
 const ammoEmptyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAYAAADESFVDAAAAcUlEQVQoke2ROw6DQAxEn80uBQ0UOYDvf6rtIkU0lCu06xT8kkgUSCmZ7skz42IEwMycE6WUJGwwRKVVAUC1odbCK5eFzxo+dZv+aNpnCZ0j6yyijlQgX2gSM/NHL8QYvg/a4LXwHOfl3Tg5MP/kD34DQXoaYcq+77YAAAAASUVORK5CYII='); // municao-vazia.png
 const houseImg = img('data:image/png;base64,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'); // casa.png
-const reloadImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAjklEQVR4nGNgwAEajpn/z1ii9Z+BAGDCJfHi3meGkJoPDBSBPQpSBF3AiMxxF+X9L8LDDmYvvf8GTHd1dWFoYmeHqPn58ycDI7ImGHjz5SeDakgMA7+QEMPHd+8Y3u9YDRYDAZBahah0MBskh2IASJHlRi2w/2fEXENxHS7AAtO48/VnsAbFe58J+hsZAAC6jzdlywokngAAAABJRU5ErkJggg=='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAf0lEQVR4nGNgGLSg4Zj5/4wlWv8JqWNB5riL8v4X4WEHs1/c+8wQUvOBQamrC8MQdnaImp8/fzIwImuCgTdffjKohsQw8AsJMXx8947h/Y7VYDEQAKlViEoHs0FyKAaAFFlu1ALbPiPmGiMxXgV7AaRx5+vPYA2K9z4T9DcyAAAbmzOYUhqsPgAAAABJRU5ErkJggg==')]; // arma-recarga.gif (16x7, 2 frames)
-const RELOAD_W = 16, RELOAD_H = 7, RELOAD_GRIP = { x: 3, y: 5 };
+const reloadImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAANCAYAAACzbK7QAAAA8UlEQVR4nGP8z+DAQEvAgk9SRPjyfxj7zVtdRnIsYCKkQKHVgsF9kw2KZVS1AAQm5L5lIBcwEooDEeHL/6/LazKInmNhpGocIAeJ6LSXDCLe7/5TxQcwg70kRRnufP7JcOvLJ7D4lj2nGE5fusNgqqeC1SB0ORC/sSgK4QNkg0EAZDgI1Pctg2tApmFgeV0Ggg2lI5tmIHwgLCyMYjDMcJjLCQE1Hj4GFV52FLFtz1/DkzYLTBG64aDkCQIPqk/gzQMiDJf/3/qCKoasHiWS0V2ursvC8ICADwhlQHAQgXwAMximARYn5OZgFAuoYRAuAADFoW42LElp5wAAAABJRU5ErkJggg=='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAANCAYAAACzbK7QAAAA1UlEQVR4nGP8z+DAQEvARFPTGehgAQshBSLCl//D2G/e6jJS1QcgwxVaLRhAmOo+QHa5ui4LwwM0MWIBI3oqghniJSnKcOfzT4ZbXz6BxbfsOcVw+tIdBlM9FawGocuB+I1FUQgfIBsMAiDDQaC+bxlcAzINA8vrMhBsKB3ZNAPhA2FhYRSDYYbDXE4IqPHwMajwsqOIbXv+Gp4oWGCK0A2HReyD6hN4U48Iw+X/t76giiGrR4lkdJfDIhcfIJR0wUEE8gHMYJgGWJyQk/YxLKCGQbgAAFE3ZgepcyvYAAAAAElFTkSuQmCC')];   // escopeta-recarga.gif (24x13)
+const RELOAD_W = 24, RELOAD_H = 13, RELOAD_GRIP = { x: 6.5, y: 9.5 };
 const meleeImgs = [1, 2, 3].map(i => null);
-meleeImgs[0] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAdklEQVR4nGNgGDLg6tWr/7GJMxGjed26dVg1E2XAOjyaCRqwDqpZXV2dQVtbm5EkA9YRoRkEGJE5GUu0/kso8TLovShnIEYzigENx8zBNm7N/QOXPH32LF7NGF7YmvuHgYuHh0FBSYkozRjA1Nj4PwiTrHFAAQDU3SXb2+n/XgAAAABJRU5ErkJggg==');
-meleeImgs[1] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAf0lEQVR4nGNgoBAw4pK4evXqf3QxbW1tRqINwGUYuiFMDEQAZE3YXEYSABlAFUMYBhRcRXIBC7JEwzFzuESD1UnGdevWYThVXV0dhc+Crnlr7h8wH6QZpPjmzZsoGtGjEc4xNTYGG6CgpATmP7h3j2HBokVYEw9WADMAF59mAAC1yTdSwinx2QAAAABJRU5ErkJggg==');
-meleeImgs[2] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAeElEQVR4nGNgGDLg6tWr/weXQUPYBeiuYGFAAg3HzOESDVYnGRmIACwwhqmx8f+tuX+I0YMCwLaANIPo02fPMoaGhoLZkZGRDOrq6gw3b94EKwwKCsLqIqyCIAMXLFrEoK2tzbhu3TqUUAcZCgIgOZKcCgs49GgEALdCL7fd9tO2AAAAAElFTkSuQmCC'); // melee.gif
+const knifeIconImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAMCAYAAAC0qUeeAAAAmUlEQVR4nGP8////fwYQYHRkZCAAWE5cuAdmWPzf/5+QBiYLw2SwghMgTSAN+BQjc04Q0ABWDDOdkAa4yRZEaEBxhgWaBhHhyygaUBQja/BxMWPg4OBAkWP8z+CA4TZkE0EanjxVZQSJYZgMA+6bbBgUWi3AbBnp22DNWBW/eavLuNPvCIO6LguDRK0Bw48fP3A7A5tzQAYAAEF/QJDqwDgDAAAAAElFTkSuQmCC');   // faca-icone.png (ícone do HUD)
+meleeImgs[0] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACkAAAAbCAYAAADh0qZQAAAA3UlEQVR4nNWWsQrCMBRFby4duttB0MHNqaBLyeCgUHAp/oTf4egPuTm5ODgKjoJf0O7dIgYr4qChUJN3ILxA3nC4gZcogzlChxAAIV7SHIxdnom+HZ7ON1v1Q1QtFEJMUk/X6iXrMVG6NvoU5a+GJk2fonRp8i1K18ZP0aR3MUHOSf0ULfIMcRwj2GFe5JmtdV1jOLjaNJOOU2314ix3M4y22u4b0aAkyypV+9UR4zRCfzOxiXaNavsLer/iskpVkJL/hBAAIQBCAIQACAEQAiAEQAiAEAAhAPoWcOEOOktE55XOdSMAAAAASUVORK5CYII=');   // faca.gif quadro 1 (41x27)
+meleeImgs[1] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACkAAAAbCAYAAADh0qZQAAABZElEQVR4nGP8z+DAQBPwf/9/MM3oyEipUUwMNHTgiQv3IOz/+/+fOD8X4mgyACO1Q/IEEY6xMExmHFBHYnM0zFHIHoA7FBTSBJIEzR2Jy7GkhCbdHElUqNI14+ABIMehhyShdExXR1qghRiIj5I2B0tIWqBFNzGlAd0diR6icEfDytTB4khkgBGSWBxK19xNyKEWBkpYq1GahKSI8OX/IEwt86juSBGo4xRaLeBskgCW6KaqI0WEL//n4OBgAGFkMZIMoXV0v3mry/jkqSrYkgfVJxjcN9lQxVyapMknT1UZQaG50+8I0XrAmQYHoFnGWbPlEMOWPafAoUuMHnA5SU9HvnmrywgLGUoau7QvzBkRGQCfQ1HKSBxgwGscFICj8UtTR1rgCR1S1NG+Wvy//z8sU2BrQ4IcCJLH1/ClqyNxhuCg6OP8x3QorsYENsDCQA/A6MhogaflTVD7gDTViOjGIgMAF0q35JMQTtIAAAAASUVORK5CYII=');   // faca.gif quadro 2 (41x27)
+meleeImgs[2] = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACkAAAAbCAYAAADh0qZQAAABI0lEQVR4nGP8z+DAMNgBE8MQAEwMQwAwMQwBwERPy06cn/uf4f/+/4M+JE9cuEeyYxkHInefADmSgYHBwkAJ6gpHxkGXJi0MkxlhoQoGBEJ1wDKOBbpDB2vutkB2KJ7QHC2CSAlNfGBQhKSFYTIjvigfFI4kBJhoXRZSI9pJKsxFhC/DLX7zVpdgWiIZgKIbS8HORKoDOTg4aONAakW3QqsFmJaRvk1yI4FujlTXZWGQqDVg+PHjB9ihyNFPDYCr9iHakaAo3ul3BOxQEAA5dMueUwzUBBY4Mg/JrSBY6CE70IKIApmuRRAoREEY3swio7jBBXCZQ345yehIE4fSptH7f/9/5ARPi6invMahQ4gyUcUURto6lLp9HPRWDIG+C7EAADsae7PuWoufAAAAAElFTkSuQmCC');   // faca.gif quadro 3 (41x27)
 // inimigos: corpo sem pernas + pernas em 2 frames, como o jogador
-const enemyBodyImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABBElEQVR4nGNkwAFypaX/izIywvmv//9nmPz0KUIADTA2ycj8RxcEaQIZUvfkCVysSUYGr4FMIAJZAwgguwTZEGxyeF2ED7zG5SKQRPBBbwZsNCmA8erddLw6ZthtwfBO3ZMnGC7CGQsgcGClP9iSQ8VnCXqNBZsBYcLC/+tPhaBofvnjB5itw8mJ1VKsBoE1n3mBXfz/f8IGgVwCY4uaSIDpRrM1KBpwRT9tXAQDq96+Zaw3kUDRoYMjbAjGGizGQGBt0Rm4l0iKNeQwQgc4swgDAXAA6jJkV135/h3sfQZKQZiw8H/kGAYBcO4nFcASK8gwWKYn23kgL4PCEZTOCMUoSQAAI618GWl7/iAAAAAASUVORK5CYII='); // inimigo-piscar.gif quadro 1 (olho preto)
-const enemyBlinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAATCAYAAACdkl3yAAABB0lEQVR4nGNkwAFypaX/izIywvmv//9nmPz0KUIADTA2ycj8RxcEaQIZcuX7d7iYDicnXgOZQETdkycogjCXrHr7FoxhhiDLEeUifOA1LheBJIIPejNgo0kBjFfvpuPVMcNuC4Z36p48wXARzlgAgQMr/cGWHCo+S9BrLNgMCBMW/l9/KgRF88sfP8Bs5IAnaBBY85kX2MX//ydsEMglMLaoiQSYbjRbg6IBV/TTxkUwsOrtW8Z6EwkUHTo4woZgrMFiDATWFp2Be4mkWEMOI3SAM4swEAAHoC5DdhUoM4O8z0ApCBMW/o8cwyAAzv2kAlhiBRkGy/RkOw/kZVA4gtIZoRglCQAApgOApZOeBN4AAAAASUVORK5CYII='); // quadro 2 (olho fechado)
-const enemyLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAMUlEQVR4nGNgIAEwInPChIX/g2gdTk4wv+7JExR5JlJMxgAw05tkZMA0TpPxKQTJAwCagApuem+CewAAAABJRU5ErkJggg=='),   // pernas juntas
-                      img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAKUlEQVR4nGNgIAeECQv/B2FksSYZmf8gDOMzkWUyzHR0MawmE1IIUgMAA0QM1ZbYkDUAAAAASUVORK5CYII=')];  // pernas abertas
+const enemyBodyImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAABZ0lEQVR4nJ2UsU7DMBCGf0ehouoECRJLpwywMBDGLgydWFgZeAXWPkSeBCEWBpi6RmxVJTKwMHWpRBBThBRQg87Bxk3OadJfiuycfV9+nx2LAuewyfdeimos/TgR1gQAri2RNBkcYtTb0e9x/g0f5VwbWHieVzzsDWsDlEywi8W7jj0ND/RYlC1ZqKM6ZiLJdGbCuLHakqsJprg4ObTJURNGz0ds21WCapi+jhsnRWdJbZmXnwu2hoKATbD0cV+28fVAx5o2xeWC6hiZzuM8wWz1I/s3u30g27ApVdi47wNvMx0HerrXVFu3CpMgpSCUzdXpHEDpjiTr2dbhmrRDfVy7OTQ1/UqBQNVw/l87JYtDhwPRQ5vlH0+ly9v7FULH7e4w5X74vzoCSasaOtgg5XJyl685o5uIu6VE032ooUwinQYqQ5Qt5btaXSsg9wE69OVxggYTdCughtJvGYQSrKBbAxW0GvsFL0qqPYJLmd8AAAAASUVORK5CYII=');   // inimigo-corpo.png (20x20, olho escuro; o vermelho só aparece à noite)
+const enemyBlinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAABaElEQVR4nJ2UIU/DQBTH/9eUhWUKWhLMVAUYBEXOIKYwWARfAbtvgOknIQSDADXb4JYlVGBQMyOUgGlIClmXd+Uda/fadfsnzV3f3f36v3evpzKcokqu85yVY/HHkapcAMCuWkgadPbRa22Z9zD9gYt8bhVYOY6T3e90lwZoMcGoJZXBQTIVoRZ3zibvhQEGXL996Ucaq9wy6bG7B0lSnF1LsnhC7+lAbNeVohzGL/3aScFJtLTN88+JmENFwDpY/LCr2/Cy0+hQbCnIZbToPEwjjGa/un+13QaSFYdShvXbLvA6MnGgZXp1ubXLMA1ieb5uLo7HAHJ3JJ3Ppg4LMg5Nua7ncFHD7xjwOIfj/9yxKhxaEogeOiz3cKhd3tzN4Fv2+g5j6Yf/yyMQNcqhhRVil4PbtOCMbiLpllJ196GBCgupGigNQTLV77y7RkDpA1T0eTnBgAm6EdBA6bf0fA1m6MZAhpZjc0qjrhHRNMdoAAAAAElFTkSuQmCC');   // inimigo-piscar.png
+const enemyLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAARUlEQVR4nGP8z+DAQCxggTFEhC//d+EUAbP3fH/DsFFQFsz2f/+Y4c1bXUYQm4loY5EVg3SDTIQBkIk4FSM7AwRgzkAGAHYMFUsi9lI4AAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAATklEQVR4nGP8z+DAQCxgFBYW/u/CKQLm7Pn+huHNW11GmKSI8OX/GwVlwWz/948ZmIg2loGBgQlkEshEbAAkBzIRrhhkFcwZ6ADZGSA+AAFTGoD1maCFAAAAAElFTkSuQmCC')];   // inimigo-pernas.gif
 const titleImg = img('data:image/png;base64,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'); // titulo.png (139x51)
 const houseNightImg = img('data:image/png;base64,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'); // casa-noite.png (janelas acesas)
 // dente (moeda do jogo) e o velho Bill, mercador, com o carrinho de loja
 const toothImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdElEQVR4nGNgoCf4dmr+fxAmWzMI/Hx2HsUQJmI1c5omMPx6fgFDjolUl/x9coGByyyRkWQ/fsPhBeIVIKlBlmch5EdkAHL6t1MMKIaz4NWBwxCKAhEdMDFQC3xDCkR8AUmUIf8JxAYywEgQ2DThTDiDAgAAqbeAlAXih2QAAAAASUVORK5CYII=');          // dente.png (16x16)
+UPGRADE_ICONS.teeth = toothImg; UPGRADE_ICONS.moveSpd = legImgs[1];   // ícones das cartas novas
 const toothCoinImgs = { 1: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAHCAYAAADAp4fuAAAAQklEQVR4nGNggIJvp+b/B2EYHywAAj+fnQdLMIEITtMEhl/PL8AVMcFZDAwMf59cYOAyS2TEqh3DXBANUYokAWICAH+QO6IMDx/mAAAAAElFTkSuQmCC'),   // dente-1.png (vale 1)
   5: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAJCAYAAAAPU20uAAAAQElEQVR4nGNggIJvp+b/B2EGbODbqfn/QeDns/MYiphAApymCQy/nl/AqpkJqyhVFWA4EptDURSh+4YRXRG6RgAp2UOpqQ0g2wAAAABJRU5ErkJggg==') };   // dente-5.png (vale 5)
-const billBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAABXklEQVR4nGNkwAMMy6P+s8mKgNm/Hr8B0+c7lzFiU4tVUEnB5D9/uBoDyJCTOZOI0sdiPiXv/9vTNxmETdVRJF73HGNgYLgF55tPyUOW+3/vwRkUw1hABLohICBaYgWhGSA0DIC8iG4ICDCBJHTYJzKAXIVMw8KEWMBipLIUzFhes5WBgeEvAwPDDjAfJn7uTjQ4rGAAmY0MwE78////f5jAmTt/GUxVWcDi0XkPweJ31HrhGkAuxRZz4DBCNgQGkmcjDP915w3cJbhcxIJuCMw1Py4/QqjiRDBxhR3YIEZGRkaQ90A0TIJDVw6h6g6CSdBFIHD69p//2Fz0+eNbBmG0FI7TIJirsLroCIkuQvYasot4JYThbFwuYsIqCnURDH9+8RbFRaDMTLRBc1MZGWGuMuefBU7x+FyENfcjA2y2g1wI8i6uIoVoAErxKvHu/5EtIdtEkGEnP6bBIwIAa/aW6ygacH0AAAAASUVORK5CYII=');  // velho-bill.png (18x18, olha para a ESQUERDA)
-const billLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAANElEQVR4nGNgIAEwInNU4t3/g2hhU3Uw/2TOJBR5JrJNhpnudOsVmD3r+HncJsOcga4IBgBrnQ4B/OTV0gAAAABJRU5ErkJggg=='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAN0lEQVR4nGNgIAeoxLv/B2FkMfMpef9BGMZnIsVAuOI7C3cyokvqLz0MxhiK0Z0AArOOn0cxAACo0hFoo0IQZAAAAABJRU5ErkJggg==')];   // bill-pernas.gif
-const billHandImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAECAYAAABGM/VAAAAAL0lEQVR4nGNkYGBgMCyP+s8mK8Lw6/EbhvOdyxgZYQIwAJJggvOQABNIObIqEBsALcUQ0PEqeXgAAAAASUVORK5CYII=');    // bill-mao.png
-const billPipeImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAECAYAAACtBE5DAAAAOElEQVR4nGNgYGBg+P/////Tt//8B7HhACYAkgTRSgomIPo/k6kqCyNIgJGRkRFZFxOybpgiEBsA3RIWFusA+FwAAAAASUVORK5CYII=');   // bill-cachimbo.png
+const billBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAABcklEQVR4nJWUsU7DMBCGz1E6dbTZAEViYkatYGBjzM7CA7DB3rk7z1B1ZgpLxZaBQlWJLRMoUhFL4zFTEaA7xdHZxEn4pdT16fL5v8slAjokpfxxY1pr4csPumDDq3OIpqd0oXDfdIgRneRLwJv3jnewvn6gvZSyBueTZaPTEGGYlCcCotjm5pMUSrY3sDaFdbID44DIiW+zAbT2cJsNYD26J5d8bbvRJ4El68UnbZ6CD1rPvvetpMPZJfWSy9dDgT8ILYqiDi5f3yG+GNN/PX2m9QRurJLLedoIDNwAwghkkkcHdPHyXbeND4XDjDvSagOu2nobGjdKKSpbKWWXgg5RGVgO+Ti1lpw8vtiDjg5XGyjfvvo7dF1aMg6Tfg5DvjFQq+Sqh8MjTN31G2yuP6NQPWVeMjr0fSQC6FLlUMd39AbVc8gO4PJ+19xPmCsEYhtKZ8A7gQbqxvANksltDaWY1qIX0HcIh5LredrP4X+c/wJrR7l7MjyA3wAAAABJRU5ErkJggg==');  // velho-bill.png (20x20, olha para a ESQUERDA)
+const billLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAATUlEQVR4nGP8z+DAQCxggjFEhC//F/HhgWDhy/9NZnD/l88XALMxFJNk8pu3uowMx4/DJdjarzFIb7iI2xkMlpZwiVtfPjGo8LKjKAYA6PkZdMrVaxsAAAAASUVORK5CYII='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAUklEQVR4nGP8z+DAQCxgEhG+/F/EhweChS//R5YE8U1mcP+XzxcAyzERbSzI5DdvdRkZjh/HqYCt/RqD9IaLCGcwWFpiVQgy6NaXTwwqvOxgPgA4jh10vU5kYgAAAABJRU5ErkJggg==')];   // bill-pernas.gif
+const billHandImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAGCAYAAAAPDoR2AAAATElEQVR4nGNkgAJhYeH/MPbbt28ZQTQLTII7xpZBVPM3w+vrrAwMSw7/BylgRJaAAZCCr0sOMzDBRbAAJpB2kCpkXTAAthjdQTBHAQCp8yA552sYvAAAAABJRU5ErkJggg==');    // bill-mao.png (7x6)
+const billHookImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAHCAYAAAAxrNxjAAAAVUlEQVR4nGNgoDZghDGEhYX/w9hv375lROczwRRt2XOK4c2bN2AM4ovLWDOws8nDTQQrBAELAyUGERERMAZpQgdghSCjQQpApoGAj4sZbjciuxObGwFnYiSfEmK1YQAAAABJRU5ErkJggg==');   // bill-gancho.png (10x7): a outra mão dele é um gancho de pirata
 const cartImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAjCAYAAAAXMhMjAAAChklEQVR4nM1Yv2sUQRR+O1kkIAg2EQPij2ssLDwQNJDC4kyZJoVgKv8BW7Gx0FYbbexSWaaxVAsDghEO1M5mLyd6CUljJSxCOPnWe8u7tzM7M3e5Yz84dvd9M9988+bt7uwlpHDl0o0hNQSJNrayvk2/vr0sY69W12jr09fyenDtbi3/+fho4r7gAbT5+eMDpSdlbDASphEPTiLWGGAoAlIckOIhvI9jY63FxeI6DcmaKytbgtd9JSQfkjGGcc3aNivfzGN4CdfYZpbiNj5GN6jmpsnagEsiUHvMHNcbAzVxc2HJKW6rJxcfUosM1Fuv302iMudbslkiadIbodfvFn7wKMnynFJOJQffff9YeWtwY532aeHTjnoIzxuGGgxDDYahBsNQg5HGNNaPndboTtMxhuQ4jpit352rq0MdS0Nu9ctn/xD9Pm1t0xJmQjiO+SZWu6xjxuaILM/LMdMQY+8PFogon7kpoHP+mPaKVcqrmcPaV43NB52RsdrMAf/dow5mZyYTNaeNVczpAuVOMdnrWNojBiDOPI6ZaKeNVcy5bgAWjzFYF7fxtnFT13JqvNh4XBwfbD+hpbXXdPR2szwyJ3kGeDfcNxkS5ay59vI63V+5XgzGW+8v+2/KDegpcWQOfUr+cJf+nrtV8AAMc9wHJAhbNxP6LSAHBzBwHTQfuqNmYzh3Zo6zxJDGAM5MHV937TMGJPrBO09k4j1r24WPmeNz23tPoyXa6Je6bXCftm2bXlnWCxdvU6b+FkBM/lXQ63eTnhS2nPNki6UXfWHMpmdLgHE1ePT8afEDQoQ0TkKvQrQf3hue2V0eE8BMd3aeTfTl1Xbo2T6iveakIGNSY9Pq/QO9GtvCfg3HdAAAAABJRU5ErkJggg=='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAjCAYAAAAXMhMjAAACkElEQVR4nM1Xv2sUQRR+t1kkkCpNREE0ucbCQiFgAoGzuKRMk8LCKv9AqjQ2FlpZ2GiTLlUEizQp1cJCiMJBtJPAXiLmEpJGFIRFCCffem95O/tmdjabO/aDY+feN/PmmzdvfjVIwcyt2T7VAA1N2PzyNh19fZXaNhaWaHP3S/q/d+ehk/98fnbhtuCB3Z0VCi9TWG/gmAY8OAlfYVwnoJKQzgHp3Icv4tD+x/cPSTn0jZotKpuCN9tKSN4VMQhrjo9TFMfZyJmj1kZVNPIyfFHfwTCd23hfv945VyVqPU4JT98ZcZxvDOTE/bEpq/MNJZ9svE8uMnghZMRVnbKhbsJ1OREYvFrTEwICYXz37WPm1GA7KncPO7kTpQo039JWehMeJQKqMQKqMQKqMQKqMcIylc0tpzlYVaaNITm2w6a1W7y90DdtTnG8rKcn/xD9nFDrNIUYH45tRQNzTmtG2AgRxXHaZ+gj7P3JGBHFQxcFtK+d00EyS8omjLnPCxsN2gNhzsgB/9UjD4YnJhI5ZwrLiTMTlBuViV5bqQ8bADvz+EainiksJ862ANh5GYEuu8Zr/Ya26TTxcuVJ8l3bfkpTS1t09vZR+mVO8gzwdtgXGQJlzbl715dpdf5u0hlfu/eOd9LL5xXxZQ5tUv70E/29OpfwAASzvQgIEK5u3g8c2TmAjl0wed/bNAtD2Ro5jhJDCgM4Mi7e9b9IGJC7CY8SkThntVt4RhyXtXPPRFPUMQ91rfMi39oTIDetN24+oMh4osEmn23dw06jKx0rZR5sMvWiLYRp/rQABGYFbvT4xbPk5zNCDZfhL0e0Wut9OSqM8vfcMe09f32hl1fL4u/Xm/3CgaokHHK5irCq/v4By5zYZ18u2KwAAAAASUVORK5CYII=')];   // carrinho.gif (39x35, rodas em 2 quadros)
-const tankBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAXCAYAAAAP6L+eAAABzklEQVQ4ja1VIU/DQBh9t6yZaWoOEtxEkyEQNYBf5rAj+wHgMPwAAgRQzGFI8AtiATO/BIGCmqHYkglck3KmmWkqDsG+W3e7Yx3wzF2/Xt/37n13XxksaLiu5JUKAECkKfqTCbOtNYG1OJd6UKQpiDQfW4W8BADDJJkL5km7QqhYw3UXRPxIvOl51gUtzo0JlxJ3hWAiTWEaTR8UVV3qteuyP5kwfQS+fdVRVHXZb9bwVPXk+vbGwggAcRjh9ui5ENmcYgAgEn3U54QidpS3/LsFLxuuK4/PdtTzMElUgU32mGAl9Zs1FYvDCMlHgtOTZ6xpHtvOdpkmgeNIANBJAbMdy1AmQoJX9RCHkXHxWqWC/DUHZn7rylleLQDcvx9YVYwfR+hcvwEAukIwGykwtWKQZSxwHDnIMhaHkbXifrMGTIkJSz0eZBkDivvZ4lzabuccMWH8OIJXNfeOfNJlx86YsdeuS/1kUFLymFqrTbV1K/olubl8BTDrFcMkUafERG4lph/A+cu+il3sPqg5EVOyn/xeCb12XQaOIwPHkQ3XlS3OZb6HlH5L7DdruOnsAQA+01QVk3b6J/lU5DiMcHXYn3v3L7702nVlARX5C8yX3B9+OCP9AAAAAElFTkSuQmCC'); // tank-corpo.png (22x23)
-const tankLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAOUlEQVR4nGNgIAEwInP0WVn/w9jqfHxw8VVv34LVMSErvvj7N1wzTAEyQFFMCKAoRnZGmLAwnA0DAPtjDAjTPs6EAAAAAElFTkSuQmCC'),    // pernas juntas (tank-pernas.gif quadro 2)
-                     img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAO0lEQVR4nGNgIAEwggh9Vtb/MIGLv3+DxUAgTFgYLr7q7VtGJnQFyACkAJkPVkwsACtGdgYyQHYGiA8AgZAQCECjU/oAAAAASUVORK5CYII=')];   // pernas abertas (quadro 1)
+// Rusher: jacaré pequeno e muito rápido (com lacinho)
+const rusherBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAAQCAYAAAAbBi9cAAAA+UlEQVR4nGNgIA78h2J0NhwwIUngwwyfO7+CDYHSGIAFTFrmMjAY2BJ01m37vwwMDD+wyoFchNOQ/9NCGRimh8H5qr8KcFoCMQgEYBqQNDIyMjL8/w8JDt4HW8EW8pZzg6XQDWLEFnBgkLkKu9XTw7AahHDR2Z+odIo/AymAEewimGZcYM5Ggi7C7TWY4XOghlw4jIgULIaxIAn8BycDGDj9GELrGzEwLJxIMHkgwggdmMpC8MVzRKUxZOf9x+s1mPeOTwYzsXkNm8R/DK8xICVcED09DGYxWB9G6MMNwpWOQK6CAYiBYHNwG4QPIEcK1DBcBhECGBYBAHyaValJoD9HAAAAAElFTkSuQmCC');   // rusher-corpo.png (18x16)
+const rusherBlinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAAQCAYAAAAbBi9cAAAA8klEQVR4nGNgIA78h2J0NhwwIUngwwyfO7+CDYHSGIAFTFrmMjAY2BJ01m37vwwMDD+wyoFchNuQC4chGApUfxXgtARiEAhMD0OlQeD4ZAhmYGDgfbAVbCFvOTeIy4huECO2gAODzFXYrZ4ehtUghIvO/kSlU/wZSAGMYBfBNOMCczYSdBFur8EMnwM1BBTosEjBYhgLksB/cDKAgdOPIbS+EQPDwokEkwcijNCBqSwEXzxHVBpDdt5/vF6DeQ+aHLB5DZvEfwyvMSAlXBA9PQxmMVgfRujDDcKVjpBSOtRAsDm4DcIHkCMFahgugwgBDIsAnf9VrI3NbvoAAAAASUVORK5CYII=');   // rusher-piscar.png
+const rusherLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAADCAYAAAB1c+RqAAAAO0lEQVR4nGNkQAPCwsL/34ZNRxdmEF6VyfD27VtGDAkGBgYmbIIMFw6DMUgjMQDDEJBtwreWobiAEAAAnAEQ0yNZm7AAAAAASUVORK5CYII='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAADCAYAAAB1c+RqAAAARUlEQVR4nGNkQALCwsL/34ZNh7BXZTK8ffuWEVkMrg4qB+MzociCwIXDEAwFYINWZWIowwtANjNY5v4H02jiYLHMVRhyAIvDHuevJf0VAAAAAElFTkSuQmCC')];   // rusher-pernas.gif (17x3)
+// Healer: jacaré curandeiro com uma vela (não ataca a casa, cura os outros)
+const healerBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABUAAAAUCAYAAABiS3YzAAAA8ElEQVR4nGNkwAGEhYX/o4u9ffuWkYEIwIjLgMudYQwCemZw/odLpxh0y1cRZTAjyEB0A5CBrGcJmH68vYdog5lABC4D0QGx6lhgDGYZA4a/Ty7AaRgAuZBUwAQzEJ2GsdEBKKiwxQFGmDLgAM8u7wHTyC6HhTO+cGXBJUnINUSFKTaA7kIQAKUAosIUF4CFLXL4EpMCmBhoAFhI9T7FhjIjeZsUC5jIcQkoQ+BLHSz4NONyHaEUwIRLApR+YYUJqa5lxGslnmIRBEAlFswBJBnKgMUSmKEgAEq3MB/BDCfZUGwGIxsOMphsQ2FsbK4GAOiMa4MpJgmOAAAAAElFTkSuQmCC');   // healer-corpo.png (21x20)
+const healerBlinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABUAAAAUCAYAAABiS3YzAAAA80lEQVR4nL2U0QnCMBCGL20GEPqqIyg+dQcXcBLBGQQncYG+OIFPYkeo+FZwgaL86pUj5pK0gt9Lkqb5crleakihKIqH+6xtW0MJGE1Q79Y0WZT9+H450Xx7SBIbCF2BBDKA+VSx5QUakICmKj/vvcdRKcinS+qu575lmmpPQ8lY6Lbcd0GqfN/gK6ekcKuPr1ZGDmarTTCvVpuMRZOUUx9uhLIaojnV4NzK/IYqJUn6t+P/LM3FsYdskNEIcCFC1WFDi7XoYhWQaROoXxT5mGhNcMvAb1H+bNwLZGJS3yYsBahbPhHLB0t9YimHeLSU+76on8Bfb003HSe/AAAAAElFTkSuQmCC');   // healer-piscar.png
+const healerLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAFCAYAAACuNHcwAAAATklEQVR4nGNkwAOEhYX/P97eg1VO1rOE4e3bt4z49DMxEAAfLp0CY5BhpAKChjMgAVItwGs4yNu65atQ+KRYgNdwUJhf7gxD4eOKA2wAALhRG9aN3HYjAAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAFCAYAAACuNHcwAAAATUlEQVR4nGNgwAKEhYX/fzs1H4xBbHzyuNSAAAsDDvDh0ikGSgETOZrevn3LKOtZQp7hIM265asotgCr4aAwvNwZhlcjSM3j7T141QAAmrQp73RcPkUAAAAASUVORK5CYII=')];   // healer-pernas.gif (23x5)
+const healerArmFront = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAVCAYAAABPPm7SAAAANUlEQVR4nGNgGAWjYBSMAioBRmFh4f+4JN++fctIyAAWEPF4ew+GhKxnCVEuYCJKFR5AsRcAlTwLCY4ViroAAAAASUVORK5CYII='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAVCAYAAABPPm7SAAAANUlEQVR4nGNgGAWjYBSMAioBRmFh4f+4JN++fctIyAAWEPF4ew+GhKxnCVEuYCJKFR5AsRcAlTwLCY4ViroAAAAASUVORK5CYII=')];   // healer-bracos.gif (antebraço)
+const healerArmBack = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAVCAYAAABPPm7SAAAAnElEQVR4nGNgIANE/nf8T44+uGb+xyxwA5gYyARku4L/Mct/iryADhgZSADCwsIYNrMwkAjUePjg7FtfPpEfiGQDYWHh/7E6Gv9h3mEaEBf8fHYejEFsJkoNZCJHU4pbJGUGIAMmBjLAnc8/KTNg7+o68gwQhsY9s4wB+S54vL0HhU92IP59coF8A0CaZT1LGN6+fctIdnYGaQbRAJvUNu0otX4MAAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAVCAYAAABPPm7SAAAAlElEQVR4nGNgIANE/nf8z0AJ4H/M8h9mCBPdbYcZAnIFw6AAjKQoFhYWxnA2C6k2qvHwwdm3vnwiPRYoBsLCwv9jdTT+w7zDNCAu+PnsPBiD2EyUGshEjqYUt0jKDEAGTAxkgDuff1JmwN7VdeQZIAyNe2YZA/Jd8Hh7D5j+++QCeQbANMt6ljC8ffuWkezcCNIMogGI5jbrht6V5wAAAABJRU5ErkJggg==')];   // healer-bracos.gif (mão com a chama verde)
+const tankBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAB70lEQVR4nK1WTWrCQBR+kZTatC5KAsW1IAUppD1BwWzsuoucoOuuvYQeozdwE6+QBtyUgmsRIl20jdYuUt7oGyczmfxgP5CZzMvM936+vNGAEti2nYrPq9XKgJow8g4S4aZNcKwLNo+TL4iMTW0ikybemaMY8VAkCNbx7h3LATcBiGw7rUPUEB9m8SJjpAjkNTdtFkavjQRx47RzX5KjdJB8valXEwR6hh5izuVRl8qoYn0aRBCPDLZJHulAGXmpLE/XoA9xNwTo3CkjwzwE/zFTwsrI7qID5VGe71FVADwS5zrIPSQY//DnWbzl4hBTiERFtVEM5BknGPQPxnkI8P4BvacttK1WZl+RCDLpIoVdff+qBJSy7qW28LrUmbL3i+RzZ8HD0PMctPdRUDfAffhD5HUDk7xHcALyWoNgPAV/qEaiS5mJi5FAtDw/2Vk0UTBgGocRVK0JSxcnslqwhE1pJCKwG2DKitTFJUxEOLIaTaa8yAo6BweYlEsai9ZMrUZRGGKCNbGV60AXTaEPJArxg/SeTzMSxusB1VZEVEpCHfjl1eXr/u2h6ERCxHTBiWSlbbqsN8Ujg3UABEUkXwO1/xQodXvzmNx790u2JkeFREeRgCyQeQjeQ5KxY0RHkxARjoxsDxLIv5HIZDL+AD8eDjh78JRfAAAAAElFTkSuQmCC');   // tank-corpo.png (25x25)
+const tankBlinkImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAB7klEQVR4nK1WzWrCQBCeSEqtrYeSQPEsSEEKtk9QMBd77sEn6LlnX0Ifo2/gJb5CGvBSCp5FiPTQNlp7sHyrs2Y3/9gPwmwy7n7zzUwmGpQDy7K20fvlcmlQSRhJB0XR2VbJrl2IdRB+kW+sSxOZvHDO7JgTh4IAFsC6ExL5lrUtQ1SJ3kyDueJkBYgelyTaVjPVpyoBbuxG4o90lTbIVzvSIpCSERkiRMS6TUulX7A+FSYIhobYpFs+UAensly6el0KWh5R8y5mBWYe9R+VEhaGuosP1K2+3qNoA0gl9rWbeIg7+pH302AjmyOaQhBl1Sbm4MgkQa97cM48ovcPaj9tqFGrK/uymkBJF3fY1fdvnIBT1rpMLXxa6kw9+nn4ufPgMESegMZeBYjcVSD24QKSpoHJ0QOSgKNOgTuaUH8QV5KWMhMP/QjR4vxk50lRIYA0DnwqWhORLklUq9OC1rlKosA0QMqyuku2MBPBihqNJ7LIMTQPAYhWzhksqW4eNbEOA8aoiaV8DrLUZMbATRF9IZ3nU6WF8XlAt2UR5ZLwBH557cjn/dtD0ZmEiUEERMlyx3TebAqGhpgAACvSPwOl/xTE6vbmiHZv3y/EM10ViI4iIb1BZh45D6Hih6KjSZgIVpDtwQ3ybyQ6mY4/p88RyeV0084AAAAASUVORK5CYII=');   // tank-piscar.png
+const tankLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAS0lEQVR4nGP8z+DAQCxgFBYW/i/+9Tdc4CU3K8Obt7qMIsKX/7twisDF93x/w8AEkgApQAcgcZACZMBEtBtAikHWITsDBtCdARIDAEgwGoAEm39iAAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAARElEQVR4nGP8z+DAQCxggTFEhC//F//6G8x+yc3K4MIpAle05/sbhjdvdRmZYAIgDkgRCIA0gRSgA7hiYgBcMT5nwAAAMTMYS13vBdMAAAAASUVORK5CYII=')];   // tank-pernas.gif
 
 // Range: gavial com revólver. Olho fechado por padrão; abre para espiar e ao mirar.
-const rangeBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAATCAYAAACUef2IAAAA/UlEQVR4nGNkIAAO1Yn/F9cQALNf3vjAYNf0kpGBGHBzmfp/GEaTAvFh4nA2yCJizGUEKT679DGDcbQsUQ4h1uUsf8wdGKSYXzD8MZHAqejtwg0MsOAAAQj7JX4XX72bDveatvJMrK44sNL/P9PVE3DDQS4GAXyuJioirkItZzl5AC6mHnUTr14mYg1FdikIEIpEFgYC4PWZF3C2JFI4E4o8gi4WNZGA41EXM9A8jJEBoVRB0GBt5ZmMoJQBwsiRRwgwEaXo6gkMFxMCxBWBOIKA6CKUgQQAsgBfOBMVFNjAP20LMI1ejoMsA4lR5BVYqQcCoJIPFLkgGlRAAQA1U4pzy7yONQAAAABJRU5ErkJggg=='); // olho fechado (range-corpo-2.png)
-const rangePeekImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAATCAYAAACUef2IAAABA0lEQVR4nGNgIAAO1Yn/Z2BgAGMomyjAdHOZ+n8YRpMDGyauIQDmnL79hwHEJtZwRpCBZ5c+ZjCOliXWMQwvb3xgsGt6yYhPDcsfcwcGKeYXDH9MJHAqertwA9i1MABhv8Tv4qt30+Fe01aeidUVB1b6/2e6egJuOMjFIIDP1Xi9AwMwy1lOHoCLqUfdxKuXiVhDkV0KAoQikYWBAHh95gWcLYkUzoQij6CLRU0k4HjUxQw0D2NkQChVEDRYW3kmIyhlgDBy5BECTEQpunoCw8WEAFE5D1cQEApnssChOnG85TNRQYEN/NO2ANPo5TjIMpAYRV6BlXogACr5QJELokEFFACE6IYWvK5wzwAAAABJRU5ErkJggg=='); // olho aberto (range-corpo-1.png)
-const rangeShotgunImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAECAYAAACHtL/sAAAAhklEQVR4nGNkQALuorz/RXjYwWz9zDIGdnZ2hp8/fyIrAQOQOAiA5FiQNcHAmy8/GR7dv8/ALyTE8PHdO4b3O1Yz1LUKg+Waqt8yKESlg9kgOUZkA0AaJ02UYnh54wODXdNLRmRDby5T/49NnAWmcefrz2CJlzc+/MdwMwMDg3rUTRSNMAAA+2g3LFu0RHgAAAAASUVORK5CYII='); // range-escopeta.png (16x4, cano para a DIREITA, mãos do gavial)
-const rangeLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAECAYAAABCxiV9AAAAOklEQVR4nGNkgIJl3lz/ZYx5GcQ1BMB89aibjEwwSRB4cvYzw8sbH5CFEACkG0TfXKYOpuE60SVAYgD8PRKZPr83YgAAAABJRU5ErkJggg=='),   // pernas juntas
-                      img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAECAYAAABCxiV9AAAAQElEQVR4nGNkYGBgWObN9R9EyxjzMohrCICYDOpRNxmZYBJRW78x2jW9ZHx54wNYEg5gCpDBzWXq/+E60SVAfAAIoxWfcfNEyAAAAABJRU5ErkJggg==')];  // pernas abertas
-const revolverImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAFCAYAAAB8ZH1oAAAAZklEQVQImWNctGHff3UtXQZcwFxNlHHRhn3/GdElTt56/f/mtcsMDAwMDOpaugw3r11miAtwYmTBZgIDAwPDoTrx/wLfBBjMoeJMuKy0a3rJ+PLGB5xOQgHuorz/oxVF/jMwMDAAAAs8HIDyVciKAAAAAElFTkSuQmCC');       // 10x5, cano para a ESQUERDA
+const rangeBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAVCAYAAABc6S4mAAABYklEQVR4nO1VsU7DQAz1UVSpLBW5TKjqyESk/gEMMHVDiB/gCxj4Dv6DoVu3LvxBpTCgjAgxXRKxMFRCh3xXX0wIPUMXBp50kmMlfn722VEWTmATUp3bts+UmQIhdttB6GPymXkCUNQAh/v+haKG9Dq3UhKltbYuCGU8rTzRPIHh8ZuzX+/3PtmexIqUBIJqVkNyvs5SgkJG4kq0Gt/B4GIJq9Hk2xf7i7OmTAhne7VRBS/5IjgOstPuhK8UJEcU2CtAxFQovEVdTeZIdR6S6D9dNv5pFS3RDgWlsyk4zxxhblXnNf7Sgxjen5fNA+uDpMlOQQy90SScfwV/oAet2YjdoiiBKTOFw4cqnBJ2Td3gRSBSgBg83jgF1QMEcHurOTBlpnBFA/g1UkAtyj6sip8iXded9lO72bwv4hIBAw+GZcJ1j0Hp4Aqhf8yvFPBMUQUClSAZbVxahFsREEmXn1R+ADRWw4ITIDa3AAAAAElFTkSuQmCC');   // range-corpo-2.png (24x21, olho fechado)
+const rangePeekImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAVCAYAAABc6S4mAAABbUlEQVR4nO1VPUoDQRT+RiUSm+DOVhJSpnIhN9BCq3QiXkA8QArP4QG8QQq7dGks7QJrISklWM3ukkY0ICtvJm8yrGtmNI2FHwxM3u6+733vL6LEMdYhlmlZtaksEQjETtUJf8w2NYqAaYHW1a5+Pr99RzxIy1ASIaUstROOuJ8bolGE1tGrcXq/p+/ztxnw0NWE8aAMUmIJ8rsC0dl+qHKEkugULTpDNM8nWLR7377YGJ8CXScAfTdqvQpe0rE1HCQn9QFfCkSH7NgoIPhUCOqiuiK7iGVqg2g8X6zs/dyboi12ymedczdygroRtW38pQY+fMwmqx9OHUKKrBX4sN3u2fOv4A/UoDIbvi7yEqgsETR8pEIrcdpUD54HQQoIzadrrSB/hIV732gOVJYIWtGAWSNTFEHR21XxU8TLvPN+qhbbrUtwiuDAdUZponVPTvnQCuH/mF8pcCMlFQRSQmS8cXkRbkTAJHV2VvkJpuXGgnGQWTwAAAAASUVORK5CYII=');   // range-corpo-1.png (olho aberto)
+const rangeShotgunImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAICAYAAADjoT9jAAAAt0lEQVR4nGNkwAGEhYX/45IjBTDiMthLUpThzuefDJFNMxhM9VTAcqcv3YGz0QG6HIjfWBTFwILNYBAAGY6sGBsbBJbXZTDc+vIJzFbj4QPTIEfBfYBuMMxwmCZiwJt+SECIFP4Hm7Pt+Wsw/+3bt4wsyDYjG46s6e3btxhBiRFXaoIMDAzvwIYjq4cHEbLhcKAG0YQPgAwTKQRZ8g6rQ8BBBPIBzGCYIpjL8LmeKAAyiFpJEhsAAB5qYFoazBJkAAAAAElFTkSuQmCC');   // range-escopeta.png (24x8, com as mãos; cano para a direita)
+const rangeLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAECAYAAAC+0w63AAAAVElEQVR4nGP8z+DAAAMiwpf/30pmZBDSYWAQKfzP8GarEETc+x3Dm7e6jHCFDAwMTMgcGHh3Bcq49R6bNKZGkKlqc/8jXFCIYOPVCHMq3CCoU7EBAJLPGQkZcoPbAAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAECAYAAAC+0w63AAAAYUlEQVR4nGP8z+DAICJ8+f+tZEYGIR0GMBAp/M/w5q0uI5gtfPn/m34wE0WcCaIUAt5dQZWEAZAYg5ogA8gAkEFwjSCFanPBfAwAkgNhEe93YM0wANYIcyouAHbuViEUMQDGICoC2b2x0QAAAABJRU5ErkJggg==')];   // range-pernas.gif (14x4)
+const revolverImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAAICAYAAAAm06XyAAAAhElEQVR4nGNgIAEICwv/R+YzogvgA1v2nGLwcTFjePv2LSOIzwIi6vuWYVVsqqcCZ5++dAdFI0GbQTaBNCEb5INkANwUfH68lczIIKTDwMCgJggWF/F+BzaACZ9mkAIQVpv7n+HdFZAp71Hk8dqM7govSVGGO59/Mtz68gnF70QbgBxGACc+ONEgcb8hAAAAAElFTkSuQmCC');   // revolver.png (15x8, com a mão; cano para a esquerda)
 const RANGE = {
   damage: 10,              // dano de cada bala do revólver na casa
   fireEvery: [1.5, 2.5],   // segundos entre tiros
@@ -302,32 +320,45 @@ const RANGE = {
 
 // tipos de inimigo. Vida e velocidade são FIXAS; as waves só mudam a quantidade.
 const ENEMY_TYPES = {
-  basic: { id: 'basic', name: 'JACARÉ', sc: SCALE, w: 18, h: 19, hitbox: { w: 12, h: 17 }, legOffset: { x: 5, y: 13 },
-           eye: { x: 7, y: 1 }, stepLen: 15, knockMul: 1, body: enemyBodyImg, blink: enemyBlinkImg, legs: enemyLegImgs },
+  basic: { id: 'basic', name: 'JACARÉ', sc: SCALE, w: 20, h: 20, hitbox: { w: 13, h: 18 }, legOffset: { x: 6, y: 15 },
+           eye: { x: 8, y: 2 }, stepLen: 15, knockMul: 1, body: enemyBodyImg, blink: enemyBlinkImg, legs: enemyLegImgs },
   // tank: sc 5 = desenhado 25% maior que o básico (escala inteira, pixel art nítido)
-  tank:  { id: 'tank', name: 'TANK', desc: 'muita vida  ·  lento', sc: 5, w: 22, h: 23, hitbox: { w: 16, h: 21 }, legOffset: { x: 4, y: 17 },
-           eye: { x: 8, y: 2 }, stepLen: 11, knockMul: 0.3, body: tankBodyImg, blink: null, legs: tankLegImgs,
+  tank:  { id: 'tank', name: 'TANK', desc: 'muita vida  ·  lento', sc: 5, w: 25, h: 25, hitbox: { w: 18, h: 23 }, legOffset: { x: 7, y: 18 },
+           eye: { x: 9, y: 2 }, stepLen: 11, knockMul: 0.3, body: tankBodyImg, blink: tankBlinkImg, legs: tankLegImgs,
            hp: 300, speed: 35, bite: 20 },
-  range: { id: 'range', name: 'RANGE', sc: SCALE, w: 22, h: 19, hitbox: { w: 10, h: 15 }, legOffset: { x: 8, y: 15 },
+  range: { id: 'range', name: 'RANGE', sc: SCALE, w: 24, h: 21, hitbox: { w: 11, h: 17 }, legOffset: { x: 7, y: 17 },
            eye: { x: 10, y: 1 }, stepLen: 15, knockMul: 1, body: rangeBodyImg, blink: rangePeekImg, legs: rangeLegImgs,
            blinkEvery: [2, 5], blinkDur: 0.45,   // aqui o "piscar" é abrir o olho para espiar
-           hp: 90, speed: 60, ranged: true },    // 3x o básico (30), bem menos que o tank (300); atira de longe   // 10x a vida do básico; quase metade da velocidade; mordida 4x; empurrões fazem 30% do efeito
+           hp: 90, speed: 60, ranged: true },
+  // rusher: corre muito, vida baixa; mordida fraca (2) mas bem mais rápida que a do básico
+  rusher: { id: 'rusher', name: 'RUSHER', sc: SCALE, w: 18, h: 16, hitbox: { w: 11, h: 13 }, legOffset: { x: 2, y: 13 },
+           eye: { x: 7, y: 3 }, stepLen: 9, knockMul: 1.3, body: rusherBodyImg, blink: rusherBlinkImg, legs: rusherLegImgs,
+           hp: 12, speed: 175, bite: 2, biteEvery: 0.3 },
+  // healer: não ataca a casa; ronda como o range e cura os jacarés machucados (os de mais vida primeiro)
+  healer: { id: 'healer', name: 'HEALER', sc: SCALE, w: 21, h: 28, top: 8, hitbox: { w: 11, h: 17 }, legOffset: { x: 0, y: 15 },
+           eye: { x: 8, y: 10 }, stepLen: 14, knockMul: 1, body: healerBodyImg, blink: healerBlinkImg, legs: healerLegImgs,
+           arms: { front: healerArmFront, back: healerArmBack, x: 3, y: -8 },
+           hp: 70, speed: 75, healer: true },    // 3x o básico (30), bem menos que o tank (300); atira de longe   // 10x a vida do básico; quase metade da velocidade; mordida 4x; empurrões fazem 30% do efeito
 };
 // a cada 5 waves entra um inimigo novo
-const NEW_ENEMY_AT = { 5: 'tank', 10: 'range' };
+const NEW_ENEMY_AT = { 5: 'tank', 10: 'range', 15: 'rusher', 20: 'healer' };
 const ENEMY_BLINK = { every: [3, 8], dur: 0.12 };
 
 // quadros (w x h+1, 1 px de folga em cima): 'stand'/'step' = pernas abertas, 'pass' = juntas com o corpo 1 px acima
 const enemyFrames = {};
 function enemyFrame(T, name, blink = false) {
-  const key = T.id + name + (blink ? 'b' : '');
+  const af = T.arms ? Math.floor(clock * 10) % 2 : 0;          // braços animados (chama da vela)
+  const key = T.id + name + (blink ? 'b' : '') + af;
   if (enemyFrames[key]) return enemyFrames[key];
   const body = blink && T.blink ? T.blink : T.body;
   if (!body.complete || !T.legs[0].complete || !T.legs[1].complete) return null;
+  const top = T.top || 0, by = top + (name === 'pass' ? 0 : 1);
   const c = document.createElement('canvas'); c.width = T.w; c.height = T.h + 1;
   const g = c.getContext('2d');
-  g.drawImage(name === 'pass' ? T.legs[0] : T.legs[1], T.legOffset.x, T.legOffset.y + 1);
-  g.drawImage(body, 0, name === 'pass' ? 0 : 1);
+  if (T.arms) g.drawImage(T.arms.back[af], T.arms.x, by + T.arms.y);
+  g.drawImage(body, 0, by);
+  g.drawImage(name === 'pass' ? T.legs[0] : T.legs[1], T.legOffset.x, top + T.legOffset.y + 1);   // pernas na frente do rabo
+  if (T.arms) g.drawImage(T.arms.front[af], T.arms.x, by + T.arms.y);
   return (enemyFrames[key] = c);
 }
 const boxImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAANCAYAAABPeYUaAAAAuElEQVQokaWTMQrCQBBF/19ShYC94CKk0IPkHB7EWjyI58gpUmkRkAgWAUUhSSWMRVxxNxjW9Td/YeY/ZgaWACAigkCRJA1gsVr+DDjs9j1IRGSWacTTGN258waY/lNeIXKL22iO8t4gnSRfff04WhnlAnzk9g0mQQagAqBHPLcjygWUVYNUJ6OOzIZYk2yKun/cOj//hLR1O9jKRyanAOBaXIIgJqdIMojwEkm+bxK6EgAQ+P/vPAHyqFpEdVYUZwAAAABJRU5ErkJggg=='); // caixa-municao.png
@@ -592,6 +623,40 @@ const sfx = (() => {
     deny() {          // sem dentes
       if (!ok('deny', 0.1)) return;
       tone({ dur: 0.18, peak: 0.2, wave: 'square', f0: 160, f1: 90 });
+    },
+    boom() {          // explosão (dinamite, mina)
+      if (!ok('boom', 0.05)) return;
+      noise({ dur: 0.9, peak: 0.9, type: 'lowpass', f0: 1400, f1: 50 });
+      tone({ dur: 0.55, peak: 0.6, wave: 'sine', f0: 95, f1: 32 });
+    },
+    freeze() {        // cubo de gelo
+      if (!ok('freeze', 0.1)) return;
+      noise({ dur: 0.5, peak: 0.3, type: 'highpass', f0: 3000, f1: 7000 });
+      [1568, 2093, 2637].forEach((f, i) => tone({ dur: 0.18, peak: 0.1, wave: 'triangle', f0: f, delay: i * 0.05 }));
+    },
+    uzi() {
+      if (!ok('uzi', 0.03)) return;
+      noise({ dur: 0.06, peak: 0.32, type: 'bandpass', f0: 1800, q: 1 });
+      tone({ dur: 0.05, peak: 0.1, wave: 'square', f0: 180, f1: 90 });
+    },
+    revolver() {
+      if (!ok('revolver', 0.04)) return;
+      noise({ dur: 0.14, peak: 0.5, type: 'lowpass', f0: 3200, f1: 300 });
+      tone({ dur: 0.1, peak: 0.18, wave: 'square', f0: 230, f1: 80 });
+    },
+    swap() {          // troca de arma
+      if (!ok('swap', 0.05)) return;
+      noise({ dur: 0.05, peak: 0.3, type: 'bandpass', f0: 2500, q: 3 });
+      tone({ dur: 0.05, peak: 0.1, wave: 'square', f0: 600, delay: 0.05 });
+    },
+    toss() {          // arremesso
+      if (!ok('toss', 0.05)) return;
+      noise({ dur: 0.22, peak: 0.22, type: 'bandpass', f0: 700, f1: 2200, q: 2 });
+    },
+    ignite() {        // pimenta
+      if (!ok('ignite', 0.1)) return;
+      noise({ dur: 0.6, peak: 0.4, type: 'bandpass', f0: 500, f1: 2600, q: 1 });
+      tone({ dur: 0.3, peak: 0.12, wave: 'sawtooth', f0: 200, f1: 600 });
     },
     hover() {         // mouse passou sobre um botão
       if (!ok('hover', 0.04)) return;
@@ -874,11 +939,12 @@ let WORLD_W = 0, WORLD_H = 0;   // definidos em buildMap() = WORLD
 const player = {
   x: WORLD_W / 2, y: WORLD_H / 2,
   vx: 0, vy: 0,              // velocidade extra (knockback)
-  w: 18 * SCALE, h: 18 * SCALE,
+  w: PLAYER_SPR.w * SCALE, h: PLAYER_SPR.h * SCALE,
   facing: SPRITE_FACES,
   aim: 0,
   walkDist: 0,          // distância andada (avança a animação das pernas)
   running: false, dustT: 0,
+  weapon: 'shotgun', mags: { uzi: 0, revolvers: 0 }, reserve9: 0, revSide: 0, pepperT: 0,
   walking: false,
   walkFrame: 'stand',
   moveX: 0,             // direção do movimento (para inclinar o corpo)
@@ -908,7 +974,7 @@ const cam = { x: 0, y: 0, trauma: 0, sx: 0, sy: 0, init: false };
 const bullets = [];
 const particles = [];
 let crossPulse = 0;
-const ammoPop = new Array(AMMO_MAX).fill(0); // animação da gauge que acabou de esvaziar
+const ammoPop = new Array(AMMO_CAP).fill(0); // animação da gauge que acabou de esvaziar
 let emptyFlash = 0;                          // pisca as gauges ao tentar atirar sem munição
 let reservePop = 0;                          // pulso do contador de reserva
 
@@ -1030,7 +1096,8 @@ function gunTransform() {
 }
 function muzzlePos() {
   const g = gunTransform();
-  const lx = (GUN_MUZZLE.x - GUN_GRIP.x) * SCALE, ly = (GUN_MUZZLE.y - GUN_GRIP.y) * SCALE * g.flip;
+  const G = gunSpec();
+  const lx = (G.muzzle.x - G.grip.x) * SCALE, ly = (G.muzzle.y - G.grip.y) * SCALE * g.flip;
   const c = Math.cos(g.rot), s = Math.sin(g.rot);
   return { x: g.x + lx * c - ly * s, y: g.y + lx * s + ly * c };
 }
@@ -1052,7 +1119,7 @@ function shoot() {
       x: m.x, y: m.y, px: m.x, py: m.y,
       vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
       life: SHOT.life * rand(0.75, 1), age: 0,
-      hits: [], dmgMul: 1,           // jacarés já atingidos por este projétil (atravessa)
+      hits: [], dmgMul: 1, fire: player.pepperT > 0,   // jacarés já atingidos (atravessa); pimenta: incendeia
     });
   }
 
@@ -1094,7 +1161,9 @@ function rollDrop(x, y) {
   let r = Math.random();
   for (const d of DROP_TABLE) {
     if (r < d.chance) {
-      pickups.push({ kind: 'ammo', x, y, amount: d.amount, scale: d.scale, t: rand(0, 6), age: 0,
+      const kinds = ['ammo'].concat(has9mm() ? ['ammo9'] : []);       // 9 mm só cai se tiver uzi ou revólveres
+      const kind = kinds[Math.floor(Math.random() * kinds.length)];
+      pickups.push({ kind, x, y, amount: d.amount * AMMO_KINDS[kind].mult, scale: d.scale, big: d === DROP_TABLE[0], t: rand(0, 6), age: 0,
         shine: 0, nextShine: rand(...BOX_SHINE_EVERY), pop: 1, life: DROP_LIFE });
       return;
     }
@@ -1107,7 +1176,8 @@ const pickupCenterY = b => b.y - 14 + pickupFloat(b) - b.pop * 30;   // nasce co
 
 // recompensa de fim de wave (some em DROP_LIFE, como os outros drops)
 function spawnReward(kind, x, y) {
-  pickups.push({ kind, x, y, amount: kind === 'ammo' ? ROGUE.rewardAmmo + 4 * run.wave : 0, scale: kind === 'ammo' ? 4.2 : 4,
+  const amount = kind === 'ammo' ? ROGUE.rewardAmmo + 4 * run.wave : kind === 'ammo9' ? 30 + 3 * run.wave : 0;
+  pickups.push({ kind, x, y, amount, scale: kind === 'heal' ? 4 : 4.2,
     t: rand(0, 6), age: 0, shine: 0, nextShine: 0.5, pop: 1, life: DROP_LIFE, reward: true });
   particles.push({ x, y: y - 20, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
 }
@@ -1116,12 +1186,14 @@ function spawnReward(kind, x, y) {
 const TRAINING_AMMO = 12;
 let trainingAmmoT = 0;
 function updateTrainingAmmo(dt) {
-  const empty = mode === 'test' && player.ammo === 0 && player.reserve === 0 && !pickups.some(p => p.kind === 'ammo');
+  const kind = ammoKindOf(player.weapon), K = AMMO_KINDS[kind];
+  const inGun = player.weapon === 'shotgun' ? player.ammo : player.mags[player.weapon];
+  const empty = mode === 'test' && inGun === 0 && player[K.res] === 0 && !pickups.some(p => p.kind === kind);
   if (!empty) { trainingAmmoT = 0; return; }
   if ((trainingAmmoT += dt) < 0.6) return;              // pequena pausa antes de aparecer
   trainingAmmoT = 0;
   const R = houseRect();
-  pickups.push({ kind: 'ammo', x: Math.min(WORLD_W - 40, R.r + 56), y: R.b - 10, amount: TRAINING_AMMO, scale: 4.2,
+  pickups.push({ kind, x: Math.min(WORLD_W - 40, R.r + 56), y: R.b - 10, amount: TRAINING_AMMO * K.mult, scale: 4.2,
     t: 0, age: 0, shine: 0, nextShine: 0.5, pop: 1, life: Infinity, reward: true });
   particles.push({ x: R.r + 56, y: R.b - 30, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
   sfx.select();
@@ -1130,7 +1202,8 @@ function updateTrainingAmmo(dt) {
 function canCollect(b) {
   if (gameOver) return false;
   if (b.kind === 'heal') return house.active && house.hp < houseMax();
-  return player.reserve < reserveMax();
+  const K = AMMO_KINDS[b.kind];
+  return player[K.res] < K.max();
 }
 
 function collectHeal(b) {
@@ -1150,8 +1223,9 @@ function collectHeal(b) {
 
 function collectPickup(b) {
   if (b.kind === 'heal') return collectHeal(b);
-  const gained = Math.min(b.amount, reserveMax() - player.reserve);
-  player.reserve += gained;
+  const K = AMMO_KINDS[b.kind];
+  const gained = Math.min(b.amount, K.max() - player[K.res]);
+  player[K.res] += gained;
   reservePop = 1;
   sfx.reload();
   const cy = pickupCenterY(b);
@@ -1188,7 +1262,7 @@ function updatePickups(dt) {
 }
 
 function drawPickup(b) {
-  const spr = b.kind === 'heal' ? medkitImg : boxImg;
+  const spr = b.kind === 'heal' ? medkitImg : AMMO_BOX_IMGS[b.kind] || boxImg;
   if (!spr.complete) return;
   // pisca nos últimos 3 segundos
   const left = b.life - b.age;
@@ -1235,7 +1309,7 @@ function drawPickup(b) {
   const label = b.kind === 'heal' ? `+${Math.round(ROGUE.rewardHeal * 100)}% CASA` : `+${b.amount}`;
   const ly = Math.round(cy - h / 2 - 6);
   ctx.fillStyle = '#000'; ctx.fillText(label, b.x + 1, ly + 1);
-  ctx.fillStyle = b.kind === 'heal' ? '#7bd04a' : b.amount >= DROP_TABLE[0].amount ? '#ffe08a' : '#f4f1de';
+  ctx.fillStyle = b.kind === 'heal' ? '#7bd04a' : b.big ? '#ffe08a' : '#f4f1de';
   ctx.fillText(label, b.x, ly);
   ctx.textAlign = 'left';
 }
@@ -1323,6 +1397,92 @@ function spawnEdgeEnemy(cfg, type = 'basic') {
   enemies.push(e);
 }
 
+// Healer: nunca se aproxima da casa. Anda pelo anel em volta da clareira, puxando para o lado onde há
+// jacarés machucados, e a cada pulso cura todos os machucados num raio grande em volta dele
+const HEALER = { every: 1.2, radius: 340, amount: 14, pct: 0.05, rx: 520, ry: 350 };   // anel onde ele anda (px a partir do centro da casa)
+const healBeams = [];
+const healerTorch = e => {                         // chama verde na mão (raio de cura e luz)
+  const T = e.T, flip = e.facing === -1 ? 1 : -1;
+  return { x: e.x + flip * (-T.w * T.sc / 2 + (T.arms.x + 13.5) * T.sc), y: e.y + T.h * T.sc / 2 - (T.h + 1) * T.sc + (T.top + T.arms.y + 2) * T.sc };
+};
+function updateHealer(e, dt) {
+  if (e.healT === undefined) { e.healT = rand(0.6, 1.2); e.ang = Math.atan2(e.y - house.y, e.x - house.x); e.pulse = 0; }
+  e.healT -= dt; e.pulse = Math.max(0, (e.pulse || 0) - dt * 2.5);
+  // para que lado do anel ir: média dos ângulos dos machucados (pesada pela vida perdida)
+  let sx = 0, sy = 0;
+  for (const o of enemies) {
+    if (!o.alive || o.T.healer || o.hp >= o.maxHp * 0.98) continue;
+    const a = Math.atan2(o.y - house.y, o.x - house.x), wgt = o.maxHp - o.hp;
+    sx += Math.cos(a) * wgt; sy += Math.sin(a) * wgt;
+  }
+  const rx = HEALER.rx, ry = HEALER.ry, maxTurn = e.speed * dt / ((rx + ry) / 2);   // gira no ritmo em que consegue andar
+  if (sx || sy) {                                   // gira pelo anel na direção do grupo machucado
+    const want = Math.atan2(sy, sx), diff = Math.atan2(Math.sin(want - e.ang), Math.cos(want - e.ang));
+    e.ang += Math.sign(diff) * Math.min(Math.abs(diff), maxTurn);
+  } else e.ang += maxTurn * 0.4;                        // ninguém machucado: ronda devagar
+  const tx = house.x + Math.cos(e.ang) * rx, ty = house.y + Math.sin(e.ang) * ry;
+  const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy);
+  if (d > 6) { const st = Math.min(d, e.speed * dt); e.x += dx / d * st; e.y += dy / d * st; e.walk += st; }
+  // nunca entra no anel (não chega perto da casa)
+  const nx = (e.x - house.x) / rx, ny = (e.y - house.y) / ry, nr = Math.hypot(nx, ny);
+  if (nr < 0.92) { const k = 0.92 / (nr || 1); e.x = house.x + nx * k * rx; e.y = house.y + ny * k * ry; }
+  // olha para o centro dos machucados (ou para onde anda)
+  const look = (sx || sy) ? Math.cos(Math.atan2(sy, sx)) * 100 + house.x - e.x : dx;
+  if (Math.abs(look) > 4) e.facing = look < 0 ? -1 : 1;
+  if (e.healT > 0) return;
+  // pulso de cura em área
+  e.healT = HEALER.every;
+  const t0 = healerTorch(e);
+  let healed = 0;
+  for (const o of enemies) {
+    if (!o.alive || o.T.healer || o.hp >= o.maxHp || Math.hypot(o.x - e.x, o.y - e.y) > HEALER.radius) continue;
+    const amt = Math.min(o.maxHp - o.hp, HEALER.amount + o.maxHp * HEALER.pct);
+    o.hp += amt; o.hpShow = 2; o.healGlow = 1; healed++;
+    healBeams.push({ x1: t0.x, y1: t0.y, x2: o.x, y2: o.y - 10, t: 0 });
+    particles.push({ x: o.x, y: o.y - 50, vx: 0, vy: -55, life: 0.8, age: 0, size: 0, color: 'text', text: `+${Math.round(amt)}`, tint: '#7dff6a', drag: 1.5 });
+    for (let i = 0; i < 10; i++)
+      particles.push({ x: o.x + rand(-20, 20), y: o.y + rand(-24, 20), vx: rand(-20, 20), vy: rand(-130, -60), life: rand(0.5, 0.9), age: 0, size: rand(3, 6), color: Math.random() < 0.6 ? '#7dff6a' : '#e6ffd6', drag: 1 });
+  }
+  if (healed) {
+    e.pulse = 1;
+    healRings.push({ x: e.x, y: e.y, t: 0 });       // onda verde mostrando a área da cura
+    sfx.heal();
+  }
+}
+const healRings = [];
+function drawHealerGlows() {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const e of enemies) {
+    if (!e.alive || !e.T.healer) continue;
+    const q = healerTorch(e), r = 46 + Math.sin(clock * 9 + e.x) * 5 + (e.pulse || 0) * 40;
+    const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, r);
+    g.addColorStop(0, `rgba(125,255,106,${0.55 + (e.pulse || 0) * 0.3})`); g.addColorStop(0.4, 'rgba(90,230,80,.25)'); g.addColorStop(1, 'rgba(90,230,80,0)');
+    ctx.fillStyle = g; ctx.fillRect(q.x - r, q.y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}
+function drawHealBeams(dt) {
+  for (let i = healRings.length - 1; i >= 0; i--) {   // onda verde do tamanho da área de cura
+    const r = healRings[i]; r.t += dt;
+    if (r.t > 0.55) { healRings.splice(i, 1); continue; }
+    const k = r.t / 0.55, rad = HEALER.radius * (0.25 + 0.75 * k);
+    ctx.fillStyle = `rgba(125,255,106,${0.12 * (1 - k)})`;
+    ctx.beginPath(); ctx.ellipse(r.x, r.y, rad, rad * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(160,255,140,${0.7 * (1 - k)})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(r.x, r.y, rad, rad * 0.6, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  for (let i = healBeams.length - 1; i >= 0; i--) {
+    const b = healBeams[i];
+    b.t += dt;
+    if (b.t > 0.4) { healBeams.splice(i, 1); continue; }
+    const k = 1 - b.t / 0.4;
+    ctx.strokeStyle = `rgba(125,255,106,${0.45 * k})`; ctx.lineWidth = 16 * k;
+    ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+    ctx.strokeStyle = `rgba(230,255,200,${0.9 * k})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+  }
+}
+
 // Range: chega até a borda da clareira, fica rondando num círculo em volta da casa e atira de longe
 function updateRanged(e, dt) {
   if (e.orbitDir === undefined) {
@@ -1366,9 +1526,12 @@ function updateRanged(e, dt) {
 }
 
 // posição da mão (onde fica o revólver) em coordenadas do mundo
+// mãos do range no sprite (as armas já trazem a mão desenhada): frente encostada no peito, a segunda (dois revólveres) atrás do corpo
+const RANGE_HANDS = { front: { x: 8.5, y: 11.5 }, back: { x: 11.5, y: 14.5 } };   // a segunda fica atrás do corpo, 3 px abaixo
+const REVOLVER_GRIP = { x: 10.5, y: 5.5 }, RANGE_SG_GRIP = { x: 6.5, y: 4.5 };
 function rangedHand(e, back = false) {
   const T = e.T, sc = T.sc, flip = e.facing === -1 ? 1 : -1;
-  const lx = back ? 12.5 : 7.5, ly = back ? 9.5 : 8.5;       // mão da frente no queixo; segunda na barriga, 5 px atrás e 1 px abaixo
+  const lx = back ? RANGE_HANDS.back.x : RANGE_HANDS.front.x, ly = back ? RANGE_HANDS.back.y : RANGE_HANDS.front.y;
   return { x: e.x + flip * (-T.w * sc / 2 + lx * sc), y: e.y - T.h * sc / 2 + ly * sc };
 }
 
@@ -1376,7 +1539,7 @@ const enemyBullets = [];
 function rangedShoot(e, back = false) {
   const h = rangedHand(e, back), shotgun = e.weapon === 'shotgun';
   const a = Math.atan2(house.y - h.y, house.x - h.x);
-  const reach = (shotgun ? 13 : 9) * e.T.sc;
+  const reach = (shotgun ? 24 - RANGE_SG_GRIP.x : REVOLVER_GRIP.x) * e.T.sc;   // da mão até a ponta do cano
   const mx = h.x + Math.cos(a) * reach, my = h.y + Math.sin(a) * reach;
   if (shotgun) {
     const G = RANGE.shotgun;
@@ -1409,6 +1572,9 @@ function updateEnemyBullets(dt) {
     const b = enemyBullets[i];
     b.age += dt; b.px = b.x; b.py = b.y; b.x += b.vx * dt; b.y += b.vy * dt;
     const R = houseRect();
+    if (ally.active && Math.abs(b.x - ally.x) < PLAYER_HITBOX.w * SCALE / 2 + 6 && Math.abs(b.y - ally.y) < PLAYER_HITBOX.h * SCALE / 2 + 6) {
+      damageAlly(b.dmg || RANGE.damage); enemyBullets.splice(i, 1); continue;   // tiro do range acerta o Antony no caminho
+    }
     if (house.active && b.x > R.l && b.x < R.r && b.y > R.t - 30 && b.y < R.b) { hitHouseRanged(b); enemyBullets.splice(i, 1); continue; }
     if (b.age > 4 || b.x < -20 || b.y < -20 || b.x > WORLD_W + 20 || b.y > WORLD_H + 20) enemyBullets.splice(i, 1);
   }
@@ -1416,7 +1582,7 @@ function updateEnemyBullets(dt) {
 
 function hitHouseRanged(b) {
   if (gameOver) return;
-  house.hp = Math.max(0, house.hp - (b.dmg || RANGE.damage));
+  house.hp = Math.max(0, house.hp - (b.dmg || RANGE.damage) * houseDefMul());
   house.flash = 0.06; house.shake = Math.max(house.shake, 0.6); house.pop = 1;
   sfx.houseHit();
   const a = Math.atan2(b.vy, b.vx);
@@ -1450,7 +1616,7 @@ function drawEnemyBullet(b) {
 function damageHouse(e) {
   if (gameOver) return;
   const dmg = e.T.bite || BITE_DAMAGE;              // básico 5, tank 20
-  house.hp = Math.max(0, house.hp - dmg);
+  house.hp = Math.max(0, house.hp - dmg * houseDefMul());   // cabana reforçada absorve parte
   house.flash = 0.08;
   house.shake = dmg > BITE_DAMAGE ? 2 : 1;          // mordida do tank sacode mais a casa
   house.pop = 1;
@@ -1514,7 +1680,7 @@ function startMode(m) {
   cards.list = [];
   sfx.select();
   gameOver = false;
-  Object.assign(player, { running: false, hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
+  Object.assign(player, { running: false, weapon: 'shotgun', mags: { uzi: 0, revolvers: 0 }, reserve9: 0, pepperT: 0, hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
     x: WORLD_W / 2, y: WORLD_H / 2 });
   // roguelike: casa de verdade (vida, alvo dos jacarés). Campo de treino: só cosmética.
   Object.assign(house, { hp: houseMax(), flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test' });
@@ -1529,8 +1695,14 @@ function startMode(m) {
       enemies.push(makeEnemy(house.x + pos.dx, house.y + pos.dy, ENEMY_HP, 0, pos));
   }
   nightK = nightPrev = nightTarget();
+  Object.assign(tips, { t: 0, usedRun: false, usedMelee: false });
+  if (m === 'rogue') {                                   // aviso grande: o objetivo é defender a casa
+    banner('DEFENDA SUA CASA', 'os jacarés vão atrás dela — não deixe ela cair!', '#e9c46a', 3.4, true);
+    run.banner.intro = true;
+  }
   run.teeth = 0; teeth.length = 0; toothPop = 0;
-  Object.assign(shop, { open: false, lv: { boots: 0, magnet: 0, card: 0 }, msg: '', msgT: 0 });
+  Object.assign(shop, { open: false, lv: shopLv0(), inv: { dynamite: 0, pepper: 0, ice: 0 }, tab: 'armas', msg: '', msgT: 0 });
+  mines.length = 0; throwables.length = 0; ally.active = false;
   bill.active = false; bill.talk = null; cut.on = false; cut.bars = 0; cards.returnTo = null;
 }
 
@@ -1614,6 +1786,8 @@ function devRender() {
       <button data-a="spawn" data-t="range" data-n="1">+1 range</button>
       <button data-a="spawn" data-t="range" data-n="1" data-w="dual">+1 range 2 rev.</button>
       <button data-a="spawn" data-t="range" data-n="1" data-w="shotgun">+1 range escop.</button>
+      <button data-a="spawn" data-t="rusher" data-n="5">+5 rushers</button>
+      <button data-a="spawn" data-t="healer" data-n="1">+1 healer</button>
       <button data-a="spawn" data-t="basic" data-n="20">+20 jacarés</button>
       <button data-a="clear">limpar</button>
     </div>
@@ -1652,7 +1826,7 @@ devEl.addEventListener('click', e => {
   if (a === 'teeth') { run.teeth = (run.teeth || 0) + 20; toothPop = 1; }
   if (a === 'billreset') setBillMet(false);
   if (a === 'night') dev.night = b.checked;
-  if (a === 'ammo') { player.ammo = AMMO_MAX; player.reserve = reserveMax(); }
+  if (a === 'ammo') { player.ammo = ammoMax(); player.reserve = reserveMax(); refillAltMags(); }
   if (a === 'heal') house.hp = houseMax();
   sfx.hover();
   devRender();
@@ -1663,7 +1837,7 @@ function devKey(k) {
   if (dev.typed === DEV_CODE) { dev.on = !dev.on; dev.typed = ''; sfx.upgrade(); devRender(); }
 }
 function updateDev() {
-  if (dev.infAmmo) { player.ammo = AMMO_MAX; player.reserve = reserveMax(); }
+  if (dev.infAmmo) { player.ammo = ammoMax(); player.reserve = reserveMax(); refillAltMags(); }
   if (dev.godHouse && house.active) house.hp = houseMax();
   // atualiza o contador de vivos de vez em quando
   if (dev.on && (devEl._t = (devEl._t || 0) + 1) % 30 === 0) {
@@ -1684,7 +1858,11 @@ window.addEventListener('keydown', e => {
   devKey(k);
   if (k === 'control') { toggleStats(); return; }
   if (cut.on && !paused) { if (['e', 'enter', ' '].includes(k)) cutAdvance(); if (k !== 'escape' && k !== 'p') return; }
-  if (shop.open) { if (k === 'e' || k === 'escape') closeShop(); return; }
+  if (shop.open) {
+    if (k === 'e' || k === 'escape') closeShop();
+    if (['1', '2', '3'].includes(k)) { shop.tab = SHOP_TABS[+k - 1].id; sfx.hover(); }
+    return;
+  }
   if (k === 'e' && !paused && !e.repeat && nearCart()) { openShop(); return; }
   if (k === 'enter' && !paused && bill.active && bill.state === 'idle') {        // dispensa o Bill e segue o jogo
     if (mode === 'rogue' && run.phase === 'shop') endShopVisit(); else if (mode === 'test') billLeave();
@@ -1700,14 +1878,32 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (k === 'r' && !e.repeat && mode !== 'menu') startReload();
+  if (mode === 'menu' || gameOver || cut.on) return;
+  if (['1', '2', '3'].includes(k)) setWeapon(WEAPON_ORDER[+k - 1]);
+  if (k === 'q' && !e.repeat) throwItem('dynamite');
+  if (k === 'f' && !e.repeat) usePepper();
+  if (k === 'c' && !e.repeat) throwItem('ice');
 });
+// roda do mouse troca de arma
+window.addEventListener('wheel', e => {
+  if (mode === 'menu' || paused || shop.open || gameOver || cut.on || (run.phase === 'cards' && cards.list.length)) return;
+  cycleWeapon(Math.sign(e.deltaY));
+}, { passive: true });
 
 // =====================================================================
 // Recarga: 1 cartucho por RELOAD_SHELL. Um toque no R recarrega até encher (ou acabar a reserva).
 // =====================================================================
-function canReload() { return player.ammo < AMMO_MAX && player.reserve > 0 && !gameOver; }
+function canReload() {
+  if (gameOver) return false;
+  if (player.weapon !== 'shotgun') return player.mags[player.weapon] < WEAPONS[player.weapon].mag && player[altRes(player.weapon)] > 0;
+  return player.ammo < ammoMax() && player.reserve > 0;
+}
 function startReload() {
-  if (player.reloading || !canReload()) { if (!canReload() && player.reserve === 0 && player.ammo < AMMO_MAX) emptyFlash = 1; return; }
+  if (player.reloading || !canReload()) {
+    const noRes = player.weapon === 'shotgun' ? player.reserve === 0 && player.ammo < ammoMax() : player[altRes(player.weapon)] === 0;
+    if (!canReload() && noRes) emptyFlash = 1;
+    return;
+  }
   player.reloading = true;
   player.reloadT = 0;
   sfx.reloadStart();
@@ -1715,6 +1911,14 @@ function startReload() {
 function updateReload(dt) {
   if (!player.reloading) return;
   player.reloadT += dt;
+  if (player.weapon !== 'shotgun') {                  // pente inteiro de uma vez
+    if (player.reloadT >= altReloadTime()) {
+      const id = player.weapon, take = Math.min(WEAPONS[id].mag - player.mags[id], player[altRes(id)]);   // tira da reserva da arma
+      player.mags[id] += take; player[altRes(id)] -= take;
+      player.reloading = false; player.reloadT = 0; sfx.shellIn(); reservePop = 1;
+    }
+    return;
+  }
   if (player.reloadT >= reloadShell() - 1e-6) {
     player.ammo++;
     player.reserve--;
@@ -1742,6 +1946,8 @@ function startWave() {
   run.toSpawn = run.cfg.count;
   run.tanksLeft = Math.min(run.cfg.tanks, run.cfg.count);
   run.rangesLeft = Math.min(run.cfg.ranges, run.cfg.count - run.tanksLeft);
+  run.rushersLeft = Math.min(run.cfg.rushers, run.cfg.count - run.tanksLeft - run.rangesLeft);
+  run.healersLeft = Math.min(run.cfg.healers, run.cfg.count - run.tanksLeft - run.rangesLeft - run.rushersLeft);
   run.spawnTimer = 0.3;
   run.phase = 'fight';
   const novo = NEW_ENEMY_AT[run.wave];
@@ -1749,6 +1955,8 @@ function startWave() {
   banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés${turn}`, isNightWave(run.wave) ? '#9db4ff' : '#e9c46a', novo ? 3.6 : 2.0, true);
   if (novo) { run.banner.threat = ENEMY_TYPES[novo]; sfx.threat(); }
   sfx.waveStart();
+  plantMines();
+  spawnAntony();
 }
 
 function finishWave() {
@@ -1762,6 +1970,7 @@ function finishWave() {
   const R = houseRect(), y = Math.min(WORLD_H - 40, R.b + 70);
   spawnReward('ammo', house.x - 60, y);
   if (!full) spawnReward('heal', house.x + 60, y);
+  if (has9mm()) spawnReward('ammo9', house.x - 175, y);                    // 9 mm (uzi e revólveres), se tiver uma delas
 }
 
 function startShopVisit() {
@@ -1792,11 +2001,13 @@ function updateWaves(dt) {
     const n = Math.min(run.cfg.group, run.toSpawn, ROGUE.maxEnemies - alive);
     for (let i = 0; i < n; i++) {
       // inimigos especiais saem misturados no meio dos básicos
-      const special = run.tanksLeft + run.rangesLeft;
+      const special = run.tanksLeft + run.rangesLeft + run.rushersLeft + run.healersLeft;
       let type = 'basic';
       if (special > 0 && Math.random() < special / (run.toSpawn - i)) {
-        type = Math.random() < run.tanksLeft / special ? 'tank' : 'range';
-        if (type === 'tank') run.tanksLeft--; else run.rangesLeft--;
+        const r2 = Math.random() * special;
+        const a1 = run.tanksLeft, a2 = a1 + run.rangesLeft, a3 = a2 + run.rushersLeft;
+        type = r2 < a1 ? 'tank' : r2 < a2 ? 'range' : r2 < a3 ? 'rusher' : 'healer';
+        if (type === 'tank') run.tanksLeft--; else if (type === 'range') run.rangesLeft--; else if (type === 'rusher') run.rushersLeft--; else run.healersLeft--;
       }
       spawnEdgeEnemy(run.cfg, type);
     }
@@ -1810,7 +2021,7 @@ function updateWaves(dt) {
 // Dentes: a moeda do jogo. Caem dos jacarés no modo horda (os mais fortes soltam mais)
 // =====================================================================
 const TEETH = {
-  drop: { basic: [0.12, 1, 1], tank: [1, 2, 6], range: [0.7, 1, 2] },   // [chance, valor mínimo, valor máximo]: cada 5 vira um dente grande
+  drop: { basic: [0.2, 1, 1], tank: [1, 3, 7], range: [0.8, 1, 3], rusher: [0.25, 1, 1], healer: [0.9, 2, 4] },   // [chance, valor mínimo, valor máximo]: cada 5 vira um dente grande
   life: 14,          // segundos até sumir (pisca nos últimos 3)
   magnet: 140,       // distância em que o dente voa até o jogador
   scale: 3,
@@ -1820,7 +2031,7 @@ let toothPop = 0;
 function dropTeeth(e) {
   if (mode !== 'rogue') return;
   const [chance, lo, hi] = TEETH.drop[e.T.id] || [0, 0, 0];
-  if (Math.random() > chance) return;
+  if (Math.random() > Math.min(1, chance + teethBonus())) return;
   let v = lo + Math.floor(Math.random() * (hi - lo + 1));
   while (v > 0) {                                   // dente grande vale 5, pequeno vale 1
     const value = v >= 5 ? 5 : 1; v -= value;
@@ -1896,7 +2107,7 @@ function drawTeethHud() {
 // =====================================================================
 const BILL = {
   every: 5,               // aparece depois das waves 5, 10, 15...
-  sc: 5, w: 18, h: 18, legOffset: { x: 4, y: 13 }, stepLen: 16,   // sc 5: um pouco maior que os jacarés
+  sc: 5, w: 20, h: 20, legOffset: { x: 6, y: 15 }, stepLen: 16,   // sc 5: um pouco maior que os jacarés
   runSpeed: 330, leaveSpeed: 380,
   spot: { gap: 14, dy: 40 },     // estaciona à direita da casa (carrinho a 'gap' px da parede), um pouco acima do meio
   shopTime: 45,           // tempo da visita (só corre com a loja fechada); Enter encerra antes
@@ -1909,7 +2120,7 @@ const BILL_HELLO = ['voltei, garoto! os dentes ainda valem ouro hehehe', 'mercad
   'o velho bill nunca falha. quase nunca hehehe', 'dentes fresquinhos? o bill aceita!'];
 const BILL_BYE = ['negócio fechado! hehehe', 'volte sempre, garoto!', 'esse foi um bom negócio... pra mim hehehe'];
 const BILL_BROKE = ['sem dentes, sem negócio, garoto', 'o velho bill não vende fiado!'];
-const bill = { active: false, state: '', x: 0, y: 0, dir: 1, walk: 0, smokeT: 0, dustT: 0, laugh: 0, talk: null, firstMeet: false };
+const bill = { active: false, state: '', x: 0, y: 0, dir: 1, walk: 0, dustT: 0, laugh: 0, talk: null, firstMeet: false };
 const cut = { on: false, bars: 0, waitClick: false };      // cutscene do primeiro encontro
 const billMet = () => { try { return localStorage.getItem('gs_bill_met') === '1'; } catch (e) { return false; } };
 const setBillMet = v => { try { localStorage.setItem('gs_bill_met', v ? '1' : '0'); } catch (e) {} };
@@ -1962,11 +2173,7 @@ function updateBill(dt) {
       particles.push({ x: px + rand(-6, 6), y: bill.y + rand(-2, 2), vx: -bill.dir * rand(20, 60), vy: rand(-25, -5),
         life: rand(0.3, 0.45), age: 0, size: rand(4, 7), grow: 14, color: 'dust', drag: 3 });
   }
-  if ((bill.smokeT -= dt) <= 0) {                            // fumacinha do cachimbo
-    bill.smokeT = rand(0.5, 0.9);
-    const m = billPipeTop();
-    particles.push({ x: m.x, y: m.y, vx: rand(-8, 8) - bill.dir * 6, vy: rand(-40, -25), life: rand(0.9, 1.4), age: 0, size: rand(3, 5), grow: 6, color: 'smoke', drag: 0.5 });
-  }
+
   // fala com efeito de máquina de escrever
   const tk = bill.talk;
   if (tk) {
@@ -1997,8 +2204,8 @@ function billFrame(name) {
   if (!billBodyImg.complete || !billLegImgs[0].complete || !billLegImgs[1].complete) return null;
   const c = document.createElement('canvas'); c.width = BILL.w; c.height = BILL.h + 1;
   const g = c.getContext('2d');
-  g.drawImage(name === 'pass' ? billLegImgs[0] : billLegImgs[1], BILL.legOffset.x, BILL.legOffset.y + 1);
   g.drawImage(billBodyImg, 0, name === 'pass' ? 0 : 1);
+  g.drawImage(name === 'pass' ? billLegImgs[0] : billLegImgs[1], BILL.legOffset.x, BILL.legOffset.y + 1);   // pernas na frente do rabo
   return (billFrames[name] = c);
 }
 // pixel do sprite (olhando para a esquerda) -> mundo
@@ -2008,7 +2215,6 @@ function billPoint(px, py) {
   return { x: bill.x + (bill.dir === 1 ? -lx : lx), y: bill.y - h + py * S + billBob() };
 }
 const billBob = () => -Math.abs(Math.sin(clock * 22)) * 4 * bill.laugh;     // pulinhos da risada
-const billPipeTop = () => billPoint(-2.5, 2);
 function drawBill() {
   const moving = bill.state === 'arrive' || bill.state === 'leave';
   const name = moving ? (Math.floor(bill.walk / BILL.stepLen) % 2 ? 'pass' : 'step') : 'stand';
@@ -2025,16 +2231,23 @@ function drawBill() {
     ctx.rotate(moving ? bill.dir * 0.08 : 0);
     ctx.scale(bill.dir === 1 ? -1 : 1, 1);
     ctx.drawImage(fr, -w / 2, -h, w, h);
-    if (billPipeImg.complete) ctx.drawImage(billPipeImg, -w / 2 - 4 * S, -h + 2 * S, 6 * S, 4 * S);   // cachimbo na ponta da boca
     ctx.restore();
   }
   // carrinho (rodas giram andando)
   const cf = cartImgs[moving ? Math.floor(bill.walk / 18) % 2 : 0];
   if (cf.complete) ctx.drawImage(cf, Math.round(c.x - cw / 2), Math.round(c.y - ch + 2 * CART.sc), cw, ch);
+  // gancho enganchado no alto da lateral do carrinho (por cima dele)
+  if (billHookImg.complete) {
+    ctx.save();
+    ctx.translate(Math.round(bill.x), Math.round(bill.y + billBob()));
+    ctx.scale(bill.dir === 1 ? -1 : 1, 1);
+    ctx.drawImage(billHookImg, -w / 2 - 7 * S, -h + 2 * S, billHookImg.width * S, billHookImg.height * S);
+    ctx.restore();
+  }
   // mão segurando a lateral do carrinho
   if (billHandImg.complete) {
     const hx = c.x - bill.dir * (cw / 2 - 0.5 * S), hy = bill.y - 9.5 * S + billBob() * 0.5;
-    ctx.drawImage(billHandImg, Math.round(hx - 2.5 * S), Math.round(hy - 2 * S), 5 * S, 4 * S);
+    ctx.drawImage(billHandImg, Math.round(hx - billHandImg.width * S / 2), Math.round(hy - billHandImg.height * S / 2), billHandImg.width * S, billHandImg.height * S);
   }
 }
 
@@ -2103,64 +2316,572 @@ function drawBillOverlay() {
 // =====================================================================
 // Loja do velho Bill (o jogo congela enquanto está aberta)
 // =====================================================================
-const shop = { open: false, t: 0, lv: { boots: 0, magnet: 0, card: 0 }, msg: '', msgT: 0, shake: 0, flash: -1 };
+// estado da loja: níveis dos upgrades (por partida), mochila de consumíveis e aba aberta
+const shopLv0 = () => ({ shotgun: 0, uzi: 0, revolvers: 0, cabin: 0, mines: 0, antony: 0, magnet: 0 });
+const shop = { open: false, t: 0, lv: shopLv0(), inv: { dynamite: 0, pepper: 0, ice: 0 }, tab: 'armas', msg: '', msgT: 0, shake: 0, flash: null };
+const SHOP_TABS = [{ id: 'armas', name: 'ARMAS' }, { id: 'defesa', name: 'DEFESA' }, { id: 'consumo', name: 'CONSUMÍVEIS' }];
+// cada nível custa mais que o anterior; consumíveis têm preço fixo e limite na mochila
 const SHOP_ITEMS = [
-  { id: 'ammo', name: 'Caixa de cartuchos', desc: '+15 cartuchos na reserva', price: () => 4,
-    can: () => player.reserve < reserveMax() || 'reserva cheia',
-    buy: () => { player.reserve = Math.min(reserveMax(), player.reserve + 15); reservePop = 1; } },
-  { id: 'repair', name: 'Kit de reparo', desc: 'conserta 40% da casa', price: () => 6,
-    can: () => house.hp < houseMax() || 'casa inteira',
-    buy: () => { house.hp = Math.min(houseMax(), house.hp + houseMax() * 0.4); house.heal = 1; sfx.heal(); } },
-  { id: 'card', name: 'Carta misteriosa', desc: 'escolha 1 de 3 upgrades', price: () => 10 + 5 * shop.lv.card,
-    can: () => true,
-    buy: () => { shop.lv.card++; shop.open = false; openCards(); cards.returnTo = run.phase; run.phase = 'cards'; } },
-  { id: 'boots', name: 'Botas de corrida', desc: '+10% de velocidade (andando e correndo)', price: () => 8 + 5 * shop.lv.boots, max: 3,
-    can: () => shop.lv.boots < 3 || 'máximo',
-    buy: () => { shop.lv.boots++; } },
-  { id: 'magnet', name: 'Ímã de dentes', desc: 'puxa os dentes de mais longe', price: () => 6 + 6 * shop.lv.magnet, max: 2,
-    can: () => shop.lv.magnet < 2 || 'máximo',
-    buy: () => { shop.lv.magnet++; } },
+  // ---- ARMAS ----
+  { tab: 'armas', id: 'shotgun', name: 'Escopeta', max: 6, price: () => 10 + 8 * shop.lv.shotgun,
+    desc: () => `+1 cartucho na escopeta (${ammoMax()} → ${ammoMax() + 1})`,
+    buy: () => { shop.lv.shotgun++; } },
+  { tab: 'armas', id: 'uzi', name: 'Uzi', max: 3, price: () => [25, 40, 60][shop.lv.uzi],
+    desc: () => shop.lv.uzi ? `nível ${shop.lv.uzi + 1}: mais dano e mais rápida` : 'tiros rápidos, menos dano: boa contra grupos  ·  tecla 2 (usa 9 mm)',
+    buy: () => { shop.lv.uzi++; if (shop.lv.uzi === 1) { player.mags.uzi = WEAPONS.uzi.mag; player.reserve9 = Math.max(player.reserve9, AMMO9.start); } } },
+  { tab: 'armas', id: 'revolvers', name: 'Revólveres', max: 3, price: () => [25, 40, 60][shop.lv.revolvers],
+    desc: () => shop.lv.revolvers ? `nível ${shop.lv.revolvers + 1}: mais dano e mais rápidos` : 'dois revólveres, um tiro de cada: precisos e rápidos  ·  tecla 3 (usa 9 mm)',
+    buy: () => { shop.lv.revolvers++; if (shop.lv.revolvers === 1) { player.mags.revolvers = WEAPONS.revolvers.mag; player.reserve9 = Math.max(player.reserve9, AMMO9.start); } } },
+  // ---- DEFESA ----
+  { tab: 'defesa', id: 'cabin', name: 'Cabana', max: 5, price: () => 10 + 8 * shop.lv.cabin,
+    desc: () => `defesa contra mordidas e tiros: ${shop.lv.cabin * 10}% → ${shop.lv.cabin * 10 + 10}%`,
+    buy: () => { shop.lv.cabin++; } },
+  { tab: 'defesa', id: 'mines', name: 'Mina terrestre', max: 6, price: () => 15 + 10 * shop.lv.mines,
+    desc: () => `${shop.lv.mines} → ${shop.lv.mines + 1} mina(s) plantada(s) perto da casa a cada wave`,
+    buy: () => { shop.lv.mines++; } },
+  { tab: 'defesa', id: 'antony', name: 'Primo Antony', max: 3, price: () => [35, 55, 75][shop.lv.antony],
+    desc: () => shop.lv.antony ? `nível ${shop.lv.antony + 1}: atira mais rápido e aguenta mais${shop.lv.antony + 1 === 3 ? ' (espalha 3 tiros)' : ''}` : '"certeza que ele aparece pra dar uma forcinha!" (se cair, compre de novo)',
+    buy: () => { shop.lv.antony++; spawnAntony(); } },
+  // ---- CONSUMÍVEIS ----
+  { tab: 'consumo', id: 'dynamite', name: 'Dinamite', key: 'Q', stack: 5, price: () => 6,
+    desc: () => 'arremesse na mira: explosão em área', buy: () => { shop.inv.dynamite++; } },
+  { tab: 'consumo', id: 'pepper', name: 'Pimenta dedo-de-moça', key: 'F', stack: 3, price: () => 10,
+    desc: () => 'por 15 s seus tiros incendeiam os inimigos', buy: () => { shop.inv.pepper++; } },
+  { tab: 'consumo', id: 'ice', name: 'Cubo de gelo', key: 'C', stack: 3, price: () => 8,
+    desc: () => 'arremesse na mira: congela os inimigos em área', buy: () => { shop.inv.ice++; } },
 ];
+function shopCan(it) {
+  if (it.max) return shop.lv[it.id] < it.max || 'nível máximo';
+  return shop.inv[it.id] < it.stack || 'mochila cheia';
+}
+function ammoMax() { return AMMO_MAX + shop.lv.shotgun; }                 // escopeta: 6 a 12 cartuchos
+const houseDefMul = () => 1 - 0.1 * shop.lv.cabin;                         // cabana: 0% a 60% de defesa
+
+// =====================================================================
+// Sprites das armas e consumíveis novos (itens-loja.png); a mina ainda é pixel art em código
+// =====================================================================
+const PIX_PAL = { k: '#141414', l: '#c9d2de', m: '#5b6170', G: '#5ac54f', R: '#e63946', r: '#c8323c', w: '#ffffff',
+  y: '#ffd166', g: '#3f9b3a', b: '#9fe3ff', c: '#5fb8e0', o: '#ff9f1c' };
+function pixImg(rows) {
+  const c = document.createElement('canvas'); c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext('2d');
+  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (PIX_PAL[ch]) { g.fillStyle = PIX_PAL[ch]; g.fillRect(x, y, 1, 1); } }));
+  return c;
+}
+const UZI_IMG = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAPCAYAAADtc08vAAAA5klEQVR4nGNggAJhYeH/yDQugFVeWFj4/6SFO/+D6OPn74JpXBimDqaXEcTRt4xmUFZXQTH07s07YDFdPXUw31RPhWHekq1g8YvHl8LVsaBrAgFkwy5fuolCwwDIUpBBjCAX1PctA9sAA6cv3UHhowMfFzM4m5GYgMMG3r59C9bLCBMAGeK+yQbMvnn5D8OD6hNgRSBxcRlrhpdPjsI1IQMWZA5IIwiANBMLWFCcVH0C7hVstmEDTOgCIOeiAwlZBeINePnkKIaiF48f4DSABZlDrLPxugAbIMkL2AA+LxBlALZwgQEANvZoouIHsNUAAAAASUVORK5CYII=');   // uzi.png (16x15, cano para a direita, mão no cabo)
+const PREV_IMG = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAICAYAAADJEc7MAAAAeElEQVR4nGNggAJhYeH/DCQARpimLXtOMfi4mJGmEaa5vm8Zg6meCgMMnL50hwEbaCyKQrURWbGpngpeFzCCNLlvsgFzbl7+w/D6OivD1yWHwfy3b9/CXYQOWGAMZE34NKDYqMbDx6DCy86w7flrojTBAUgzqdEBAOe3Mu3JfLR1AAAAAElFTkSuQmCC');   // revolver-jogador.png (14x8, espelhado: cano para a direita)
+const CONS_IMGS = {
+  dynamite: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAALCAYAAACgR9dcAAAAqklEQVR4nGNgIALY2tr+V1dX/w+ikcWZ8GkSFhb+D8KvXr1iuHnzJiNIDGQIQc0gTWXcEgwiIiIMb968AYsdPnyYUUxMDL/NMI2JIoIMc/9y4nQZEz6Ntz59YfB//5jh7du3GE5mwKaxU077/ysjm/9HVAzA/kWWt8UVYPhshIFXr15hGEDQRhj4/zocrOb/IhGIPLEawZqhmkCGwDUToxGvAcRoBFmCzAcAWtpu8x804WYAAAAASUVORK5CYII='),   // dinamite.png
+  pepper:   img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAOCAYAAAD5YeaVAAAA70lEQVR4nGNgwANkhGT+I/OZsCkSFhZGUWQpr/gfXYwBXQHIZBCN1+ROOe3/jz//BrMD/nMxhMuogzWwoCsMl1H/b83GymAtJMIQ8e4NA4idyCfIYMTE8h9DMQyo8fEwrIDzGBi6vr7A7gwQuPXpCwMycOEUYWBkwALCZdT/53Jwoogd/fWbgQXkmXP//jCsfHITrtGICeE6kHM0H15nePv2LSNWZ4A0I4MybgkwzQSSAFkJCx5kJ4BMnf/mPVwz3D6Q1UZy2uBggwGQ9SCPwZwIVuz//jHDRkFZDHciKwQBMAPmBGQAsqn80VWU0AIA0OdRU9ryLZgAAAAASUVORK5CYII='),   // pimenta.png
+  ice:      img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAOCAYAAAD0f5bSAAAAyUlEQVR4nHVSwQnDMAw8m5CXoUt0gNK1kgE6QgdwxmrpAF0ikE8DjcrFKJWd+EDGsU7ynWKggjCKMGr5DCvx8ZH4lTW4zxmAt+QwitwDINd2I8RLi7XQFDsSp/eckgA6DwwLdnuif80I5zbdEFWGkUVYiZbXWBmdB9xTu/27q4rMeCw6M9SjzRE82wYxLMmDggOxOQX9ey5HpkvYfHYTDKFWQL+eC80eEcrv25TkNdPJOR70HKuZmlVAMqHcHezU9P/UnZYono7FDyXJyHc+j6SSAAAAAElFTkSuQmCC'),   // gelo.png
+  mine:     pixImg(['...kRk...', '.kkmmmkk.', 'kmmlmmmmk', 'kmmmmmmmk', '.kkkkkkk.']),
+};
+const GUN_SPECS = {
+  shotgun:   { img: gunSprite, w: GUN_W, h: GUN_H, grip: GUN_GRIP, muzzle: GUN_MUZZLE },
+  uzi:       { img: UZI_IMG, w: 16, h: 15, grip: { x: 4, y: 6.5 }, muzzle: { x: 16, y: 3.5 } },
+  revolvers: { img: PREV_IMG, w: 14, h: 8, grip: { x: 2, y: 4.5 }, muzzle: { x: 14, y: 2 } },
+};
+const gunSpec = () => GUN_SPECS[player.weapon] || GUN_SPECS.shotgun;
+// munição de cada arma: gauges do HUD (cheia/vazia) e caixas de munição
+const BULLET_IMGS = {
+  uzi:       [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAMCAYAAABBV8wuAAAAbklEQVR4nGNggAIFBYX/IAzjs8AEufj1oAoY/j948ICRBSYoIasAlngBlWQCcWCCyGywUXvDlsElQEDxCg9EgkFNEEWCgeE3A9gobIBMCcWI3wwMt96DMZgNk7jf9AXiADVBhvsrWMESjMjBgAwALOcdQsBC9q8AAAAASUVORK5CYII='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAMCAYAAABBV8wuAAAAZUlEQVR4nGNggAIFBYX/IAzjs8AEpWSUYWL/Hzx4wMgCE5SUkoNJgCWZQCSyIIwNNirY8Duyaoazp6ASTPxKKBIMDCcYwEZhA6RLMMI81ZZuARaomnkCoQMkCHIACHeURaHqQAcAVz8Yi0zdHdoAAAAASUVORK5CYII=')],             // municao-uzi.gif (6x12)
+  revolvers: [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAKCAYAAAB8OZQwAAAAaUlEQVR4nGNkYGBgUFBQ+A+iQeDBgweMLCABLn49BglZBYYXjx8wKCgw/GcCyYIEkGkWELE3bBlMN4PiFR6IIIOaIFyQgeE3A1g7OsAtqBjxm4Hh1nsIDRO83/QFbO79FaxgQUZkh8MAACMsGLw2c9gZAAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAKCAYAAAB8OZQwAAAAZElEQVR4nGNkYGBgUFBQ+A+iQeDBgweMLCABCyt3BkVlZYb7d+8yMDDs/M8EkgUJINMsIMJe/jlMN8NymOCLD7/hgiAA1o4OcAs2TNnCICHACqbhgjNqAsHmNuT4gAUZkR0OAwA2LBsC0l3QnQAAAABJRU5ErkJggg==')],   // municao-revolver.gif (5x10)
+};
+const AMMO_BOX_IMGS = { ammo: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAANCAYAAABPeYUaAAAAt0lEQVR4nGNkYGBg+P///38GMgEjCMAMmPU8gWQD0iQXQAwCGWIy04chzU+EobXzI9EGVJfzM8za9IbhTPoWBhZ0yez1txnO/fvDYMTEgpOeGqiKoocJ3QBiALo6DJeUrfrFwHDrPQODmiBOuiuMDbdLiDGA4dZ7iDpcLpklZ8XAIAflEKLRDXl9nZVhFsMbBlLB6+usCO88nLCeZAMYkPQxgRIcWSZAAUg/PExgTiPLIBBBad4BADwuVKvCalRMAAAAAElFTkSuQmCC'), ammo9: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAANCAYAAABPeYUaAAAAp0lEQVR4nGNkYGBg+P///38GMgEjCMAMYDz3i2QD/huxQQwCGcI48y4Dg6ksA8OcjcSbkOLPwHD6McP/dGUGJgYqABYMJ8ZXMzDces/AoCaIk2Zc2IqihwnDACIAujoMl6StzmW4e/MOg7K6Ck56VuhkFD2oAUsqgAYsxCUXz5FuAFyfMsQlID7YNSQCkCtAgAmU4EjWjQRA+hEBS5aXIC4Bu4LSvAMAW3hM6nBSY4AAAAAASUVORK5CYII=') };   // caixas-municao.png: verde = cartuchos da escopeta, azul = 9 mm
+// tipos de caixa: qual reserva enche e quanto vale em relação à da escopeta
+const AMMO_KINDS = {
+  ammo:    { res: 'reserve',    weapon: 'shotgun',   mult: 1, max: () => reserveMax() },
+  ammo9:   { res: 'reserve9',   weapon: 'uzi',       mult: 4, max: () => AMMO9.max },   // 9 mm: uzi e revólveres usam a mesma
+};
+const ammoKindOf = w => w === 'shotgun' ? 'ammo' : 'ammo9';
+const altRes = () => 'reserve9';
+const AMMO9 = { max: 150, start: 30 };                // reserva de 9 mm compartilhada
+const has9mm = () => shop.lv.uzi > 0 || shop.lv.revolvers > 0;
+
+// =====================================================================
+// Armas novas: Uzi e dois revólveres (pente próprio, reserva infinita)
+// =====================================================================
+const WEAPONS = {
+  shotgun:   { name: 'ESCOPETA' },
+  uzi:       { name: 'UZI', mag: 30, reload: 1.5, spread: 0.09, pierce: 1, scale: 4, speed: 1700,
+               dmg: lv => 7 + 2 * (lv - 1), cd: lv => [0.09, 0.078, 0.066][lv - 1] || 0.066 },   // ~80 de dano/s no nível 1
+  revolvers: { name: 'REVÓLVERES', mag: 12, reload: 1.3, spread: 0.015, pierce: 3, scale: 5, speed: 2000,
+               dmg: lv => 20 + 5 * (lv - 1), cd: lv => [0.24, 0.2, 0.16][lv - 1] || 0.16 },   // ~85/s, atravessa 3
+};
+const WEAPON_ORDER = ['shotgun', 'uzi', 'revolvers'];
+const altReloadTime = () => WEAPONS[player.weapon].reload / (1 + 0.1 * lv.reload);   // carta Mãos Rápidas
+const REV_SPACING = 7;          // px do sprite entre os dois revólveres (um mais à frente que o outro)
+const ownsWeapon = id => id === 'shotgun' || shop.lv[id] > 0;
+let weaponPop = 0;
+function setWeapon(id) {
+  if (!id || !ownsWeapon(id) || player.weapon === id) return;
+  player.weapon = id; player.reloading = false; player.reloadT = 0;
+  player.cooldown = Math.max(player.cooldown, 0.15);
+  weaponPop = 1; sfx.swap();
+}
+function cycleWeapon(dir) {
+  const owned = WEAPON_ORDER.filter(ownsWeapon);
+  if (owned.length < 2) return;
+  const i = owned.indexOf(player.weapon);
+  setWeapon(owned[(i + dir + owned.length) % owned.length]);
+}
+function refillAltMags() { for (const id of ['uzi', 'revolvers']) if (shop.lv[id] > 0) player.mags[id] = WEAPONS[id].mag; if (has9mm()) player.reserve9 = AMMO9.max; }
+function fireAlt() {
+  const id = player.weapon, W = WEAPONS[id], wl = shop.lv[id];   // wl: nível da arma; lv: níveis das cartas
+  if (player.mags[id] <= 0) {
+    if (player[altRes(id)] > 0) { if (!player.reloading) startReload(); }
+    else if (mouse.pressed) { emptyFlash = 1; sfx.dry(); player.kick = 0.8; }      // sem munição nenhuma: clique seco
+    player.cooldown = 0.15; return;
+  }
+  player.reloading = false; player.reloadT = 0;
+  player.mags[id]--;
+  player.cooldown = W.cd(wl) / (1 + 0.1 * lv.atkSpd);
+  let m = muzzlePos();
+  if (id === 'revolvers') {                       // alterna: um tiro de cada revólver
+    player.revSide ^= 1;
+    if (player.revSide) {
+      const g = gunTransform(), c = Math.cos(g.rot), s2 = Math.sin(g.rot), ox = REV_SPACING * SCALE, oy = 0;
+      m = { x: m.x + ox * c - oy * s2, y: m.y + ox * s2 + oy * c };
+    }
+  }
+  const a = player.aim + rand(-W.spread, W.spread), sp = W.speed * rand(0.95, 1.05);
+  bullets.push({ x: m.x, y: m.y, px: m.x, py: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.6, age: 0,
+    hits: [], dmgMul: 1, dmg: W.dmg(wl) * (1 + 0.1 * lv.shotDmg), pierce: W.pierce, scale: W.scale * bulletMul(), fire: player.pepperT > 0 });
+  player.flash = 0.04; player.flashAngle = player.aim;
+  for (let i = 0; i < 4; i++) {
+    const pa = player.aim + rand(-0.5, 0.5), ps = rand(200, 500);
+    particles.push({ x: m.x, y: m.y, vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, life: rand(0.06, 0.14), age: 0, size: rand(2, 3), color: '#ffe08a', drag: 8 });
+  }
+  const h = hand(), side = Math.cos(player.aim) < 0 ? 1 : -1;
+  particles.push({ x: h.x, y: h.y - 6, vx: -Math.cos(player.aim) * rand(40, 100) + side * rand(10, 40), vy: rand(-280, -180),
+    life: 1, age: 0, size: 0, color: 'cap', gravity: 1100, floor: h.y + player.h / 2 - 8, rot: 0, vr: rand(-20, 20), drag: 0.5 });
+  player.kick = id === 'uzi' ? 0.8 : 1.4; player.kickRot = id === 'uzi' ? 0.06 : 0.15;
+  cam.trauma = Math.min(1, cam.trauma + (id === 'uzi' ? 0.04 : 0.08));
+  crossPulse = 1;
+  if (id === 'uzi') sfx.uzi(); else sfx.revolver();
+}
+
+// =====================================================================
+// Consumíveis: dinamite e gelo (arremessados na mira) e pimenta (tiros de fogo)
+// =====================================================================
+const FIRE = { pepperTime: 15, dur: 3, dps: 12 };
+const fireImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAtElEQVR4nGNgGNTgbZnIf2QaG2AixiAhHVRDkNlMRNmqJohhIAww4jIABoS73jAiyyHzcXpBSAfVFrh4kCCGRUxYbQc5Gc3Z/0+oYg1IRnTNMFverXuP4ap3VxAuA7FB3mFCVwQGt1A1wzRgAyxYRdUEGYQYMA2ByYEsgFnGgqEAZDtSGCB7BTkQGeMgscGIrBcUDnBvqAmCNSNrQjYQFp040wF6NKKHAU4DkA3BBtATEsUAAOU7TYelrndBAAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAwElEQVR4nGNgoAd4WybyH5kmGfxfhFsjE1G2qwkykGzAWyTnMlrcZiTbBSR54S2SrUJBSM5WE0QxBFkdE7KgkA6Sabfeo4Y6miEYBgh3vWFEDqx3VxgYQAaCDb31HoKxeIcJxbhb7xn+n1D9D1IEcw3IIGwA5jomrLIwl6gJQsICxEcSw+qCtzD/Qp2KNe6hYshhxYgsD3I+sgHv1r1HiQ0QHwbAYYZuANiQRSL/cfkbWSNOAPIKcvShs8nOULgAABKqXa9pGUq0AAAAAElFTkSuQmCC')];   // fogo.gif (16x16, 2 quadros de 100 ms)        // pimenta: 15 s; queima 3 s a 12 de dano/s
+const DYNAMITE = { r: 170, dmg: 160 };
+const ICE = { r: 190, dur: 4 };
+const THROW = { maxDist: 520, flight: 0.55, height: 120 };
+const throwables = [];
+function ignite(e) { e.burnT = FIRE.dur; }
+function throwItem(kind) {
+  if (gameOver || cut.on || shop.open || paused) return;
+  if ((shop.inv[kind] || 0) <= 0) { sfx.deny(); consPop[kind] = 1; return; }
+  shop.inv[kind]--; consPop[kind] = 1;
+  const m = mouseWorld(), dx = m.x - player.x, dy = m.y - player.y, d = Math.hypot(dx, dy), k = d > THROW.maxDist ? THROW.maxDist / d : 1;
+  throwables.push({ kind, x0: player.x, y0: player.y, x1: player.x + dx * k, y1: player.y + dy * k, t: 0, spin: 0 });
+  sfx.toss();
+}
+function usePepper() {
+  if (gameOver || cut.on || shop.open || paused) return;
+  if (shop.inv.pepper <= 0) { sfx.deny(); consPop.pepper = 1; return; }
+  shop.inv.pepper--; consPop.pepper = 1;
+  player.pepperT = FIRE.pepperTime;
+  sfx.ignite();
+  for (let i = 0; i < 18; i++) {
+    const a = rand(0, Math.PI * 2), sp = rand(80, 240);
+    particles.push({ x: player.x, y: player.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, life: rand(0.3, 0.6), age: 0, size: rand(3, 6), color: Math.random() < 0.5 ? '#ff9f1c' : '#e63946', drag: 4 });
+  }
+}
+const throwPos = t => { const k = Math.min(1, t.t); return { x: t.x0 + (t.x1 - t.x0) * k, y: t.y0 + (t.y1 - t.y0) * k, z: Math.sin(Math.PI * k) * THROW.height }; };
+function updateThrowables(dt) {
+  for (let i = throwables.length - 1; i >= 0; i--) {
+    const t = throwables[i];
+    t.t += dt / THROW.flight; t.spin += dt * 14;
+    if (t.kind === 'dynamite' && Math.random() < dt * 40) {         // pavio soltando faísca
+      const p = throwPos(t);
+      particles.push({ x: p.x, y: p.y - p.z - 14, vx: rand(-40, 40), vy: rand(-60, 0), life: 0.2, age: 0, size: 2, color: '#ffd166', drag: 4 });
+    }
+    if (t.t >= 1) {
+      if (t.kind === 'dynamite') explode(t.x1, t.y1, DYNAMITE.r, DYNAMITE.dmg);
+      else freezeArea(t.x1, t.y1, ICE.r, ICE.dur);
+      throwables.splice(i, 1);
+    }
+  }
+}
+function drawThrowable(t) {
+  const p = throwPos(t), im = CONS_IMGS[t.kind], S = 3;
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 10, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y - p.z)); ctx.rotate(t.spin);
+  ctx.drawImage(im, -im.width * S / 2, -im.height * S / 2, im.width * S, im.height * S);
+  ctx.restore();
+}
+// dano em área (explosões): mais forte no centro, empurra para fora
+function blastEnemies(x, y, r, dmg, knock) {
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    const d = Math.hypot(e.x - x, e.y - y);
+    if (d > r) continue;
+    const k = 1 - 0.5 * d / r, ang = Math.atan2(e.y - y, e.x - x), dealt = dmg * k;
+    e.hp -= dealt; e.flash = 0.12; e.jiggle = 1; e.hpShow = 2;
+    if (!e.homeRel) { e.x += Math.cos(ang) * knock * k * e.T.knockMul; e.y += Math.sin(ang) * knock * k * e.T.knockMul; }
+    particles.push({ x: e.x + rand(-10, 10), y: e.y - 40, vx: rand(-20, 20), vy: -80, life: 0.7, age: 0, size: 0, color: 'text', text: `${Math.round(dealt)}`, tint: '#ff9f1c', drag: 3 });
+    if (e.hp <= 0) killEnemy(e);
+  }
+}
+function explode(x, y, r, dmg) {
+  sfx.boom();
+  cam.trauma = Math.min(1, cam.trauma + 0.55);
+  particles.push({ x, y, vx: 0, vy: 0, life: 0.45, age: 0, size: 20, grow: r * 4, color: 'ring', drag: 0 });
+  for (let i = 0; i < 36; i++) {
+    const a = rand(0, Math.PI * 2), sp = rand(150, 520);
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: rand(0.3, 0.7), age: 0, size: rand(5, 11),
+      color: ['#ffd166', '#ff9f1c', '#e63946', '#ffffff'][Math.floor(Math.random() * 4)], drag: 4 });
+  }
+  for (let i = 0; i < 14; i++) {
+    const a = rand(0, Math.PI * 2), sp = rand(30, 140);
+    particles.push({ x: x + rand(-20, 20), y: y + rand(-20, 20), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: rand(0.8, 1.4), age: 0, size: rand(14, 24), grow: 30, color: 'smoke', drag: 2 });
+  }
+  blastEnemies(x, y, r, dmg, 110);
+}
+function freezeArea(x, y, r, dur) {
+  sfx.freeze();
+  particles.push({ x, y, vx: 0, vy: 0, life: 0.5, age: 0, size: 20, grow: r * 3.5, color: 'ring', drag: 0 });
+  for (let i = 0; i < 30; i++) {
+    const a = rand(0, Math.PI * 2), sp = rand(80, 360);
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, life: rand(0.4, 0.9), age: 0, size: rand(3, 7), color: Math.random() < 0.5 ? '#bfefff' : '#ffffff', drag: 4 });
+  }
+  for (const e of enemies) {
+    if (!e.alive || Math.hypot(e.x - x, e.y - y) > r) continue;
+    e.frozenT = Math.max(e.frozenT || 0, dur); e.flash = 0.1;
+  }
+}
+
+// =====================================================================
+// Minas terrestres: plantadas perto da casa no começo de cada wave
+// =====================================================================
+const MINE = { r: 150, dmg: 240, trigger: 46, cap: 12 };
+const mines = [];
+function plantMines() {
+  if (mode !== 'rogue' || shop.lv.mines <= 0) return;
+  const R = houseRect();
+  for (let i = 0; i < shop.lv.mines && mines.length < MINE.cap; i++) {
+    for (let tries = 0; tries < 30; tries++) {
+      const a = rand(0, Math.PI * 2), d = rand(250, 380);
+      const x = house.x + Math.cos(a) * d, y = house.y + Math.sin(a) * d * 0.8;
+      if (x > R.l - 60 && x < R.r + 60 && y > R.t - 90 && y < R.b + 60) continue;
+      if (mines.some(m => Math.hypot(m.x - x, m.y - y) < 80)) continue;
+      mines.push({ x, y, armT: 0.8 + i * 0.15, blink: rand(0, 1) });
+      break;
+    }
+  }
+}
+function updateMines(dt) {
+  for (let i = mines.length - 1; i >= 0; i--) {
+    const m = mines[i];
+    m.blink += dt;
+    if ((m.armT -= dt) > 0) continue;
+    const hit = enemies.some(e => e.alive && !e.homeRel && Math.hypot(e.x - m.x, e.y + e.T.h * e.T.sc / 2 - m.y) < MINE.trigger + e.T.hitbox.w * e.T.sc / 2);
+    if (hit) { mines.splice(i, 1); explode(m.x, m.y - 10, MINE.r, MINE.dmg); }
+  }
+}
+function drawMine(m) {
+  const im = CONS_IMGS.mine, S = 3, drop = Math.max(0, m.armT) * 200;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(m.x, m.y, 15, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const x = Math.round(m.x - im.width * S / 2), y = Math.round(m.y - im.height * S - drop);
+  ctx.drawImage(im, x, y, im.width * S, im.height * S);
+  if (m.armT <= 0 && Math.sin(m.blink * 6) > 0.3) {                // luz vermelha piscando (armada)
+    ctx.fillStyle = '#ff6b6b'; ctx.fillRect(x + 4 * S, y, S, S);
+    const g = ctx.createRadialGradient(x + 4.5 * S, y + S / 2, 0, x + 4.5 * S, y + S / 2, 10);
+    g.addColorStop(0, 'rgba(255,60,60,.6)'); g.addColorStop(1, 'rgba(255,60,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(x + 4.5 * S - 10, y + S / 2 - 10, 20, 20);
+  }
+}
+
+// =====================================================================
+// Primo Antony: jacaré aliado que fica perto da casa atirando nos inimigos
+// =====================================================================
+const ANTONY = { range: 600, speed: 190, filter: 'hue-rotate(-55deg) saturate(1.25)', aggro: 210, heal: 0.3,
+  hp: lv => 120 + 40 * (lv - 1),
+  dmg: lv => 12 + 5 * (lv - 1), cd: lv => [0.85, 0.65, 0.5][lv - 1] || 0.5, pellets: lv => lv >= 3 ? 3 : 1 };
+const ally = { active: false, x: 0, y: 0, aim: 0, facing: 1, cd: 0, walk: 0, walking: false, talkT: 0, kick: 0, hp: 0, maxHp: 0, flash: 0, hpShow: 0 };
+function spawnAntony() {
+  if (shop.lv.antony <= 0 || (mode !== 'rogue' && mode !== 'test')) return;
+  ally.maxHp = ANTONY.hp(shop.lv.antony);
+  if (ally.active) { ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * ANTONY.heal); return; }   // nova wave/upgrade: recupera um pouco
+  Object.assign(ally, { active: true, x: house.x + HOUSE_DOOR_X * HOUSE_SCALE, y: houseRect().b + 34, aim: 0, facing: -1, cd: 1, talkT: 3, walk: 0, kick: 0,
+    hp: ally.maxHp, flash: 0, hpShow: 0 });
+  particles.push({ x: ally.x, y: ally.y, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
+}
+// Antony leva mordidas e tiros; se morrer, só volta comprando de novo na próxima loja do Bill
+function damageAlly(dmg) {
+  if (!ally.active || gameOver) return;
+  ally.hp -= dmg; ally.flash = 0.1; ally.hpShow = 2.5;
+  sfx.hit();
+  for (let i = 0; i < 5; i++)
+    particles.push({ x: ally.x + rand(-12, 12), y: ally.y + rand(-20, 10), vx: rand(-150, 150), vy: rand(-180, -40), life: rand(0.2, 0.4), age: 0, size: rand(3, 5), color: Math.random() < 0.6 ? '#ac3232' : '#ffffff', drag: 6 });
+  if (ally.hp <= 0) killAlly();
+}
+function killAlly() {
+  ally.active = false; shop.lv.antony = 0;
+  sfx.kill(); cam.trauma = Math.min(1, cam.trauma + 0.25);
+  for (let i = 0; i < 28; i++) {
+    const a = rand(0, Math.PI * 2), sp = rand(100, 420);
+    particles.push({ x: ally.x + rand(-15, 15), y: ally.y + rand(-20, 20), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.3, 0.7), age: 0, size: rand(4, 8), color: Math.random() < 0.6 ? '#9fbf3a' : '#ffffff', drag: 5 });
+  }
+  particles.push({ x: ally.x, y: ally.y - 60, vx: 0, vy: -40, life: 1.6, age: 0, size: 0, color: 'text', text: 'ANTONY CAIU!', tint: '#e63946', drag: 1 });
+}
+const allyTouch = e => ally.active && Math.abs(e.x - ally.x) < (e.T.hitbox.w * e.T.sc + PLAYER_HITBOX.w * SCALE) / 2 + 4
+  && Math.abs(e.y - ally.y) < (e.T.hitbox.h * e.T.sc + PLAYER_HITBOX.h * SCALE) / 2 + 4;
+function updateAlly(dt) {
+  if (!ally.active) return;
+  ally.talkT -= dt; ally.cd -= dt; ally.kick *= Math.exp(-14 * dt); ally.flash -= dt; ally.hpShow -= dt;
+  let best = null, bd = ANTONY.range;
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    const d = Math.hypot(e.x - ally.x, e.y - ally.y);
+    if (d < bd) { bd = d; best = e; }
+  }
+  // fica perto da frente da casa (à esquerda da porta), mas chega um pouco mais perto do alvo
+  const ax = house.x - 70, ay = houseRect().b + 70;
+  let tx = ax, ty = ay;
+  if (best) { tx = ax + Math.max(-140, Math.min(140, (best.x - ax) * 0.25)); ty = ay + Math.max(-40, Math.min(110, (best.y - ay) * 0.25)); }
+  const dx = tx - ally.x, dy = ty - ally.y, d = Math.hypot(dx, dy);
+  ally.walking = d > 6;
+  if (ally.walking) {
+    const st = Math.min(d, ANTONY.speed * dt);
+    ally.x += dx / d * st; ally.y += dy / d * st; ally.walk += st;
+    if (!best) ally.facing = dx < 0 ? -1 : 1;
+  }
+  if (!best) return;
+  ally.aim = Math.atan2(best.y - (ally.y + GUN_HAND.y * SCALE), best.x - ally.x);
+  ally.facing = Math.cos(ally.aim) < 0 ? -1 : 1;
+  if (ally.cd > 0 || gameOver) return;
+  const lv = shop.lv.antony;
+  ally.cd = ANTONY.cd(lv); ally.kick = 2;
+  const hx = ally.x + GUN_HAND.x * SCALE, hy = ally.y + GUN_HAND.y * SCALE, reach = (GUN_RADIUS + GUN_MUZZLE.x - GUN_GRIP.x) * SCALE;
+  const mx = hx + Math.cos(ally.aim) * reach, my = hy + Math.sin(ally.aim) * reach, n = ANTONY.pellets(lv);
+  for (let i = 0; i < n; i++) {
+    const a = ally.aim + (n > 1 ? (i / (n - 1) - 0.5) * 0.25 : 0) + rand(-0.03, 0.03), sp = 1800;
+    bullets.push({ x: mx, y: my, px: mx, py: my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.2, age: 0,
+      hits: [], dmgMul: 1, dmg: ANTONY.dmg(lv), pierce: 1, scale: 5 });
+  }
+  for (let i = 0; i < 5; i++) {
+    const pa = ally.aim + rand(-0.5, 0.5), ps = rand(200, 500);
+    particles.push({ x: mx, y: my, vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, life: rand(0.06, 0.14), age: 0, size: rand(2, 3), color: '#ffe08a', drag: 8 });
+  }
+  sfx.revolver();
+}
+function drawAlly() {
+  const S = SCALE, w = player.w, h = player.h;
+  const name = ally.walking ? (Math.floor(ally.walk / WALK.stepLen) % 2 ? 'step' : 'pass') : 'stand';
+  const fr = walkFrame(name);
+  if (!fr || !gunSprite.complete) return;
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath(); ctx.ellipse(ally.x, ally.y + h / 2 - 2, w * 0.35, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save();
+  ctx.translate(Math.round(ally.x), Math.round(ally.y + h / 2));
+  if (ally.facing !== SPRITE_FACES) ctx.scale(-1, 1);
+  ctx.filter = ANTONY.filter;                       // primo: mesma família, outra cor (sprite próprio depois)
+  ctx.drawImage(ally.flash > 0 ? whiteOf(fr) : fr, -w / 2, -h - S, w, h + S);
+  ctx.restore();
+  const a = ally.aim, flip = Math.cos(a) < 0 ? -1 : 1, r = (GUN_RADIUS - ally.kick) * S;
+  const hx = ally.x + GUN_HAND.x * S, hy = ally.y + GUN_HAND.y * S;
+  ctx.save();
+  ctx.translate(Math.round(hx + Math.cos(a) * r), Math.round(hy + Math.sin(a) * r));
+  ctx.rotate(a);
+  if (flip < 0) ctx.scale(1, -1);
+  ctx.filter = ANTONY.filter;
+  ctx.drawImage(gunSprite, -GUN_GRIP.x * S, -GUN_GRIP.y * S, GUN_W * S, GUN_H * S);
+  ctx.restore();
+  // nome e fala ao chegar
+  const top = ally.y - h / 2 - 12;
+  ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
+  if (ally.talkT > 0) {
+    const t = 'E aí, primo! Deixa comigo!', tw = ctx.measureText(t).width + 16;
+    ctx.fillStyle = '#fff6e0'; ctx.fillRect(ally.x - tw / 2, top - 40, tw, 22);
+    ctx.strokeStyle = '#1b1410'; ctx.lineWidth = 2; ctx.strokeRect(ally.x - tw / 2, top - 40, tw, 22);
+    ctx.fillStyle = '#2a1d16'; ctx.fillText(t, ally.x, top - 25);
+  }
+  ctx.fillStyle = '#000'; ctx.fillText('ANTONY', ally.x + 1, top + 1);
+  ctx.fillStyle = '#d9e86a'; ctx.fillText('ANTONY', ally.x, top);
+  ctx.textAlign = 'left';
+  if (ally.hp < ally.maxHp) {                        // barra de vida (quando não está cheia)
+    const bw = 56, bh = 6, bx = ally.x - bw / 2, by = top + 5;
+    ctx.fillStyle = '#000'; ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+    ctx.fillStyle = '#3a1414'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = ally.hpShow > 2.2 ? '#ffffff' : '#9fbf3a'; ctx.fillRect(bx, by, Math.round(bw * Math.max(0, ally.hp) / ally.maxHp), bh);
+  }
+}
+
+function updateCombatExtras(dt) {
+  weaponPop *= Math.exp(-6 * dt);
+  for (const k in consPop) consPop[k] *= Math.exp(-6 * dt);
+  if (player.pepperT > 0) {
+    player.pepperT -= dt;
+    if (Math.random() < dt * 18) {                  // brasinhas saindo da arma
+      const m = muzzlePos();
+      particles.push({ x: m.x, y: m.y, vx: rand(-30, 30), vy: rand(-90, -40), life: rand(0.3, 0.5), age: 0, size: rand(2, 4), color: Math.random() < 0.5 ? '#ff9f1c' : '#ffd166', drag: 2 });
+    }
+  }
+  updateThrowables(dt);
+  updateMines(dt);
+  updateAlly(dt);
+}
+
+// =====================================================================
+// HUD: armas compradas, munição das armas novas e consumíveis
+// =====================================================================
+const consPop = { dynamite: 0, pepper: 0, ice: 0 };
+function drawWeaponHud() {
+  const owned = WEAPON_ORDER.filter(ownsWeapon);
+  if (owned.length < 2) return;
+  const s = 52, gap = 6, y = canvas.height - AMMO_MARGIN - 16 * AMMO_SCALE - 76;
+  const xEnd = canvas.width - AMMO_MARGIN - 52 - 10;
+  owned.forEach((id, i) => {
+    const x = xEnd - (owned.length - i) * (s + gap), on = player.weapon === id, G = GUN_SPECS[id];
+    const pop = on ? 1 + weaponPop * 0.15 : 1;
+    ctx.save(); ctx.translate(x + s / 2, y + s / 2); ctx.scale(pop, pop); ctx.translate(-s / 2, -s / 2);
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
+    ctx.strokeStyle = on ? '#e9c46a' : 'rgba(244,241,222,.35)'; ctx.lineWidth = on ? 3 : 1; ctx.strokeRect(1, 1, s - 2, s - 2);
+    const k = Math.min((s - 10) / G.w, (s - 18) / G.h);
+    ctx.globalAlpha = on ? 1 : 0.6;
+    ctx.drawImage(G.img, (s - G.w * k) / 2, (s - G.h * k) / 2 + 4, G.w * k, G.h * k);
+    ctx.globalAlpha = 1;
+    ctx.font = 'bold 12px monospace'; ctx.fillStyle = on ? '#e9c46a' : '#dfe6d6';
+    ctx.fillText(`${WEAPON_ORDER.indexOf(id) + 1}`, 5, 14);
+    ctx.restore();
+  });
+}
+function drawAltAmmo() {
+  const id = player.weapon, W = WEAPONS[id], n = W.mag, mag = player.mags[id], res = player[altRes(id)];
+  const [full, empty] = BULLET_IMGS[id];
+  // uzi: 2 fileiras de 15; revólveres: 1 fileira de 12
+  const perRow = id === 'uzi' ? 15 : n, rows = Math.ceil(n / perRow), k = id === 'uzi' ? 2 : 3, gap = id === 'uzi' ? 2 : 4;
+  const bw = full.width * k, bh = full.height * k;
+  const total = perRow * bw + (perRow - 1) * gap, totalH = rows * bh + (rows - 1) * 4;
+  const x0 = canvas.width - AMMO_MARGIN - total, y0 = canvas.height - AMMO_MARGIN - totalH;
+  for (let i = 0; i < n; i++) {
+    const shakeX = emptyFlash > 0.05 ? rand(-1, 1) * emptyFlash * 3 : 0;
+    const x = Math.round(x0 + (i % perRow) * (bw + gap) + shakeX), y = Math.round(y0 + Math.floor(i / perRow) * (bh + 4));
+    if (full.complete && empty.complete) ctx.drawImage(i < mag ? full : empty, x, y, bw, bh);
+  }
+  if (emptyFlash > 0.05) {                             // sem munição: contorno vermelho
+    ctx.strokeStyle = `rgba(230,57,70,${emptyFlash})`; ctx.lineWidth = 3; ctx.strokeRect(x0 - 6, y0 - 6, total + 12, totalH + 12);
+  }
+  if (player.reloading) {
+    const p2 = Math.min(1, player.reloadT / altReloadTime());
+    ctx.fillStyle = '#000'; ctx.fillRect(x0, y0 - 14, total, 6);
+    ctx.fillStyle = '#ffe08a'; ctx.fillRect(x0, y0 - 14, Math.round(total * p2), 6);
+  }
+  drawMeleeIcon(canvas.width - AMMO_MARGIN - 52, canvas.height - AMMO_MARGIN - 16 * AMMO_SCALE - 76);
+  const sc = 1 + reservePop * 0.35;
+  ctx.save();
+  ctx.translate(x0 - 14, y0 + totalH / 2 + 10); ctx.scale(sc, sc);
+  ctx.font = 'bold 30px monospace'; ctx.textAlign = 'right';
+  const txt = `${mag}/${res}`;
+  ctx.fillStyle = '#000'; ctx.fillText(txt, 2, 2);
+  ctx.fillStyle = res === 0 ? '#e63946' : reservePop > 0.1 ? '#ffe08a' : '#f4f1de'; ctx.fillText(txt, 0, 0);
+  ctx.restore();
+  ctx.textAlign = 'left';
+}
+function drawConsumablesHud() {
+  const ids = ['dynamite', 'pepper', 'ice'], keysTxt = { dynamite: 'Q', pepper: 'F', ice: 'C' };
+  if (!ids.some(id => shop.inv[id] > 0) && player.pepperT <= 0) return;
+  const s = 54, gap = 8, total = ids.length * s + (ids.length - 1) * gap;
+  const x0 = Math.round(canvas.width / 2 - total / 2), y = canvas.height - AMMO_MARGIN - s;
+  ids.forEach((id, i) => {
+    const x = x0 + i * (s + gap), n = shop.inv[id], active = id === 'pepper' && player.pepperT > 0, pop = 1 + (consPop[id] || 0) * 0.2;
+    ctx.save(); ctx.translate(x + s / 2, y + s / 2); ctx.scale(pop, pop); ctx.translate(-s / 2, -s / 2);
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
+    ctx.strokeStyle = active ? '#ff9f1c' : 'rgba(244,241,222,.35)'; ctx.lineWidth = active ? 3 : 1; ctx.strokeRect(1, 1, s - 2, s - 2);
+    const im = CONS_IMGS[id], k = Math.max(2, Math.floor((s - 12) / Math.max(im.width, im.height)));
+    ctx.globalAlpha = n > 0 || active ? 1 : 0.3;
+    ctx.drawImage(im, (s - im.width * k) / 2, (s - im.height * k) / 2, im.width * k, im.height * k);
+    ctx.globalAlpha = 1;
+    ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#dfe6d6'; ctx.fillText(keysTxt[id], 5, 14);
+    ctx.font = 'bold 15px monospace'; ctx.textAlign = 'right';
+    ctx.fillStyle = '#000'; ctx.fillText(`${n}`, s - 4, s - 5); ctx.fillStyle = n > 0 ? '#f4f1de' : '#e63946'; ctx.fillText(`${n}`, s - 5, s - 6);
+    ctx.textAlign = 'left';
+    if (active) { ctx.fillStyle = '#ff9f1c'; ctx.fillRect(3, s - 4, Math.round((s - 6) * player.pepperT / FIRE.pepperTime), 3); }
+    ctx.restore();
+  });
+}
 function openShop() { shop.open = true; shop.t = 0; shop.msg = ''; mouse.down = false; sfx.select(); }
 function closeShop() { if (!shop.open) return; shop.open = false; mouse.down = false; sfx.select(); }
 function shopRects() {
   const W = canvas.width, H = canvas.height;
-  const pw = Math.min(720, W - 30), ph = Math.min(460, H - 40), px = (W - pw) / 2, py = (H - ph) / 2;
-  const left = Math.min(230, pw * 0.34), rx = px + left, rw = pw - left - 18, rowH = Math.min(62, (ph - 110) / SHOP_ITEMS.length);
-  return { px, py, pw, ph, left, rows: SHOP_ITEMS.map((it, i) => ({ it, i, x: rx, y: py + 62 + i * (rowH + 4), w: rw, h: rowH })),
+  const pw = Math.min(760, W - 30), ph = Math.min(480, H - 40), px = (W - pw) / 2, py = (H - ph) / 2;
+  const left = Math.min(230, pw * 0.32), rx = px + left, rw = pw - left - 18;
+  const items = SHOP_ITEMS.filter(it => it.tab === shop.tab);
+  const tw = (rw - 8) / SHOP_TABS.length, ty = py + 56;
+  const rowH = Math.min(84, (ph - 160) / 3);
+  return { px, py, pw, ph, left,
+    tabs: SHOP_TABS.map((t, i) => ({ id: 'tab:' + t.id, tab: t, i, x: rx + i * (tw + 4), y: ty, w: tw, h: 30 })),
+    rows: items.map((it, i) => ({ it, i, x: rx, y: ty + 42 + i * (rowH + 6), w: rw, h: rowH })),
     exit: { id: 'exit', x: px + pw - 128, y: py + ph - 44, w: 110, h: 32 } };
 }
 function shopBuy(row) {
-  const it = row.it, price = it.price(), ok2 = it.can();
-  if (ok2 !== true) { shop.msg = typeof ok2 === 'string' ? ok2 : 'não dá'; shop.msgT = 2; shop.shake = 1; sfx.deny(); return; }
+  const it = row.it, ok2 = shopCan(it);
+  if (ok2 !== true) { shop.msg = ok2; shop.msgT = 2; shop.shake = 1; sfx.deny(); return; }
+  const price = it.price();
   if (run.teeth < price) { shop.msg = pick(BILL_BROKE); shop.msgT = 2.4; shop.shake = 1; sfx.deny(); return; }
   run.teeth -= price; toothPop = 1;
-  shop.flash = row.i; shop.msg = pick(BILL_BYE); shop.msgT = 2;
+  shop.flash = it.id; shop.msg = pick(BILL_BYE); shop.msgT = 2;
   sfx.buy();
   it.buy();
 }
 function updateShop(dt) {
   shop.t += dt; shop.msgT -= dt; shop.shake *= Math.exp(-10 * dt);
   const r = shopRects();
-  hoverSfx(r.rows.concat([r.exit]), 'shop:');
+  hoverSfx(r.tabs.concat(r.rows, [r.exit]), 'shop:');
   if (mouse.pressed) {
-    const h = hoveredIn(r.rows);
-    if (h) shopBuy(h);
+    const t = hoveredIn(r.tabs), h = hoveredIn(r.rows);
+    if (t) { if (shop.tab !== t.tab.id) { shop.tab = t.tab.id; sfx.select(); } }
+    else if (h) shopBuy(h);
     else if (hoveredIn([r.exit])) closeShop();
   }
   mouse.pressed = false; mouse.rightPressed = false; mouse.down = false;
 }
+// retrato da loja: corpo, pernas, mão e gancho montados num grid de pixels do sprite e ampliados inteiros
+const SHOP_BILL = { w: 30, h: 24 };                   // área do retrato (px do sprite)
+const shopBillCanvas = document.createElement('canvas');
+function drawShopBill(cx, footY, S) {
+  if (!billBodyImg.complete || !billLegImgs[0].complete || !billHandImg.complete || !billHookImg.complete) return;
+  const c = shopBillCanvas, W = SHOP_BILL.w, H = SHOP_BILL.h;
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  const g = c.getContext('2d'); g.clearRect(0, 0, W, H);
+  // idle: respira (corpo sobe 1 px), a mão dá tapinhas na barriga, o gancho balança; risada = pulinhos
+  const laugh = shop.msgT > 0 && /hehe/.test(shop.msg);
+  const breath = Math.sin(clock * 2.2) > 0.2 ? 0 : 1;
+  const hop = laugh && Math.sin(clock * 22) > 0 ? 1 : 0;
+  const tap = (clock % 2.6) < 0.5 && Math.sin(clock * 18) > 0 ? -1 : 0;
+  const wave = (clock % 3.7) > 3.0 ? -1 : 0;           // de vez em quando ergue o gancho
+  const ox = 9, oy = 1 + breath - hop;                 // posição do corpo no retrato (olhando para a esquerda; vira depois)
+  g.drawImage(billBodyImg, ox, oy);
+  g.drawImage(billLegImgs[0], ox + BILL.legOffset.x, 1 + BILL.legOffset.y + 1 - hop);   // pernas juntas, paradas no chão
+  g.drawImage(billHookImg, ox - 7, oy + 9 + wave);     // gancho apontando para a frente
+  g.drawImage(billHandImg, ox + 2, oy + 11 + tap);    // mão descansando na barriga
+  // holofote atrás (para o contorno preto aparecer no fundo escuro) e sombra no chão
+  const spot = ctx.createRadialGradient(cx + 2 * S, footY - H * S * 0.45, 0, cx + 2 * S, footY - H * S * 0.45, W * S * 0.5);
+  spot.addColorStop(0, 'rgba(195,155,211,.28)'); spot.addColorStop(1, 'rgba(195,155,211,0)');
+  ctx.fillStyle = spot; ctx.fillRect(cx - W * S, footY - H * S * 1.1, W * S * 2, H * S * 1.2);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(cx, footY - S, 7 * S, 1.5 * S, 0, 0, Math.PI * 2); ctx.fill();
+  // vira para a direita (olhando para os itens) e amplia
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  ctx.translate(Math.round(cx + 20 * S), Math.round(footY - H * S)); ctx.scale(-1, 1);   // pés (x≈20 no retrato) no centro
+  ctx.drawImage(c, 0, 0, W * S, H * S);
+  ctx.restore();
+}
 function drawShopIcon(id, cx, cy) {
-  const put = (im2, k) => im2 && im2.complete && ctx.drawImage(im2, Math.round(cx - im2.width * k / 2), Math.round(cy - im2.height * k / 2), im2.width * k, im2.height * k);
-  if (id === 'ammo') return put(boxImg, 2.4);
-  if (id === 'repair') return put(UPGRADE_ICONS.houseHp, 2.6);
-  if (id === 'boots') return put(legImgs[1], 3.4);
-  if (id === 'magnet') { put(toothImg, 2.4); ctx.strokeStyle = 'rgba(195,155,211,.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 20 + Math.sin(clock * 5) * 2, 0, Math.PI * 2); ctx.stroke(); return; }
-  if (id === 'card') {                                     // verso de carta com "?"
-    ctx.fillStyle = '#1c281d'; ctx.fillRect(cx - 14, cy - 19, 28, 38);
-    ctx.strokeStyle = '#e9c46a'; ctx.lineWidth = 2; ctx.strokeRect(cx - 14, cy - 19, 28, 38);
-    ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#e9c46a'; ctx.fillText('?', cx, cy + 8); ctx.textAlign = 'left';
+  const put = (im2, k) => im2 && im2.complete !== false && ctx.drawImage(im2, Math.round(cx - im2.width * k / 2), Math.round(cy - im2.height * k / 2), im2.width * k, im2.height * k);
+  if (id === 'shotgun') return put(gunSprite, 2.2);
+  if (id === 'uzi') return put(UZI_IMG, 3.2);
+  if (id === 'revolvers') { ctx.save(); ctx.translate(-12, 0); put(PREV_IMG, 3); ctx.translate(21, 0); put(PREV_IMG, 3); ctx.restore(); return; }
+  if (id === 'cabin') return put(houseImg, 0.6);
+  if (id === 'mines') return put(CONS_IMGS.mine, 5);
+  if (id === 'antony') {
+    const fr = walkFrame('stand'); if (!fr) return;
+    ctx.save(); ctx.filter = ANTONY.filter; ctx.drawImage(fr, Math.round(cx - fr.width * 1.3), Math.round(cy - fr.height * 1.3), fr.width * 2.6, fr.height * 2.6); ctx.restore(); return;
   }
+  if (CONS_IMGS[id]) return put(CONS_IMGS[id], CONS_IMGS[id].width > 10 ? 3.6 : 4);
 }
 function drawShop() {
   if (!shop.open) return;
@@ -2183,47 +2904,60 @@ function drawShop() {
   const tt = `${run.teeth}`, ttw = ctx.measureText(tt).width;
   if (toothImg.complete) ctx.drawImage(toothImg, r.px + r.pw - ttw - 58, r.py + 18, 32, 32);
   ctx.fillStyle = '#f4f1de'; ctx.fillText(tt, r.px + r.pw - ttw - 20, r.py + 42);
-  // retrato do Bill
-  const S = Math.max(4, Math.floor(Math.min(r.left - 30, r.ph * 0.5) / 19));
-  const fr = billFrame('step');
-  const bx = r.px + r.left / 2, by = r.py + 40 + 19 * S;
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(bx, by, 7 * S, 1.4 * S, 0, 0, Math.PI * 2); ctx.fill();
-  if (fr) {
-    const bob = Math.round(Math.sin(clock * 2.2) * S * 0.25) - (shop.msgT > 0 && /hehehe/.test(shop.msg) ? Math.abs(Math.sin(clock * 22)) * S * 0.6 : 0);
-    ctx.save(); ctx.translate(bx, by + bob); ctx.scale(-1, 1);
-    ctx.drawImage(fr, -9 * S, -19 * S, 18 * S, 19 * S);
-    if (billPipeImg.complete) ctx.drawImage(billPipeImg, -9 * S - 4 * S, -19 * S + 2 * S, 6 * S, 4 * S);
-    ctx.restore();
-  }
+  // retrato do Bill (montado peça por peça, com idle)
+  const S = Math.max(3, Math.floor(Math.min(r.left - 20, r.ph * 0.55) / 25));
+  const bx = r.px + r.left / 2, by = r.py + 44 + SHOP_BILL.h * S;
+  drawShopBill(bx, by, S);
   // fala do Bill embaixo do retrato
   ctx.font = 'bold 13px monospace';
   const say = shop.msgT > 0 ? shop.msg : 'o que vai ser, garoto?';
   const sl = wrapLines('"' + say + '"', r.left - 26);
   const sx = Math.sin(clock * 60) * 4 * shop.shake;
   sl.forEach((l, i) => { ctx.fillStyle = '#000'; ctx.fillText(l, r.px + 14 + sx + 1, by + 30 + i * 17 + 1); ctx.fillStyle = '#e9d8f0'; ctx.fillText(l, r.px + 14 + sx, by + 30 + i * 17); });
+  // abas
+  const hovT = hoveredIn(r.tabs);
+  for (const t of r.tabs) {
+    const on = shop.tab === t.tab.id, hl = hovT === t;
+    ctx.fillStyle = on ? '#8a5aa0' : hl ? '#2e2438' : '#221a2a'; ctx.fillRect(t.x, t.y, t.w, t.h);
+    ctx.strokeStyle = on ? '#e9d8f0' : '#3a2f45'; ctx.lineWidth = 2; ctx.strokeRect(t.x, t.y, t.w, t.h);
+    ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = on ? '#fff' : '#b9a9c4'; ctx.fillText(`${t.i + 1}  ${t.tab.name}`, t.x + t.w / 2, t.y + 20);
+    ctx.textAlign = 'left';
+  }
   // itens
   const hov = hoveredIn(r.rows);
   for (const row of r.rows) {
-    const it = row.it, price = it.price(), can = it.can(), afford = run.teeth >= price;
-    const hl = hov === row, flash = shop.flash === row.i && shop.msgT > 1.6;
+    const it = row.it, can = shopCan(it), price = can === true ? it.price() : 0, afford = run.teeth >= price;
+    const hl = hov === row, flash = shop.flash === it.id && shop.msgT > 1.6;
     ctx.fillStyle = flash ? '#4d3a5c' : hl ? '#2e2438' : '#221a2a'; ctx.fillRect(row.x, row.y, row.w, row.h);
     ctx.strokeStyle = hl ? '#c39bd3' : '#3a2f45'; ctx.lineWidth = 2; ctx.strokeRect(row.x, row.y, row.w, row.h);
-    ctx.globalAlpha = a * (can === true ? 1 : 0.45);
-    drawShopIcon(it.id, row.x + 32, row.y + row.h / 2);
-    ctx.font = 'bold 15px monospace'; ctx.fillStyle = '#f4f1de';
-    const lvl = it.max ? `  ${shop.lv[it.id]}/${it.max}` : '';
-    ctx.fillText(it.name + lvl, row.x + 64, row.y + row.h / 2 - 3);
-    ctx.font = '12px monospace'; ctx.fillStyle = '#b9a9c4';
-    ctx.fillText(can === true ? it.desc : can, row.x + 64, row.y + row.h / 2 + 14);
-    // preço
-    if (can === true) {
-      ctx.font = 'bold 18px monospace';
-      const pt = `${price}`, pw2 = ctx.measureText(pt).width;
-      ctx.fillStyle = afford ? '#f4f1de' : '#e63946'; ctx.fillText(pt, row.x + row.w - pw2 - 12, row.y + row.h / 2 + 7);
-      if (toothImg.complete) ctx.drawImage(toothImg, row.x + row.w - pw2 - 46, row.y + row.h / 2 - 14, 28, 28);
+    drawShopIcon(it.id, row.x + 40, row.y + row.h / 2);
+    const tx = row.x + 82, cy = row.y + row.h / 2;
+    ctx.font = 'bold 16px monospace'; ctx.fillStyle = '#f4f1de';
+    ctx.fillText(it.name.toUpperCase() + (it.key ? `  [${it.key}]` : ''), tx, cy - 12);
+    // nível (quadradinhos) ou quantidade na mochila
+    if (it.max) {
+      const L = shop.lv[it.id];
+      for (let k = 0; k < it.max; k++) {
+        ctx.fillStyle = k < L ? '#c39bd3' : '#3a2f45'; ctx.fillRect(tx + k * 14, cy - 4, 11, 8);
+      }
+    } else {
+      ctx.font = 'bold 13px monospace'; ctx.fillStyle = '#c39bd3'; ctx.fillText(`na mochila: ${shop.inv[it.id]}/${it.stack}`, tx, cy + 4);
     }
-    ctx.globalAlpha = a;
+    ctx.font = '12px monospace'; ctx.fillStyle = '#b9a9c4';
+    ctx.fillText(can === true ? it.desc() : can, tx, cy + 22);
+    // preço
+    ctx.font = 'bold 18px monospace';
+    if (can === true) {
+      const pt = `${price}`, pw2 = ctx.measureText(pt).width;
+      ctx.fillStyle = afford ? '#f4f1de' : '#e63946'; ctx.fillText(pt, row.x + row.w - pw2 - 12, cy + 7);
+      if (toothImg.complete) ctx.drawImage(toothImg, row.x + row.w - pw2 - 46, cy - 14, 28, 28);
+    } else {
+      ctx.fillStyle = '#c39bd3'; ctx.textAlign = 'right'; ctx.fillText('MÁX', row.x + row.w - 12, cy + 7); ctx.textAlign = 'left';
+    }
   }
+  ctx.font = '12px monospace'; ctx.fillStyle = '#7d6c8a';
+  ctx.fillText('1/2/3 trocam de aba  ·  clique para comprar', r.px + r.left, r.py + r.ph - 22);
   // sair
   const ex = r.exit, eh = hoveredIn([ex]);
   ctx.fillStyle = eh ? '#f4f1de' : '#2e2438'; ctx.fillRect(ex.x, ex.y, ex.w, ex.h);
@@ -2247,7 +2981,7 @@ function openCards() {
 }
 function cardRects() {
   const n = 3, gap = 18;
-  const w = Math.min(190, (canvas.width - 40 - gap * 2) / 3), h = Math.min(250, w * 1.35);
+  const w = Math.min(260, (canvas.width - 40 - gap * 2) / 3), h = Math.min(340, w * 1.3, canvas.height - 150);
   const x0 = (canvas.width - (w * n + gap * (n - 1))) / 2, y = canvas.height / 2 - h / 2 + 20;
   return cards.list.map((u, i) => ({ u, i, x: x0 + i * (w + gap), y, w, h }));
 }
@@ -2385,7 +3119,7 @@ function update(dt) {
     particles.push({ x: player.x - dx * 18 + rand(-8, 8), y: player.y + 34 + rand(-3, 3), vx: -dx * rand(30, 70) + rand(-20, 20),
       vy: rand(-25, -5), life: rand(0.3, 0.45), age: 0, size: rand(4, 7), grow: 14, color: 'dust', drag: 3 });
   }
-  const spd = SPEED * (player.running ? RUN.mul : 1) * (1 + 0.1 * shop.lv.boots);
+  const spd = SPEED * (player.running ? RUN.mul : 1) * moveMul();
 
   const kd = Math.exp(-12 * dt);           // knockback some rápido
   player.vx *= kd; player.vy *= kd;
@@ -2407,7 +3141,8 @@ function update(dt) {
   player.cooldown -= dt;
   updateMelee(dt);
   if (mouse.down && player.cooldown <= 0 && !gameOver && player.meleeT < 0) {
-    if (player.ammo > 0) {
+    if (player.weapon !== 'shotgun') fireAlt();
+    else if (player.ammo > 0) {
       player.reloading = false;      // atirar cancela a recarga (o cartucho em andamento não conta)
       shoot();
       player.ammo--;
@@ -2426,6 +3161,8 @@ function update(dt) {
   updatePickups(dt);
   updateTeeth(dt);
   updateBill(dt);
+  updateCombatExtras(dt);
+  tips.t += dt; if (player.running) tips.usedRun = true; if (player.meleeT >= 0) tips.usedMelee = true;
   updateTufts(dt);
   updateTrees(dt);
   updateTrainingAmmo(dt);
@@ -2449,6 +3186,7 @@ function update(dt) {
     }
     e.jiggle *= Math.exp(-12 * dt);
     e.hpShow -= dt;
+    if (e.healGlow) e.healGlow *= Math.exp(-4 * dt);
     if (!e.alive) {
       if (e.homeRel && (e.respawn -= dt) <= 0) {   // inimigo do campo de treino reaparece
         Object.assign(e, { alive: true, hp: e.maxHp, flash: 0.15, hpShow: 0 });
@@ -2459,6 +3197,17 @@ function update(dt) {
     e.lunge *= Math.exp(-10 * dt);
     e.recoil = (e.recoil || 0) * Math.exp(-12 * dt);
     e.recoilB = (e.recoilB || 0) * Math.exp(-12 * dt);
+    if (e.burnT > 0) {                        // pegando fogo (pimenta): dano contínuo
+      e.burnT -= dt;
+      if ((e.burnTick = (e.burnTick || 0) - dt) <= 0) {
+        e.burnTick = 0.25; e.hp -= FIRE.dps * 0.25; e.hpShow = 2;
+        particles.push({ x: e.x + rand(-14, 14), y: e.y + rand(-20, 10), vx: rand(-15, 15), vy: rand(-90, -50), life: rand(0.3, 0.5), age: 0,
+          size: rand(3, 5), color: Math.random() < 0.5 ? '#ff9f1c' : '#ffd166', drag: 2 });
+        if (e.hp <= 0) { killEnemy(e); continue; }
+      }
+    }
+    if (e.frozenT > 0) { e.frozenT -= dt; e.attacking = false; continue; }   // congelado: não anda, não morde, não atira
+    if (e.T.healer) { if (!gameOver) updateHealer(e, dt); continue; }
     if (e.T.ranged && house.active) { if (!gameOver) updateRanged(e, dt); continue; }
     if (e.speed > 0 && !gameOver) {
       // alvo: o ponto mais próximo da casa (roguelike) ou o jogador
@@ -2467,6 +3216,8 @@ function update(dt) {
         const R = houseRect();
         tx = Math.max(R.l, Math.min(R.r, e.x)); ty = Math.max(R.t, Math.min(R.b, e.y));
       }
+      e.onAlly = ally.active && Math.hypot(ally.x - e.x, ally.y - e.y) < ANTONY.aggro;   // o primo Antony atrai quem passa perto
+      if (e.onAlly) { tx = ally.x; ty = ally.y; }
       const ddx = tx - e.x, ddy = ty - e.y, dist = Math.hypot(ddx, ddy) || 1;
       if (Math.abs(ddx) > 4) e.facing = ddx < 0 ? -1 : 1;
       if (!e.attacking) {
@@ -2476,14 +3227,17 @@ function update(dt) {
       }
       e.dirX = ddx / dist; e.dirY = ddy / dist;
     }
-    if (house.active) {
+    if (e.onAlly && allyTouch(e)) {                 // mordendo o Antony
+      e.attacking = true;
+      if (!gameOver && (e.bite -= dt) <= 0) { e.bite = e.T.biteEvery || BITE_EVERY; e.lunge = 1; sfx.bite(); damageAlly(e.T.bite || BITE_DAMAGE); }
+    } else if (house.active) {
       // encostou na casa: para e morde
       const hw = e.T.hitbox.w * e.T.sc / 2, hh = e.T.hitbox.h * e.T.sc / 2;
       e.attacking = pushOutOfHouse(e, hw + 1, hh + 1) || (() => {
         const R = houseRect();
         return e.x > R.l - hw - 3 && e.x < R.r + hw + 3 && e.y > R.t - hh - 3 && e.y < R.b + hh + 3;
       })();
-      if (e.attacking && !gameOver && (e.bite -= dt) <= 0) { e.bite = BITE_EVERY; damageHouse(e); }
+      if (e.attacking && !gameOver && (e.bite -= dt) <= 0) { e.bite = e.T.biteEvery || BITE_EVERY; damageHouse(e); }
     } else if (Math.abs(player.x - e.x) < ox && Math.abs(player.y - e.y) < oy) hurtPlayer(e);
   }
   // separação simples para não empilharem
@@ -2514,7 +3268,7 @@ function update(dt) {
   heartPop *= Math.exp(-6 * dt);
 
   emptyFlash *= Math.exp(-6 * dt);
-  for (let i = 0; i < AMMO_MAX; i++) ammoPop[i] *= Math.exp(-10 * dt);
+  for (let i = 0; i < AMMO_CAP; i++) ammoPop[i] *= Math.exp(-10 * dt);
 
   // recuperação do recuo / efeitos
   const rk = Math.exp(-14 * dt);
@@ -2541,11 +3295,12 @@ function update(dt) {
     const target = enemies.find(e => e.alive && !b.hits.includes(e) && (inEnemy(e, b.x, b.y, pad) || inEnemy(e, mx, my, pad)));
     if (target) {
       // atravessa: acerta este jacaré e segue em frente, um pouco mais fraco e mais lento
-      hitEnemy(target, b, ang, pelletDamage() * b.dmgMul);
+      if (b.fire) ignite(target);
+      hitEnemy(target, b, ang, (b.dmg ?? pelletDamage()) * b.dmgMul);
       b.hits.push(target);
       b.dmgMul *= SHOT.pierceFalloff;
       b.vx *= 0.85; b.vy *= 0.85;
-      if (b.hits.length >= SHOT.pierce) bullets.splice(i, 1);
+      if (b.hits.length >= (b.pierce ?? SHOT.pierce)) bullets.splice(i, 1);
     } else if (out) {
       impact(Math.max(0, Math.min(WORLD_W, b.x)), Math.max(0, Math.min(WORLD_H, b.y)), ang, true);
       bullets.splice(i, 1);
@@ -2727,6 +3482,7 @@ function drawLighting() {
     for (const b of bullets) punchLight(b.x, b.y, NIGHT.shotR, NIGHT.shotLight * nk * sk);     // os tiros iluminam o caminho
     for (const b of enemyBullets) punchLight(b.x, b.y, NIGHT.shotR, NIGHT.shotLight * nk);
     if (houseLit()) for (const q of houseWindowPts()) punchLight(q.x, q.y + 20, 110, 0.75 * nk);   // luz das janelas
+    for (const e of enemies) if (e.alive && e.T.healer) { const q = healerTorch(e); punchLight(q.x, q.y, 150, 0.8 * nk); }   // chama verde do healer
     if (bill.active) { const c = cartPos(); punchLight(c.x, c.y - 70, 190, 0.7 * nk); punchLight(bill.x, bill.y - 40, 110, 0.5 * nk); }
   }
   if (player.flash > 0) {                                  // clarão do tiro ilumina em volta
@@ -2893,7 +3649,7 @@ function drawGun() {
     ctx.restore();
     return;
   }
-  if (player.reloading) {
+  if (player.reloading && player.weapon === 'shotgun') {
     // pose de recarga: arma de lado, inclinada para cima, animação do GIF (frame 1 -> 2)
     const f = reloadImgs[player.reloadT < reloadShell() / 2 ? 0 : 1];
     if (!f.complete) return;
@@ -2906,13 +3662,16 @@ function drawGun() {
     ctx.restore();
     return;
   }
-  if (!gunSprite.complete) return;
+  const G = gunSpec();
+  if (G.img.complete === false) return;
   const g = gunTransform();
   ctx.save();
   ctx.translate(Math.round(g.x), Math.round(g.y));
-  ctx.rotate(g.rot);
+  ctx.rotate(player.reloading ? (g.flip > 0 ? -1.1 : Math.PI + 1.1) : g.rot);   // recarregando: arma apontada para cima
   if (g.flip < 0) ctx.scale(1, -1);  // mirando à esquerda: não fica de cabeça para baixo
-  ctx.drawImage(gunSprite, -GUN_GRIP.x * SCALE, -GUN_GRIP.y * SCALE, GUN_W * SCALE, GUN_H * SCALE);
+  ctx.drawImage(G.img, -G.grip.x * SCALE, -G.grip.y * SCALE, G.w * SCALE, G.h * SCALE);
+  if (player.weapon === 'revolvers')   // segundo revólver ao lado: mais à frente, na mesma altura (as duas mãos esticadas)
+    ctx.drawImage(G.img, (-G.grip.x + REV_SPACING) * SCALE, -G.grip.y * SCALE, G.w * SCALE, G.h * SCALE);
   ctx.restore();
 }
 
@@ -3004,9 +3763,9 @@ function drawBullets() { for (const b of bullets) drawBullet(b); }
 function drawBullet(b) {
   ctx.lineCap = 'round';
   {
-    const k = 1 - b.age / b.life, s = SHOT.bulletScale * bulletMul();
-    // rastro
-    ctx.strokeStyle = `rgba(255,255,255,${0.35 * k})`;
+    const k = 1 - b.age / b.life, s = b.scale || SHOT.bulletScale * bulletMul();
+    // rastro (laranja com a pimenta)
+    ctx.strokeStyle = b.fire ? `rgba(255,150,40,${0.5 * k})` : `rgba(255,255,255,${0.35 * k})`;
     ctx.lineWidth = s * 0.6;
     ctx.beginPath();
     ctx.moveTo(b.x - (b.x - b.px) * 2.5, b.y - (b.y - b.py) * 2.5);
@@ -3016,7 +3775,7 @@ function drawBullet(b) {
     ctx.save();
     ctx.translate(b.x, b.y);
     ctx.rotate(Math.atan2(b.vy, b.vx));
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = b.fire ? '#ffb347' : '#ffffff';
     ctx.fillRect(-1.5 * s, -0.5 * s, 3 * s, 1 * s);
     ctx.restore();
   }
@@ -3092,12 +3851,12 @@ function drawRangedWeapon(e, w, h, frameName, back) {
   let rot = Math.atan2(Math.sin(lt - Math.PI), Math.cos(lt - Math.PI));            // o sprite aponta para a esquerda
   rot = Math.max(-1.2, Math.min(1.2, rot)) + (back ? e.recoilB || 0 : e.recoil || 0) * 0.5;
   const up = frameName === 'pass' ? sc : 0;
-  const hx = back ? 12.5 : 7.5, hy = back ? 9.5 : 8.5;
+  const H2 = back ? RANGE_HANDS.back : RANGE_HANDS.front, hx = H2.x, hy = H2.y;
   ctx.save();
   ctx.translate(-w / 2 + hx * sc, -h + hy * sc - up);
   ctx.rotate(rot);
-  if (shotgun) { ctx.scale(-1, 1); ctx.drawImage(img, -3 * sc, -2 * sc, 16 * sc, 4 * sc); }   // escopeta: cano para a direita, espelha
-  else ctx.drawImage(img, -7.5 * sc, -1.5 * sc, 10 * sc, 5 * sc);
+  if (shotgun) { ctx.scale(-1, 1); ctx.drawImage(img, -RANGE_SG_GRIP.x * sc, -RANGE_SG_GRIP.y * sc, img.width * sc, img.height * sc); }   // escopeta: cano para a direita, espelha
+  else ctx.drawImage(img, -REVOLVER_GRIP.x * sc, -REVOLVER_GRIP.y * sc, img.width * sc, img.height * sc);
   ctx.restore();
 }
 
@@ -3132,18 +3891,35 @@ function drawEnemy(e, ghost = false) {
     ctx.globalAlpha = 1;
     ctx.restore();
   } else {
+  if (T.ranged && e.weapon === 'dual') drawRangedWeapon(e, w, h, frameName, true);   // segundo revólver: braço de trás, atrás do corpo
   ctx.drawImage(e.flash > 0 ? whiteOf(fr) : fr, -w / 2, -h - T.sc, w, h + T.sc);
+  if (e.healGlow > 0.02) {                // acabou de ser curado: brilho verde
+    ctx.globalAlpha = 0.55 * e.healGlow; ctx.drawImage(tintOf(fr, '#7dff6a'), -w / 2, -h - T.sc, w, h + T.sc); ctx.globalAlpha = 1;
+  }
+  if (e.frozenT > 0) {                    // congelado: camada azul-gelo
+    ctx.globalAlpha = Math.min(1, e.frozenT * 2) * 0.6; ctx.drawImage(tintOf(fr, '#bfefff'), -w / 2, -h - T.sc, w, h + T.sc); ctx.globalAlpha = 1;
+  } else if (e.burnT > 0) {               // pegando fogo: brilho laranja tremendo
+    ctx.globalAlpha = 0.22 + Math.sin(clock * 20 + e.x) * 0.08; ctx.drawImage(tintOf(fr, '#ff8a1f'), -w / 2, -h - T.sc, w, h + T.sc); ctx.globalAlpha = 1;
+  }
   if (T.eye && nightK > 0.01) {          // guarda onde o olho ficou na tela (desenhado depois, por cima da escuridão)
     const open = T.id === 'range' ? e.blinkT > 0 : !(e.blinkT > 0 && T.blink);
     const fy = T.eye.y + (frameName === 'pass' ? 0 : 1);
     const q = ctx.getTransform().transformPoint(new DOMPoint(-w / 2 + (T.eye.x + 0.5) * T.sc, -h - T.sc + (fy + 0.5) * T.sc));
     e.eye = { x: q.x, y: q.y, on: open && e.flash <= 0, n: renderN };
   }
-  if (T.ranged && e.weapon === 'dual') drawRangedWeapon(e, w, h, frameName, true);   // segundo revólver, mais baixo, à mostra
   if (T.ranged) drawRangedWeapon(e, w, h, frameName, false);   // arma da mão da frente (por cima do corpo)
   ctx.restore();
   }
 
+  if (e.burnT > 0 && !ghost) {            // chamas (fogo.gif) sobre o corpo
+    const fi = fireImgs[Math.floor((clock + e.x * 0.01) * 10) % 2];
+    if (fi.complete) {
+      const fw = 16 * T.sc;
+      ctx.globalAlpha = Math.min(1, e.burnT * 2);
+      ctx.drawImage(fi, Math.round(ex - fw / 2), Math.round(ey + h / 2 - fw - 2 * T.sc), fw, fw);
+      ctx.globalAlpha = 1;
+    }
+  }
   // barra de vida (aparece depois de tomar dano)
   if (e.hpShow > 0) {
     const bw = T.id === 'tank' ? 84 : 56, bh = T.id === 'tank' ? 8 : 6, bx = e.x - bw / 2, by = ey - h / 2 - 16;
@@ -3254,7 +4030,7 @@ function drawBanner() {
     const k = Math.min(1, t / 0.16);
     const sc = k < 1 ? 3 - 2 * (1 - Math.pow(1 - k, 3)) : 1 + Math.sin(Math.min(1, (t - 0.16) / 0.25) * Math.PI) * 0.06;
     const jit = t < 0.5 ? (1 - t / 0.5) * 5 : 0;
-    const fs = Math.min(130, Math.floor(W / 5.2));
+    const fs = Math.min(130, Math.floor(W / 5.2), Math.floor(W * 0.92 / (b.text.length * 0.62)));
     ctx.save();
     ctx.globalAlpha = Math.min(1, t / 0.08) * outA;
     ctx.translate(W / 2 + rand(-jit, jit), cy + rand(-jit, jit));
@@ -3298,7 +4074,7 @@ function drawBanner() {
 function drawTitleGator(S, snoutX, headTop, tilt) {
   const fr = walkFrame(Math.sin(clock * 2.4) > 0.55 ? 'breath' : 'stand', clock % 4.3 < BLINK.dur);
   if (!fr || !gunSprite.complete) return;
-  const w = 18 * S, h = 19 * S;
+  const w = PLAYER_SPR.w * S, h = (PLAYER_SPR.h + 1) * S;
   // caixa do sprite (virado para a direita): o focinho fica na borda direita da caixa
   const x0 = Math.round(snoutX - w), y0 = Math.round(headTop - S);
   ctx.save();
@@ -3312,7 +4088,7 @@ function drawTitleGator(S, snoutX, headTop, tilt) {
   ctx.restore();
   // escopeta na mão, apontando para cima e para a frente, com um leve "respirar"
   const a = -0.3 + Math.sin(clock * 1.3) * 0.025;
-  const hx = x0 + w / 2 + GUN_HAND.x * S, hy = y0 + S + 9 * S + GUN_HAND.y * S;
+  const hx = x0 + w / 2 + GUN_HAND.x * S, hy = y0 + S + PLAYER_SPR.h / 2 * S + GUN_HAND.y * S;
   ctx.translate(hx + Math.cos(a) * GUN_RADIUS * S, hy + Math.sin(a) * GUN_RADIUS * S);
   ctx.rotate(a);
   ctx.drawImage(gunSprite, -GUN_GRIP.x * S, -GUN_GRIP.y * S, GUN_W * S, GUN_H * S);
@@ -3422,15 +4198,16 @@ function drawCards() {
     ctx.strokeRect(1, 1, r.w - 2, r.h - 2);
     // ícone
     ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(12, 18, r.w - 24, r.h * 0.34);
-    drawCardIcon(r.u, r.w / 2, 18 + r.h * 0.17, Math.min(64, r.w * 0.42));
-    // textos
+    drawCardIcon(r.u, r.w / 2, 18 + r.h * 0.17, Math.min(96, r.w * 0.42));
+    // textos (crescem junto com a carta)
+    const fk = Math.max(0.8, Math.min(1.35, r.w / 190));
     ctx.textAlign = 'center';
-    ctx.font = 'bold 15px monospace'; ctx.fillStyle = '#f4f1de';
-    ctx.fillText(r.u.title, r.w / 2, r.h * 0.34 + 44);
-    ctx.font = '12px monospace'; ctx.fillStyle = '#c9d4c0';
-    wrapText(r.u.desc, r.w - 22).forEach((l, i) => ctx.fillText(l, r.w / 2, r.h * 0.34 + 66 + i * 16));
-    ctx.font = 'bold 11px monospace'; ctx.fillStyle = col;
-    ctx.fillText(r.u.cat.toUpperCase() + '  ·  ' + (lv[r.u.id] ? `nível ${lv[r.u.id]} → ${lv[r.u.id] + 1}` : 'NOVO'), r.w / 2, r.h - 30);
+    ctx.font = `bold ${Math.round(15 * fk)}px monospace`; ctx.fillStyle = '#f4f1de';
+    ctx.fillText(r.u.title, r.w / 2, r.h * 0.34 + 34 + 12 * fk);
+    ctx.font = `${Math.round(12 * fk)}px monospace`; ctx.fillStyle = '#c9d4c0';
+    wrapText(r.u.desc, r.w - 26).forEach((l, i) => ctx.fillText(l, r.w / 2, r.h * 0.34 + 50 + 26 * fk + i * 17 * fk));
+    ctx.font = `bold ${Math.round(11 * fk)}px monospace`; ctx.fillStyle = col;
+    ctx.fillText(r.u.cat.toUpperCase() + '  ·  ' + (lv[r.u.id] ? `nível ${lv[r.u.id]} → ${lv[r.u.id] + 1}` : 'NOVO'), r.w / 2, r.h - 18 - 14 * fk);
     ctx.fillStyle = 'rgba(244,241,222,.55)'; ctx.fillText(`[${r.i + 1}]`, r.w / 2, r.h - 12);
     ctx.restore();
   }
@@ -3451,7 +4228,7 @@ function statLines() {
     ['crit',     'Crítico',        pct(critChance())],
     ['vamp',     'Vampirismo',     pct(vampirism())],
     ['atkSpd',   'Vel. ataque',    `${(1 / shotCooldown()).toFixed(2)}/s`],
-    ['shotDmg',  'Dano escopeta',  `${+pelletDamage().toFixed(1)} x${pelletCount()}`],
+    ['shotDmg',  'Dano armas',     pct(1 + 0.1 * lv.shotDmg)],
     ['pellets',  'Projéteis',      `${pelletCount()}`],
     ['bulletSz', 'Tamanho bala',   pct(bulletMul())],
     ['reload',   'Recarga',        `${reloadShell().toFixed(2)}s/cart.`],
@@ -3460,6 +4237,8 @@ function statLines() {
     ['meleeCd',  'Recarga faca',   `${meleeCooldown().toFixed(2)}s`],
     ['meleeKb',  'Empurrão faca',  pct(1 + 0.15 * lv.meleeKb)],
     ['meleeRng', 'Alcance faca',   `${Math.round(meleeRange())}`],
+    ['moveSpd',  'Velocidade',     pct(moveMul())],
+    ['teeth',    'Drop dentes',    `+${Math.round(teethBonus() * 100)}%`],
   ];
 }
 function drawStats() {
@@ -3509,9 +4288,9 @@ function drawMenu() {
   ctx.fillStyle = 'rgba(8,12,8,.5)';
   ctx.fillRect(0, 0, W, H);
   // escala inteira: a cabeça ocupa ~40% da largura (limitada pela altura em telas estreitas)
-  const S = Math.max(6, Math.round(Math.min(W / 31, H / 17.5)));
+  const S = Math.max(5, Math.round(Math.min(W / 38, H / 19)));
   const bob = Math.sin(clock * 1.6) * S * 0.25;
-  drawTitleGator(S, Math.min(W * 0.42, 18 * S * 0.72), H * 0.23 + bob, -0.05);
+  drawTitleGator(S, Math.min(W * 0.42, PLAYER_SPR.w * S * 0.72), H * 0.23 + bob, -0.05);
   // logo embaixo à esquerda, por cima do jacaré
   if (titleImg.complete) {
     const L = Math.max(2, Math.floor(Math.min(W * 0.46, H * 0.62 * 2.7) / titleImg.width));
@@ -3559,6 +4338,11 @@ function drawHearts() {
 
 function drawHouse() {
   if ((!house.active && !house.decor) || !houseImg.complete) return;
+  if (run.banner && run.banner.intro && mode === 'rogue') {      // aviso inicial: contorno pulsando na base da casa
+    const R = houseRect(), k = 0.5 + 0.5 * Math.sin(clock * 8);
+    ctx.strokeStyle = `rgba(233,196,106,${0.5 + 0.4 * k})`; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.ellipse(house.x, R.b - 10, (R.r - R.l) * 0.62 + k * 12, 60 + k * 6, 0, 0, Math.PI * 2); ctx.stroke();
+  }
   const w = HOUSE_W * HOUSE_SCALE, h = HOUSE_H * HOUSE_SCALE;
   const sx = rand(-1, 1) * house.shake * 4;
   const x = Math.round(house.x - w / 2 + sx), y = Math.round(house.y - h / 2);
@@ -3670,7 +4454,7 @@ function drawMeleeIcon(x, y) {
   ctx.scale(sc, sc);
   ctx.translate(-s / 2, -s / 2);
   ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
-  if (meleeImgs[0].complete) ctx.drawImage(meleeImgs[0], 2, 4, MELEE_W * 3, MELEE_H * 3);
+  if (knifeIconImg.complete) ctx.drawImage(knifeIconImg, Math.round((s - knifeIconImg.width * 3) / 2), Math.round((s - knifeIconImg.height * 3) / 2), knifeIconImg.width * 3, knifeIconImg.height * 3);
   if (!ready) {   // escurece de cima para baixo conforme o tempo que falta
     const k = player.meleeCd / meleeCooldown();
     ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, s, Math.round(s * k));
@@ -3682,17 +4466,69 @@ function drawMeleeIcon(x, y) {
   ctx.strokeStyle = ready ? '#f4f1de' : 'rgba(244,241,222,.35)'; ctx.lineWidth = 2;
   ctx.strokeRect(1, 1, s - 2, s - 2);
   if (pop > 0.05) { ctx.fillStyle = `rgba(255,255,255,${pop * 0.7})`; ctx.fillRect(0, 0, s, s); }
+  hudKeyLabel('BOTÃO DIR.', s / 2, -6);
+  ctx.restore();
+  drawRunIcon(x, y - 76);
+}
+// legenda pequena em cima dos ícones do HUD
+function hudKeyLabel(t, cx, y) {
+  ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
+  const w = ctx.measureText(t).width + 8;
+  ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(cx - w / 2, y - 10, w, 13);
+  ctx.fillStyle = '#e9c46a'; ctx.fillText(t, cx, y);
+  ctx.textAlign = 'left';
+}
+// ícone da corrida (acende enquanto corre)
+function drawRunIcon(x, y) {
+  const s = 52, on = player.running;
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = on ? 'rgba(233,196,106,.35)' : 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
+  const L = legImgs[on ? Math.floor(clock * 10) % 2 : 1];
+  if (L.complete) ctx.drawImage(L, Math.round((s - L.width * 3) / 2), Math.round((s - L.height * 3) / 2) + 6, L.width * 3, L.height * 3);
+  ctx.fillStyle = on ? '#fff' : 'rgba(244,241,222,.6)';                 // risquinhos de velocidade
+  for (let i = 0; i < 3; i++) ctx.fillRect(8 + (on ? (clock * 60 + i * 9) % 10 : 0), 12 + i * 7, 10 - i * 2, 2);
+  ctx.strokeStyle = on ? '#e9c46a' : '#f4f1de'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, s - 2, s - 2);
+  hudKeyLabel('SHIFT', s / 2, -6);
+  ctx.restore();
+}
+// dicas no começo da partida (somem depois de usar ou depois de um tempo)
+const tips = { t: 0, usedRun: false, usedMelee: false };
+function drawStartTips() {
+  if (mode === 'menu' || gameOver || paused || shop.open || cut.on || (run.phase === 'cards' && cards.list.length)) return;
+  const all = tips.usedRun && tips.usedMelee;
+  const a = Math.min(1, tips.t / 0.6) * Math.max(0, Math.min(1, ((all ? 0 : 12) - tips.t) / 1.2 + (all ? 0 : 0)));
+  if (a <= 0.01) return;
+  const items = [];
+  if (!tips.usedRun) items.push(['SHIFT', 'correr']);
+  if (!tips.usedMelee) items.push(['BOTÃO DIREITO', 'faca']);
+  if (!items.length) return;
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.font = 'bold 18px monospace';
+  const parts = items.map(([k, v]) => ({ k, v, w: ctx.measureText(k).width + 26 + ctx.measureText(v).width }));
+  const gap = 36, total = parts.reduce((t, q) => t + q.w, 0) + gap * (parts.length - 1);
+  let x = canvas.width / 2 - total / 2; const y = canvas.height - 150 + Math.sin(clock * 3) * 3;
+  ctx.fillStyle = 'rgba(8,12,8,.75)'; ctx.fillRect(x - 18, y - 30, total + 36, 44);
+  ctx.strokeStyle = 'rgba(233,196,106,.6)'; ctx.lineWidth = 2; ctx.strokeRect(x - 18, y - 30, total + 36, 44);
+  for (const q of parts) {
+    const kw = ctx.measureText(q.k).width + 14;
+    ctx.fillStyle = '#e9c46a'; ctx.fillRect(x, y - 22, kw, 28);
+    ctx.fillStyle = '#10170f'; ctx.fillText(q.k, x + 7, y - 2);
+    ctx.fillStyle = '#f4f1de'; ctx.fillText(q.v, x + kw + 12, y - 2);
+    x += q.w + gap;
+  }
   ctx.restore();
 }
 
 function drawAmmo() {
+  if (player.weapon !== 'shotgun') return drawAltAmmo();
   if (!ammoFullImg.complete || !ammoEmptyImg.complete) return;
-  const w = 9 * AMMO_SCALE, h = 16 * AMMO_SCALE;
-  const total = AMMO_MAX * w + (AMMO_MAX - 1) * AMMO_GAP;
+  const N = ammoMax(), AS = N > 8 ? AMMO_SCALE * 0.75 : AMMO_SCALE;   // com mais cartuchos as gauges encolhem
+  const w = 9 * AS, h = 16 * AS;
+  const total = N * w + (N - 1) * AMMO_GAP;
   const x0 = canvas.width - AMMO_MARGIN - total;
   const y0 = canvas.height - AMMO_MARGIN - h;
   // gasta da direita para a esquerda
-  for (let i = 0; i < AMMO_MAX; i++) {
+  for (let i = 0; i < N; i++) {
     const full = i < player.ammo;
     const pop = ammoPop[i];
     const shakeX = emptyFlash > 0.05 ? rand(-1, 1) * emptyFlash * 3 : 0;
@@ -3715,7 +4551,7 @@ function drawAmmo() {
     ctx.fillStyle = '#000'; ctx.fillRect(x0, y0 - 14, total, 6);
     ctx.fillStyle = '#ffe08a'; ctx.fillRect(x0, y0 - 14, Math.round(total * k), 6);
   }
-  drawMeleeIcon(canvas.width - AMMO_MARGIN - 52, y0 - 76);
+  drawMeleeIcon(canvas.width - AMMO_MARGIN - 52, canvas.height - AMMO_MARGIN - 16 * AMMO_SCALE - 76);
   // contador "pente / reserva"
   const txt = `${player.ammo}/${player.reserve}`;
   const sc = 1 + reservePop * 0.35;
@@ -3770,10 +4606,8 @@ function render() {
   // objetos ordenados por profundidade (y): quem está mais abaixo fica na frente
   const drawPlayerAndGun = () => {
     if (player.hp <= 0) return;
-    const gunBehind = Math.sin(player.aim) < 0;   // mirando para cima: arma atrás do corpo
-    if (gunBehind) drawGun();
     drawPlayer();
-    if (!gunBehind) drawGun();
+    drawGun();                                    // a escopeta fica sempre na frente do jacaré
   };
   const objs = pickups.map(b => ({ y: b.y - 30, draw: () => drawPickup(b) }));
   // tufos ordenados pela base: o dino fica atrás quando está acima deles
@@ -3786,6 +4620,9 @@ function render() {
     // casa ordenada pela base das paredes (centro equivalente dos personagens)
     if (house.active || house.decor) objs.push({ y: houseRect().b - 36, draw: drawHouse });
     for (const t of teeth) objs.push({ y: t.y - 30, draw: () => drawTooth(t) });
+    for (const m of mines) objs.push({ y: m.y - 50, draw: () => drawMine(m) });
+    for (const t of throwables) objs.push({ y: throwPos(t).y, draw: () => drawThrowable(t) });
+    if (ally.active) objs.push({ y: ally.y, draw: drawAlly });
     if (bill.active) objs.push({ y: bill.y - 36, draw: drawBill });
     for (const b of bullets) objs.push({ y: b.y + BULLET_DEPTH, draw: () => drawBullet(b) });
     for (const b of enemyBullets) objs.push({ y: b.y + BULLET_DEPTH, draw: () => drawEnemyBullet(b) });
@@ -3794,10 +4631,12 @@ function render() {
 
   drawLeaves(true);                    // folhas já no chão
   drawParticles();
+  drawHealBeams(1 / 60);
   for (const o of objs) o.draw();
   drawLeaves(false);                   // folhas caindo, por cima de tudo
   drawLighting();                      // sombra da mata + sol da clareira
   drawHiddenBehindHouse();             // silhueta de quem está atrás da casa
+  drawHealerGlows();                   // chama verde do healer brilhando
   drawMuzzleFlash();
   drawFireflies();
   if (mode !== 'menu') drawReloadHint();
@@ -3809,6 +4648,9 @@ function render() {
   } else {
     drawHouseMarker();
     drawAmmo();
+    drawWeaponHud();
+    drawConsumablesHud();
+    drawStartTips();
     if (house.active) drawHouseBar(); else drawHearts();
     drawStats();
     drawTeethHud();
