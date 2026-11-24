@@ -172,9 +172,9 @@ const DROP_LIFE = 5;                   // segundos até qualquer drop sumir (pis
 // drop ao matar um inimigo: um único sorteio (sobra 90% = nada).
 // A fonte principal de munição é a caixa do fim de cada wave; o drop é só um alívio.
 const DROP_TABLE = [
-  { amount: 8,  chance: 0.003, scale: 4.2 },
-  { amount: 4,  chance: 0.012, scale: 3.6 },
-  { amount: 2,  chance: 0.035, scale: 3.0 },
+  { amount: 8,  chance: 0.004, scale: 4.2 },
+  { amount: 4,  chance: 0.015, scale: 3.6 },
+  { amount: 2,  chance: 0.043, scale: 3.0 },
 ];
 const BOX_SHINE_EVERY = [1.8, 3.2];    // intervalo aleatório entre brilhos (s)
 const BOX_SHINE_TIME = 0.45;           // duração da passada do brilho (s)
@@ -216,7 +216,7 @@ const ROGUE = {
 };
 // dificuldade de cada wave (n = 1, 2, 3...)
 // velocidade do jacaré básico: +6% a cada 5 waves (6-10: +6%, 11-15: +12%... até +30%). Os outros não mudam.
-const enemySpeedMul = () => mode === 'rogue' ? 1 + 0.06 * Math.min(5, Math.floor(Math.max(0, run.wave - 1) / 5)) : 1;
+const enemySpeedMul = () => mode === 'rogue' ? 1 + 0.08 * Math.min(5, Math.floor(Math.max(0, run.wave - 1) / 5)) : 1;
 function waveConfig(n) {
   return {
     count: 6 + (n - 1) * 5,                                   // 6, 11, 16, 21... (+5 por wave)
@@ -736,7 +736,7 @@ const sfx = (() => {
         src.connect(f); f.connect(g); g.connect(master); src.start();
         this._rain = g;
       }
-      this._rain.gain.setTargetAtTime(muted ? 0 : 0.16 * k, ac.currentTime, 0.3);
+      this._rain.gain.setTargetAtTime(muted ? 0 : 0.08 * k, ac.currentTime, 0.3);
     },
     thunder() {       // trovão: estalo + ronco grave longo
       if (!ok('thunder', 0.5)) return;
@@ -1104,6 +1104,7 @@ function whiteOf(image) {
 }
 
 let clock = 0;                                     // relógio global para animações
+let windClock = 0;                                 // relógio do vento (corre mais rápido na chuva)
 
 const medkitImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABMAAAAKCAYAAABWiWWfAAAAsElEQVR4nGOctHDnf1M9FQZywelLdxguX7oJZrOADLIwUGKgBGxYvZVBWV2FgQmXghMX7jF8b+pgeG1sy3BU1RCvy2CACZmDDv5fucZACmBCDy+Qi76FxTEoJ8czfL17HyymxseD04WmSPpxepMcwITuTVBkcK1axHB37kK42K1PXxhEzx5msL59Hr9hlLoG2THgpIENgJPL2cNgtigew0D6N6yGGoYvNol1GSiNgdgAbk0/Q1sUWycAAAAASUVORK5CYII=');   // sprites/itens/medkit.png (19x10)
 const pickupBuf = document.createElement('canvas');
@@ -1631,7 +1632,7 @@ function spawnEdgeEnemy(cfg, type = 'basic') {
   else                 { x = -m; y = rand(0, WORLD_H); }
   const T = ENEMY_TYPES[type];
   const e = makeEnemy(x, y, T.hp || ROGUE.enemyHp, (T.speed || ROGUE.enemySpeed) * (type === 'basic' ? enemySpeedMul() : 1), null, type);
-  e.hat = Math.random() < HAT.chance ? randomHat() : null;
+  e.hat = type === 'basic' && Math.random() < HAT.chance ? randomHat() : null;   // só os básicos usam chapéu
   if (T.ranged) {
     const r = Math.random();
     e.weapon = r < RANGE.shotgunChance ? 'shotgun' : r < RANGE.shotgunChance + RANGE.dualChance ? 'dual' : 'revolver';
@@ -2033,7 +2034,7 @@ function startMode(m) {
   cards.list = [];
   sfx.select();
   gameOver = false;
-  Object.assign(player, { running: false, weapon: 'shotgun', mags: { uzi: 0, revolvers: 0 }, reserve9: 0, pepperT: 0, hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
+  Object.assign(player, { running: false, zapT: 0, weapon: 'shotgun', mags: { uzi: 0, revolvers: 0 }, reserve9: 0, pepperT: 0, hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
     x: WORLD_W / 2, y: WORLD_H / 2 });
   // roguelike: casa de verdade (vida, alvo dos jacarés). Campo de treino: só cosmética.
   Object.assign(house, { hp: houseMax(), flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test' });
@@ -2593,7 +2594,7 @@ function startWave() {
   const novo = NEW_ENEMY_AT[run.wave];
   const turn = isNightWave(run.wave) !== isNightWave(run.wave - 1) ? (isNightWave(run.wave) ? '   ·   A NOITE CAIU' : '   ·   AMANHECEU') : '';
   const rainNow = rainRoll();
-  const faster = run.wave > 1 && (run.wave - 1) % 5 === 0 && run.wave <= 26 ? '   ·   OS BÁSICOS ESTÃO MAIS RÁPIDOS' : '';
+  const faster = run.wave > 1 && (run.wave - 1) % 5 === 0 && run.wave <= 26 ? '   ·   JACARÉS MAIS RÁPIDOS' : '';
   banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés${turn}${faster}${rainNow ? '   ·   COMEÇOU A CHOVER' : ''}`, isNightWave(run.wave) ? '#9db4ff' : '#e9c46a', novo ? 3.6 : 2.0, true);
   if (novo) { run.banner.threat = ENEMY_TYPES[novo]; sfx.threat(); }
   sfx.waveStart();
@@ -3254,9 +3255,15 @@ const RAIN = { chance: 0.22, from: 3, waves: 2, cooldown: 3, fade: 0.35,
   fireOut: [1, 2],           // fogo da pimenta apaga entre 1 e 2 s
   dudChance: 0.25,           // dinamite molhada falha
   iceR: 1.3, iceDur: 1.6,    // gelo mais efetivo (raio e duração)
-  bolt: [7, 13], boltDmg: 70, boltR: 90, drops: 260 };
-const weather = { on: false, k: 0, left: 0, cool: 0, boltT: 9, flash: 0, bolt: null, drops: [] };
+  bolt: [7, 13], boltDmg: 70, boltR: 90, drops: 260,
+  boltHouse: 30, boltAlly: 35, boltFence: 45, zap: 0.9,   // dano na casa / Antony / cerca; jogador fica atordoado (s)
+  boltWeight: { enemy: 1, house: 1.2, player: 0.5, ally: 0.8, fence: 0.12 },
+  wind: 4, windSpeed: 2.2, lean: 5 };       // vento na chuva: balanço x4, mais rápido, e as plantas deitam para a esquerda
+const weather = { on: false, k: 0, left: 0, cool: 0, boltT: 9, flash: 0, bolt: null, drops: [], leaves: [] };
 const raining = () => weather.k > 0.5;
+// volume da chuva: some no menu/game over; pausa, cartas de upgrade e loja abafam
+const rainVolume = () => mode === 'menu' || gameOver ? 0
+  : weather.k * (paused || run.phase === 'cards' || shop.open || (typeof setUI !== 'undefined' && setUI.open) ? 0.3 : 1);
 const ICE = { r: 190, dur: 4 };
 const THROW = { maxDist: 520, flight: 0.55, height: 120 };
 const throwables = [];
@@ -3370,9 +3377,17 @@ function updateWeather(dt) {
   weather.k += Math.sign((weather.on ? 1 : 0) - weather.k) * Math.min(Math.abs((weather.on ? 1 : 0) - weather.k), dt * RAIN.fade);
   weather.flash = Math.max(0, weather.flash - dt * 2.2);
   if (weather.bolt && (weather.bolt.t += dt) > 0.35) weather.bolt = null;
-  sfx.setRain(mode !== 'menu' && !paused && !gameOver ? weather.k : 0);
   if (weather.force) strikeLightning();                 // dev mode: raio na hora
-  if (weather.k < 0.05) { weather.drops.length = 0; return; }
+  if (weather.k < 0.05) { weather.drops.length = 0; weather.leaves.length = 0; return; }
+  {                                                      // folhas arrancadas pelo vento
+    const W = canvas.width, H = canvas.height, want = Math.round(22 * weather.k);
+    while (weather.leaves.length < want) weather.leaves.push({ x: W + rand(10, 400), y: rand(-50, H), vx: -rand(420, 700), vy: rand(40, 140), r: rand(0, 6), vr: rand(-9, 9), s: Math.random() < 0.5 ? 3 : 4, c: ['#3f7a2a', '#5a9a32', '#7a6a2a'][Math.floor(Math.random() * 3)], ph: rand(0, 6) });
+    if (weather.leaves.length > want) weather.leaves.length = want;
+    for (const l of weather.leaves) {
+      l.x += l.vx * dt; l.y += (l.vy + Math.sin(clock * 4 + l.ph) * 120) * dt; l.r += l.vr * dt;
+      if (l.x < -40 || l.y > H + 40) { l.x = W + rand(10, 300); l.y = rand(-80, H * 0.7); }
+    }
+  }
   // gotas (em coordenadas de tela)
   const W = canvas.width, H = canvas.height, want = Math.round(RAIN.drops * weather.k * (W * H) / (1280 * 720));
   while (weather.drops.length < want) weather.drops.push({ x: rand(-100, W + 50), y: rand(-H, H), v: rand(900, 1300), l: rand(14, 26) });
@@ -3389,16 +3404,35 @@ function updateWeather(dt) {
 }
 function strikeLightning() {
     weather.force = false; weather.boltT = rand(...RAIN.bolt);
-    const vis = enemies.filter(e => e.alive && !e.homeRel && e.x > cam.x && e.x < cam.x + viewW() && e.y > cam.y && e.y < cam.y + viewH());
     weather.flash = 1;
     sfx.thunder();
-    if (vis.length) {
-      const t = vis[Math.floor(Math.random() * vis.length)];
-      weather.bolt = { x: t.x, y: t.y, t: 0, seed: Math.random() * 1000 };
-      blastEnemies(t.x, t.y, RAIN.boltR, RAIN.boltDmg, 40);
-      for (let i = 0; i < 16; i++) { const a = rand(0, Math.PI * 2), sp = rand(100, 300); particles.push({ x: t.x, y: t.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, life: rand(0.2, 0.5), age: 0, size: rand(3, 6), color: Math.random() < 0.5 ? '#ffffff' : '#bfe6ff', drag: 4 }); }
-      cam.trauma = Math.min(1, cam.trauma + 0.35);
+    // alvos na tela: jacarés, a casa, o jogador, o Antony e as cercas (sorteio com peso)
+    const inV = (x, y, m = 0) => x > cam.x - m && x < cam.x + viewW() + m && y > cam.y - m && y < cam.y + viewH() + m;
+    const W = RAIN.boltWeight, opts = [];
+    for (const e of enemies) if (e.alive && !e.homeRel && inV(e.x, e.y)) opts.push({ w: W.enemy, kind: 'enemy', x: e.x, y: e.y });
+    if (house.active && house.hp > 0) { const R = houseRect(); if (inV((R.l + R.r) / 2, (R.t + R.b) / 2, 100)) opts.push({ w: W.house, kind: 'house', x: rand(R.l + 40, R.r - 40), y: rand(R.t, R.b - 40) }); }
+    if (!intro.on) opts.push({ w: W.player, kind: 'player', x: player.x, y: player.y });
+    if (ally.active) opts.push({ w: W.ally, kind: 'ally', x: ally.x, y: ally.y });
+    for (const f of fences) if (inV(f.x, f.base)) opts.push({ w: W.fence, kind: 'fence', f, x: f.x, y: f.base - 20 });
+    if (!opts.length) return;
+    let r = Math.random() * opts.reduce((a, o) => a + o.w, 0), t = opts[0];
+    for (const o of opts) { if ((r -= o.w) <= 0) { t = o; break; } }
+    weather.bolt = { x: t.x, y: t.y, t: 0, seed: Math.random() * 1000 };
+    blastEnemies(t.x, t.y, RAIN.boltR, RAIN.boltDmg, 40);              // quem estiver perto também leva
+    if (t.kind === 'house') {
+      const d = RAIN.boltHouse * houseDefMul();
+      house.hp = Math.max(0, house.hp - d); house.flash = 0.15; house.shake = 2.5; house.pop = 1; showHouseDamage(t.x, t.y - 20, d);
+      if (house.hp <= 0) destroyHouse();
+    } else if (t.kind === 'ally') damageAlly(RAIN.boltAlly);
+    else if (t.kind === 'fence') damageFence(t.f, RAIN.boltFence, t.x, t.y);
+    else if (t.kind === 'player') {
+      // jogador: tranco, fica branco e atordoado (anda devagar e não atira)
+      player.zapT = RAIN.zap; player.hurt = 1; player.invuln = Math.max(player.invuln, 0.3);
+      const a = rand(0, Math.PI * 2); player.vx = Math.cos(a) * 500; player.vy = Math.sin(a) * 500;
+      sfx.hurt();
     }
+    for (let i = 0; i < 16; i++) { const a = rand(0, Math.PI * 2), sp = rand(100, 300); particles.push({ x: t.x, y: t.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, life: rand(0.2, 0.5), age: 0, size: rand(3, 6), color: Math.random() < 0.5 ? '#ffffff' : '#bfe6ff', drag: 4 }); }
+    cam.trauma = Math.min(1, cam.trauma + (t.kind === 'player' ? 0.6 : 0.35));
 }
 // raio (em coordenadas do mundo): zigue-zague do alto da tela até o alvo
 function drawBolt() {
@@ -3423,6 +3457,12 @@ function drawRain() {
   ctx.beginPath();
   for (const d of weather.drops) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - d.l * 0.25, d.y + d.l); }
   ctx.stroke();
+  for (const l of weather.leaves) {                     // folhas girando no vento
+    ctx.save(); ctx.translate(Math.round(l.x), Math.round(l.y)); ctx.rotate(l.r); ctx.globalAlpha = Math.min(1, k * 1.2);
+    ctx.fillStyle = l.c; ctx.fillRect(-l.s, -l.s / 2, l.s * 2, l.s); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-l.s, l.s / 2 - 1, l.s * 2, 1);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
   if (weather.flash > 0) { ctx.fillStyle = `rgba(235,245,255,${0.55 * weather.flash * weather.flash})`; ctx.fillRect(0, 0, W, H); }
 }
 
@@ -4257,7 +4297,7 @@ function update(dt) {
   if (!map.ready && sandSet.complete && grassSet.complete) buildMap();
   if (!map.ready) return;
 
-  clock += dt;
+  clock += dt; windClock += dt * (1 + (RAIN.windSpeed - 1) * weather.k);
   updateCamera(dt);
   const nt = nightTarget();
   if (nt !== nightPrev) {                       // começou a anoitecer / amanhecer
@@ -4315,7 +4355,9 @@ function update(dt) {
     particles.push({ x: player.x - dx * 18 + rand(-8, 8), y: player.y + 34 + rand(-3, 3), vx: -dx * rand(30, 70) + rand(-20, 20),
       vy: rand(-25, -5), life: rand(0.3, 0.45), age: 0, size: rand(4, 7), grow: 14, color: 'dust', drag: 3 });
   }
-  const spd = introWalk ? SPEED * INTRO.walkSpeed : SPEED * (player.running ? RUN.mul : 1) * moveMul();
+  player.zapT = Math.max(0, (player.zapT || 0) - dt);
+  if (player.zapT > 0 && Math.random() < 0.3) particles.push({ x: player.x + rand(-18, 18), y: player.y + rand(-30, 10), vx: rand(-60, 60), vy: rand(-80, -20), life: 0.2, age: 0, size: rand(2, 4), color: Math.random() < 0.5 ? '#ffffff' : '#bfe6ff', drag: 4 });   // faíscas do raio
+  const spd = (introWalk ? SPEED * INTRO.walkSpeed : SPEED * (player.running ? RUN.mul : 1) * moveMul()) * (player.zapT > 0 ? 0.4 : 1);
 
   const kd = Math.exp(-12 * dt);           // knockback some rápido
   player.vx *= kd; player.vy *= kd;
@@ -4344,7 +4386,7 @@ function update(dt) {
   // tiro
   player.cooldown -= dt;
   updateMelee(dt);
-  if (mouse.down && !build.on && player.cooldown <= 0 && !gameOver && player.meleeT < 0) {
+  if (mouse.down && !build.on && player.cooldown <= 0 && !gameOver && player.meleeT < 0 && !(player.zapT > 0)) {
     if (player.weapon !== 'shotgun') fireAlt();
     else if (player.ammo > 0) {
       player.reloading = false;      // atirar cancela a recarga (o cartucho em andamento não conta)
@@ -4602,8 +4644,9 @@ function updateTrees(dt) {
 function drawTree(t) {
   if (!treeImg.complete) return;
   const S = TREE.scale;
-  const wind = Math.sin(clock * 1.1 + t.phase) * 0.6 + Math.sin(clock * 0.47 + t.x * 0.01) * 0.4;
-  const sway = wind * TREE.windAmp + t.sway;
+  const wind = Math.sin(windClock * 1.1 + t.phase) * 0.6 + Math.sin(windClock * 0.47 + t.x * 0.01) * 0.4;
+  const wk = 1 + (RAIN.wind - 1) * weather.k;                           // chuva: balança muito mais e deita para a esquerda
+  const sway = wind * TREE.windAmp * wk - RAIN.lean * weather.k + t.sway;
   const x0 = Math.round(t.x - TREE.trunkX * S), y0 = Math.round(t.baseY - TREE.baseRow * S);
   // sombra
   ctx.fillStyle = 'rgba(0,0,0,.22)';
@@ -4840,9 +4883,10 @@ function drawTuft(t) {
   if (!im.complete) return;
   const S = TUFT.scale, w = im.width, h = im.height;
   // vento: onda que atravessa a tela + rajadas lentas
-  const wind = Math.sin(clock * 1.7 + t.x * 0.011 + t.phase * 0.3) * 0.65
-             + Math.sin(clock * 0.53 + t.x * 0.004) * 0.35;
-  const sway = Math.max(-TUFT_PAD, Math.min(TUFT_PAD, wind * TUFT.windAmp * (t.big ? 1.2 : 0.8) + t.bend));
+  const wind = Math.sin(windClock * 1.7 + t.x * 0.011 + t.phase * 0.3) * 0.65
+             + Math.sin(windClock * 0.53 + t.x * 0.004) * 0.35;
+  const wk = 1 + (RAIN.wind - 1) * weather.k;
+  const sway = Math.max(-TUFT_PAD, Math.min(TUFT_PAD, (wind * TUFT.windAmp * wk - RAIN.lean * weather.k) * (t.big ? 1.2 : 0.8) + t.bend));
   const x0 = Math.round(t.x - (w * S) / 2), y0 = Math.round(t.y - h * S);
   ctx.drawImage(tuftFrame(im, t.flip, Math.round(sway * 2)), x0 - TUFT_PAD, y0);
 }
@@ -5932,6 +5976,7 @@ function loop(now) {
   last = now;
   update(dt);
   music.update(dt);
+  sfx.setRain(rainVolume());
   render();
   requestAnimationFrame(loop);
 }
