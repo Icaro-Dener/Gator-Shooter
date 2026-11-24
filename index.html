@@ -91,7 +91,7 @@ const CRIT_MULT = 2;               // crítico dobra o dano
 const lv = {};                      // níveis de cada upgrade
 const UPGRADES = [
   { id: 'crit',      title: 'Olho de Jacaré',  desc: '+5% de chance de crítico',            cat: 'geral'   },
-  { id: 'vamp',      title: 'Vampirismo',      desc: '+2% do dano causado vira vida da casa', cat: 'geral' },
+  { id: 'vamp',      title: 'Vampirismo',      desc: '+1% do dano causado vira vida da casa (máx. 5%)', cat: 'geral', max: 5 },
   { id: 'atkSpd',    title: 'Gatilho Leve',    desc: '+10% de velocidade de ataque (todas as armas)', cat: 'armas' },
   { id: 'shotDmg',   title: 'Chumbo Grosso',   desc: '+10% de dano (todas as armas)',        cat: 'armas'   },
   { id: 'reload',    title: 'Mãos Rápidas',    desc: '+10% de velocidade de recarga (todas as armas)', cat: 'armas' },
@@ -133,7 +133,7 @@ function resetStats() { for (const u of UPGRADES) lv[u.id] = 0; }
 resetStats();
 // valores derivados (usados pelo jogo no lugar das constantes)
 const critChance    = () => 0.05 * lv.crit;
-const vampirism     = () => 0.02 * lv.vamp;
+const vampirism     = () => 0.01 * Math.min(5, lv.vamp);
 const shotCooldown  = () => SHOT.cooldown / (1 + 0.1 * lv.atkSpd);
 const pelletDamage  = () => PELLET_DAMAGE * (1 + 0.1 * lv.shotDmg);
 const reloadShell   = () => RELOAD_SHELL / (1 + 0.1 * lv.reload);
@@ -194,6 +194,8 @@ const ROGUE = {
   rewardHeal: 0.2,       // curativo: recupera 20% da vida máxima da casa
 };
 // dificuldade de cada wave (n = 1, 2, 3...)
+// velocidade dos inimigos: +8% a cada 5 waves (6-10: +8%, 11-15: +16%... até +40%)
+const enemySpeedMul = () => mode === 'rogue' ? 1 + 0.08 * Math.min(5, Math.floor(Math.max(0, run.wave - 1) / 5)) : 1;
 function waveConfig(n) {
   return {
     count: 6 + (n - 1) * 5,                                   // 6, 11, 16, 21... (+5 por wave)
@@ -462,12 +464,12 @@ const rand = (a, b) => a + Math.random() * (b - a);
 // SFX sintetizados (Web Audio, sem arquivos) — M liga/desliga
 // =====================================================================
 const sfx = (() => {
-  let ac = null, master = null, noiseBuf = null, muted = false;
+  let ac = null, master = null, noiseBuf = null, muted = false, vol = 1;   // vol: ajuste do jogador (Configurações)
   const last = {};
   function init() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
     ac = new (window.AudioContext || window.webkitAudioContext)();
-    master = ac.createGain(); master.gain.value = 0.45;
+    master = ac.createGain(); master.gain.value = 0.45 * vol;
     const comp = ac.createDynamicsCompressor();       // evita estourar com muitos sons juntos
     master.connect(comp); comp.connect(ac.destination);
     noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
@@ -703,6 +705,8 @@ const sfx = (() => {
       tone({ dur: 0.12, peak: 0.15, wave: 'square', f0: 990, delay: 0.07 });
     },
     get muted() { return muted; },
+    set muted(v) { muted = !!v; },
+    setVolume(v) { vol = v; if (master) master.gain.value = 0.45 * vol; },
   };
 })();
 
@@ -727,7 +731,7 @@ const dayNightSfx = {
 function playDayNight(which) {
   if (sfx.muted) return;
   const a = dayNightSfx[which];
-  a.volume = 0.7; a.currentTime = 0;
+  a.volume = 0.7 * settings.sfx; a.currentTime = 0;
   a.play().catch(() => {});
 }
 
@@ -736,20 +740,41 @@ const music = (() => {
     theme: new Audio('musica/gator-shooter-theme.mp3'),
     swamp: new Audio('musica/swamp-attack.mp3'),
     shop:  new Audio('musica/old-bill-shop.mp3'),     // visita do velho Bill
+    story: new Audio('musica/gator-story.mp3'),       // tela da história
+    morning: new Audio('musica/morning-scale.mp3'),   // horda de dia (reveza com Swamp Attack)
+    moss:  new Audio('musica/midnight-moss.mp3'),     // horda de noite
+    river: new Audio('musica/river-wave.mp3'),        // horda de noite (reveza com Midnight Moss)
   };
   for (const t of Object.values(tracks)) { t.loop = true; t.volume = 0; t.preload = 'auto'; }
+  // modo horda: playlist do dia e da noite. Cada faixa toca até o fim e passa a vez para a outra;
+  // cada dia/noite novo começa pela faixa que não tocou por último
+  const cycle = { day: { list: ['swamp', 'morning'], i: 0 }, night: { list: ['moss', 'river'], i: 1 } };
+  let period = null, lastRogue = null;
+  for (const c of Object.values(cycle)) for (const name of c.list) {
+    tracks[name].loop = false;
+    tracks[name].addEventListener('ended', () => {
+      if (c.list[c.i] === name && mode === 'rogue') { c.i = (c.i + 1) % c.list.length; }   // acabou: entra a outra
+    });
+  }
+  function rogueTrack() {
+    const p = nightTarget() ? 'night' : 'day';
+    if (p !== period) { if (period !== null || p === 'night') cycle[p].i = (cycle[p].i + 1) % cycle[p].list.length; period = p; }
+    return cycle[p].list[cycle[p].i];
+  }
   let unlocked = false, lastWant = null;
   // o navegador só deixa tocar áudio depois de uma interação
   const unlock = () => { unlocked = true; };
   ['mousedown', 'keydown'].forEach(ev => window.addEventListener(ev, unlock));
-  const want = () => (bill.active && bill.state !== 'leave' ? 'shop' : mode === 'rogue' ? 'swamp' : 'theme');
+  const want = () => (mode === 'menu' && story.open ? 'story' : bill.active && bill.state !== 'leave' ? 'shop' : mode === 'rogue' ? rogueTrack() : 'theme');
   return {
     restart(name) { const t = tracks[name]; if (t) { try { t.currentTime = 0; } catch (e) {} } },
+    resetRogue() { cycle.day.i = 0; cycle.night.i = 1; period = null; lastRogue = null; },   // partida nova: começa com Swamp Attack
     update(dt) {
       if (!unlocked) return;
       const w = want();
       if (w !== lastWant) {                       // horda e loja começam do início (voltando da loja, a horda continua de onde parou)
-        if (w === 'shop' || (w === 'swamp' && lastWant !== 'shop')) this.restart(w);
+        if (w === 'shop' || w === 'story') this.restart(w);                      // loja e história começam do início
+        else if (mode === 'rogue') { if (w !== lastRogue) this.restart(w); lastRogue = w; }   // faixa nova da horda: do início; voltando da loja, continua
         lastWant = w;
       }
       musicPreviewT = Math.max(0, musicPreviewT - dt);
@@ -1389,7 +1414,7 @@ function spawnEdgeEnemy(cfg, type = 'basic') {
   else if (side === 2) { x = rand(0, WORLD_W); y = WORLD_H + m; }
   else                 { x = -m; y = rand(0, WORLD_H); }
   const T = ENEMY_TYPES[type];
-  const e = makeEnemy(x, y, T.hp || ROGUE.enemyHp, T.speed || ROGUE.enemySpeed, null, type);
+  const e = makeEnemy(x, y, T.hp || ROGUE.enemyHp, (T.speed || ROGUE.enemySpeed) * enemySpeedMul(), null, type);
   if (T.ranged) {
     const r = Math.random();
     e.weapon = r < RANGE.shotgunChance ? 'shotgun' : r < RANGE.shotgunChance + RANGE.dualChance ? 'dual' : 'revolver';
@@ -1696,14 +1721,274 @@ function startMode(m) {
   }
   nightK = nightPrev = nightTarget();
   Object.assign(tips, { t: 0, usedRun: false, usedMelee: false });
-  if (m === 'rogue') {                                   // aviso grande: o objetivo é defender a casa
-    banner('DEFENDA SUA CASA', 'os jacarés vão atrás dela — não deixe ela cair!', '#e9c46a', 3.4, true);
-    run.banner.intro = true;
-  }
   run.teeth = 0; teeth.length = 0; toothPop = 0;
-  Object.assign(shop, { open: false, lv: shopLv0(), inv: { dynamite: 0, pepper: 0, ice: 0 }, tab: 'armas', msg: '', msgT: 0 });
+  Object.assign(shop, { visit: 0, bought: {}, open: false, lv: shopLv0(), inv: { dynamite: 0, pepper: 0, ice: 0 }, tab: 'armas', msg: '', msgT: 0 });
   mines.length = 0; throwables.length = 0; ally.active = false;
   bill.active = false; bill.talk = null; cut.on = false; cut.bars = 0; cards.returnTo = null;
+  intro.on = false;
+  music.resetRogue();
+  if (m === 'rogue') startIntro();                        // abertura: o jacaré sai de casa
+}
+
+// =====================================================================
+// História (botão no menu): storyboard (historia.gif, 10 quadros 112x64) + texto digitando
+// =====================================================================
+const storyImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABACAYAAADCmvPmAAAFMklEQVR4nO1dS2sUQRDulQ2TJQlIgjc3GlnQXETwpLeAx/wH7/4g7/4H77l5EARvUVgTyeYmCUISdFCIdJJeKzX9qK7pnpne6Q+W3Z2Zfmx/XV1P40AIcSkyksWdtieQUQ+ZwMSRCUwcmcDEkQlMHJnAxJEJTByZwMQx3NjdrVwsj36LNlFsLtfuo7z5DZS+dL9XtevSWsi54N9TkcC2J5zRgyO0T5usdPzWzhEY4vhcVOjWpnMENo0yMWnG8x2OPny+dWEkWsax+5ER4bmREOLn/SdiEaAzXhSG47Ulr85mZ38CTSsjBIaSEEjiZK2oPDQ9K+effQlvGrMF32AVN0JHniRMveB104KpVxuYobG7vsGiSCD84VDa1HdJoHzhe7BdHfiSD8cc94Qwkx4k6UBFYkhSQpIwMWyuPmBIeQiTh8nREdAXyegEgU0bMrB/2C/UwZT2055KXcWRx4TAhYHGjITSh+oFr5tg2xDynpJo0zj4GmVM0fcjVKf3XDufoouw9MnveAPBcdTnWFJXbC53OhrjyoqwQmlYEjgLC/uwSSjuVyeZfYAxEoMvuBaGQpROgkx9uO5zxu+TO3GLQOy46xbLhxDcj2lzUEiB/ii1TZ1jtMvHKsTgxYOtaKX1bfhnM+DiqGA2NUWFSUshKx81ndQUeRPHsU8lIMVc5JAaPYGWIjX0ha1LXbsQDv+UsFF8amQw1ndWRQic7p2LqARSF5O76K52nID4OELEx0XyvW1e4P7etr/l/PVtac8HwmC2r0UYGl0Nv50iyeEQEQvzYLavX2XyA239mJ6pE07DiJHWOl/ZvnpfvdifSwXl2OVKqsKP/SWxvnPNz8W3v/PrUCK1kRjO4lEtTp+2dYMFXMAFOjnZsupDM0lx8qPY5alYodydD9vrYqm+/ZqIbvuYbxJyc8jj22b8XBHIDUtRiInRltpfsbkc1DWQR+nRx7FoAyZXSHuEUo4uzuKbpEcX4NaNY3puAvSm1OlYD9YJWG9sHFaOUUji6d61XvRxOai6UelapYMLcVh5RhtKo+gomxERy5pUczCNMbHo4bokyrZqISEevymC6T5sHOnGsxKIF4BTSuEDW2zUNi6u35k0kJm4JurA+dynd4+u3p+/PmCO8b8PCqxWKGVhuCR3PR1UWpxnGyRxkgBfIm2kKfdFbFzPp5KNwPqEQgpHB1LSS2oOGJSyj5j4/n4gHu7S4v4c6XOSZwDbiPGFIsBmpGD4jjsN7E5gKVQ6qqr3eE56lIQuZ1F1BU91iKHmB5tGyPILaYlCEqGkuYwXuLGc+UBTaKpLccsZKk5W33+9fMbSa6a8ILwfQgo5xzgplBaSqNgl9+O1JVaqqy5CHqd1MM9GpIpZC/P3JY2q73QhM3WcSl/UWRPTB5SEYxTrOlcbit+mLFNIZiUst6Jvq8jTYbD69NWlbnIUZX33+Mut75x/ayjrVmQ/8j2EfnKBqwclcDuqWxFS9+F51JJAVTSEieQUH3WtHqUgWJw49BUiB+iLKwmUH7hSqABJtEmirmrMND5lPkUkCWzaItUZRfKarjIuSlWaIsN1jKr7vuSFROmxMXWE2e5zIYnDG0HXt/EP/YTY3YuK4iavqF54rZSOCglqn61bodyi27aC1RKKRNgeGhq6nKBLN0rrVLkRJql3/p2YJqUwdLacW+XMhWnu3BpSSZ5uTVz1rEn8oZ+Ype1ljb5DzktnCLnIk/el3Of/diBhJCGBGWZkAhNHJjBxZAITRyYwcWQCE0cmMHFkAkXa+Afz/RT9TEJK1gAAAABJRU5ErkJggg=='),
+  img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABACAYAAADCmvPmAAADSUlEQVR4nO2bO24bMRCGKWENBbBbt25SBCniE7j0GXzInMM3cCG4cJN2awFZxIANJl6HoPicB3cGmL+xBY1Ws/w4Dy6pnXPuzZnUar+1AyacDKByGUDlMoDKZQCVywAqlwFULgOoXNPV7T3LhQ83X9zy6zfLtU3MEejhhX9NfLIUOkCcE3lP7ZBF3dhstOd0yGogvyyFKpcBHKhc1sKk18kp0XqTYVo+DOhysWXAf76lZ4Auu1gBYtaCHLOVauKoTqG1CMDeqL+mxE728OGXNN/EpFBpA6MlKtkBtqTRErzLr/xz7PTyqhYky+jUCneo2G4EsFjxd0KB1u4vBk2RdSauCGuBGL6/BbicUr6UoEKatXhsoFEMWge2ziRvl3NMKrycaj72RBNlvQcv5DHpQBu8VpW68lKEYWpo9+iF6SJOk9iGJaXr73/+/v3249zV56dXNx8vPm28/OuW67XYQpQag9Rrqv3S3dXt/Ru2ILd2Yyl4qQj0g5wC9vhz9/n/3cM/tz3EVfFnwvdqaoXZ0uCM7EpJ8hfU4Vz6TMELobXY1t471//IxEZnT3RhIxFcA3tToaaFuqa9wi6Ao1LDmvrCFNiTDiGKozWslaGkNV1DvIHMsBzEXDPTkzpz9uHnuCcMVUaaJJ48K9Wf+eiKkTIfL85scvbr93j7VH0dpaE1kPJxEOaRlQdxnYDXah/bhh0up+IdDWwAsD6JMTn2cQKnUMginktzx+K9xZ5apUeNm9bAEOJoeD0Q5optXP9KDQzFTgXlWE1bO+MHZKvW/C4DDhuhXM89UxKxqNkSYo+g0ceZnYYsI3o2eEfq8azzxNfG0aUEDBB7HC43uyVG4oloh56jXyA52EsZXX6wKI80YNXjSwlM3LFTqWs7CXssoNfxraLxBJhALScParbDAUIcpK6Fl0jIXMsCzrUfKcAalJ6b06hlQ3hkNbA34iQciB0Jr3S4S0QEjqyLUrQ0TNoRE5UcIFRaQC7CssckbWCkglyEgRMHcBXl7/8WgkkhFZxYgFTLkSX4bE8dlg5MFcCSKAd6UQYtlP1GXrkMoHIZQOUygMrldzRFLORNMFkEKpcBVC4DqFwGULkMoHIZQOUygMplAJ1uvQNABLEaOcJBiAAAAABJRU5ErkJggg=='),
+  img('data:image/png;base64,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'),
+  img('data:image/png;base64,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'),
+  img('data:image/png;base64,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'),
+  img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABACAYAAADCmvPmAAAEg0lEQVR4nO2dzWpTQRTHJ6XQYqJdiYK2CClWkdSVKzdFA93q0jcQ3Qm+gA+guBD6EC7cCkV00QfQ6qIlBbEt6E5rBiwUK+c2E09O5947c5P5OMn8IfROyMed+fGfc87c3GlNCHEskthqKvQJJA2nBJC5EkDmSgCZKwFkrgSQuRJA5koAmWu6sdwOegIzC7Pi8Nuf/rGN6s3pgbbcOfL6fnze6ti3ao3l9jE3eGrgpeWAu/jc0BCDAawCL2+A68RJtsr7PFOQISEGAWgLTzegw0LLk+47TECGguhmFApEO3hhdzCP+jH/d6ANgzhqxxUJf5/6qzuHPEHffEL06kDasYXaGXFx/opoLi32n9tYX+8fd1emvLguT/S7yyDivvmC6A1gHjyqIpghJCOHGAQgwLvdbg8AsoHpG6isCHFsANKkBeLewyePB16z9vyVMcwQ7pQWEH26MBhAcKBSa3mJBUxZASJ7gLQDOoCfX78Qi2dnROf3YdZ+8GxNC1MHtFkA0wVQU4i+XOgVoKr5cOkw93Mz+wsAsXQwNz9tFcbNJoG5s9UR33e/jhSmrqQpg8gWoM59Ol3d/HIKYBnMsqm26RBmTC4MDhAG4NKbj9lxEUSqW09f5sKE6RmAmcKsAtQEImuApu5TnQcX2kI0gUndSWFWdWcsLgwKkHZcQawCcnb1kTajtYmbyrUmME1j4UQBpEtlamotAzrbg0dVBhNPtTqQGKYOZAzTaNQAqXCs/HD3WnbceD+4+A0DvTp9pxAmgATpYNLVH5wlq2QKtH/v5vgCtI1/uD2sGghoGUwFUlc/mpQ4260bweNgMIAu4NnA1DmSOg+Da10+d/LavYMMIDgQFNqF3q8H+lQXxS2AuSH+u+zt0bsMKIDEMCGDVc7D4AbaewdC9KZz7MIQGmuAWDQJUUDBbcqdOOZR1+HnFERwImTOISFO7M8KuytT/UcGk8RANX1ieLgNENVrcPnjWxPjQFN3dsVJbMumSAIPQ1TuVNkpQNxv9t7rURPrwDJBkgJgdA/qzPvXz5+qW30pASyBqLJN1QbhehBDBDeCE31OqQmgJUgMNIa4mABWFHUhhajcOLYAoeD1/TNB18IQQT4gOgGoftxqo1Hf5+BSebEQwOkgtn7tOFsL9eLAUHfuhFARRBduTDGwooqSGXyMIWbtnhvHAiCNg5ymUdk7V11JQZfg6HoqC4BV4iA3bRusgSqI/QWAuSZPB+bFwXHIRjs5LqROHDU85wDHNRuV6Bx1sVAH2AW8aJIYTrFQllzApYkMwHN5uck5QOzConKC21RaR/AAkJpG6ZV712VUFA7UQYzRhdLwjl0Mz/XFXm+FvIkLY4YoS+ApF1J4rhcxonJgrBClxb3yrsqFKMoIUxfGBFFawFPTJcDzdY+8Vwdygygtd6mAPvmEx3afGNfZqiTfk/aJGXIvlbwBrTsAOYzrJ2anJtrhqpvcyQj2SguxuQ9W0MoZd9wGYp4DpefdCkPDA9XS/43grSjrwCRzJYDMlQAyVwLIXAkgcyWAzJUACt76B9/G9by1x6IXAAAAAElFTkSuQmCC'),
+  img('data:image/png;base64,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'),
+  img('data:image/png;base64,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'),
+  img('data:image/png;base64,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'),
+  img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABACAYAAADCmvPmAAAE2UlEQVR4nO1dzW7UMBBOo0hBbE/AEXHphRPvgMQhh0q87t54Ei49o54oaiSkIgOznZ2dscc/G4+3/qSoSTaJnfk8f/ZEvRqG4WnoaBZj7Q505KET2Dg6gY2jE9g4OoGNoxPYODqBjaMT2Dim609fkm+eP7w67K93j9mdKf28rYH777C7mQ77999+Hq6Bd9O8L1wj/T62IgwLmA32adr/+nE4WF6/O+zj8/S30EhJ0SSLwuH6hjVIC9A+Ciwr3AZo7sP338F2R440H3nuQSnCds+E7RIxFxyAmLgQRkwQ99dtQFpOJ+lAwYNFItWiVq4e7Svtt0ET8XOprEbJRMKx5ETffL72NowdONcGHiRfP743G7TMZBBxg4ozg1qArNzmZKCRAybxVMpnRsiXhiD57BjE+ndLcH0Fq+X21VGob3Rx2gbntaYXa7pWG/cJ/jTVB29tIZwfBF9I5QeuLTqNkIjKQazZodqyVwZG0nVa7avlj0Myn2I67cJhi4GFZFpDxGpToxQtdNfubp7jhJDccORJUzH8DNqHsab2paKEz1oK+z0qWIkwIEciiJ53xPpkP1onTxIER8CCfIN0je+8D7WjZOCAysPUVFqOkBYPWS1EmZp35xRpqql9Wn8qTSMtEcS0QGIKJm3wwp0PAex3zNSQFcyVgzVuxYIb0KZMqGWBWulXchT6UgjZ0ndL05E+2dB7Rqsvj8/XjgC3gjSHjGdlKKoT2JGHSVJf3/xmCqRSAu08KSTAl6aN98xi7z8Z61zMJhrIkX5pRNRCkEBne7kpHqlMICU4iVmBuGQ8ML4uVOw01ooMpbYsRKezgT4ka2DpkgFfBFVy9r80Ytv2lRTGtOlrl5NjsBWpcioFXBASe7x1ILNmtCUtyMaQy8kcz26NW5kPTadDwtrSV86NmFFWqtL8JSZB84Lccy4xFYgBlpsUCDrglEuaF3XHPZFvVPMA0QS6UcONHGzepMDF0qq+BueuKveVZkqgsjWjgTFV21aqu+eKH+OAMow5GiJNvnLX0Dp/Ck0hksXS/JUQp5FJSRy1BEKm5i/UISnP4wpyfAu8uGgVjksV826dB2I3w324Qs0odUtwXqpWg/MnzNReQZeKlaAS+ZyYGwtgjkwoNwtC6xN9YS++j9vPNStbaN76/51jtE/SLt9ggEDQZ7loG1JC31fkG9fWYBCTuy6I0w4IgVtLJ0rN/dL3xpoupRTcPfg+M2lEDewVUW2pyPdcg3YCcyBFRz7fx5UbxpiW2tNqC4l64RyARsOlyMFfYoEMnbyPI9LnyggsIywzp+kjFjhn4qQFXa5Tvk/EXKdwjmTFjC5C5XYKeZroXcqHsZJQc4rJBYB8bUjRABYhfeEQa2XOiSk0mjQmLtUMQvGOxdWJJSJtwbKSwn0NsDnFz5bud+2N1NzFrKC/dOwCxJTSPi4vBPz1gW5zF2kS9dyOcIPDSk6VAq4IyTcZwFUY0A3iBQqnmWZK6wFWghktag02OicKmGiIyl1U6gXgmevdaaRVO6XIGXhcv7VlmBK4FA0yAtzmyfCXHDFHQg7oC7VmRu8jCKHXpgxUzMuRBg5G0Ir2rRv3U/ORzxNsb29vD/t9G7Jk4GS5hTyv+j/+aBvVo9COPHQCG0cnsHF0AhtHJ7BxdAKHtvEHC8JfXfmR/qQAAAAASUVORK5CYII=')];
+const STORY = [                     // um quadro do gif por tela; o texto vai na faixa preta de baixo
+  { frame: 0, title: 'BEWARE GATORS' },
+  { frame: 1, text: 'Um jacaré foi atingido por uma luz misteriosa, que mudou sua maneira de enxergar o mundo.' },
+  { frame: 2, text: 'Agora inteligente, ele se viu sozinho em um pântano onde nenhum outro animal parecia compreendê-lo.' },
+  { frame: 3, text: 'Durante sua caminhada,' },
+  { frame: 4, text: 'encontrou uma velha cabana abandonada' },
+  { frame: 5, text: 'e uma escopeta.' },
+  { frame: 6, text: 'Com o tempo, reconstruiu o lugar' },
+  { frame: 7, text: 'e transformou aquela cabana em seu lar.' },
+  { frame: 8, text: 'Finalmente, poderia viver em paz, longe de problemas.' },
+  { frame: 9, text: 'Mas nem todos os animais aceitavam seu estilo de vida. O que começou como uma simples tentativa de viver tranquilamente logo se transformaria em uma luta para proteger tudo aquilo que havia conquistado.' },
+];
+const story = { open: false, i: 0, t: 0, shown: 0, fade: 0 };
+function openStory() { Object.assign(story, { open: true, i: 0, t: 0, shown: 0, fade: 0 }); sfx.select(); }
+function closeStory() { story.open = false; sfx.select(); }
+function storyAdvance() {
+  const sc = STORY[story.i], len = (sc.text || sc.title).length;
+  if (story.shown < len) { story.shown = len; return; }          // primeiro clique completa o texto
+  if (story.i >= STORY.length - 1) { closeStory(); return; }
+  story.i++; story.t = 0; story.shown = 0; story.fade = 1;
+  sfx.hover();
+}
+function updateStory(dt) {
+  story.t += dt; story.fade = Math.max(0, story.fade - dt * 2.5);
+  const sc = STORY[story.i], len = (sc.text || sc.title).length;
+  story.shown = Math.min(len, story.shown + dt * (sc.title ? 14 : 38));
+  if (mouse.pressed) storyAdvance();
+  mouse.pressed = false;
+}
+function drawStory() {
+  const W = canvas.width, H = canvas.height, sc = STORY[story.i];
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  // quadro em tela cheia (112x64, com faixas pretas em cima: linhas 0-8 e embaixo: 56-63)
+  const fr = storyImgs[sc.frame];
+  const S = Math.min(W / 112, H / 64), fw = 112 * S, fh = 64 * S;
+  const fx = Math.round((W - fw) / 2), fy = Math.round((H - fh) / 2);
+  if (fr.complete) { ctx.imageSmoothingEnabled = false; ctx.drawImage(fr, fx, fy, Math.round(fw), Math.round(fh)); }
+  // texto na faixa preta de baixo do quadro
+  const barTop = fy + 56 * S, barH = 8 * S, maxW = Math.min(fw, W) * 0.9;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (sc.title) {
+    const fs = Math.max(14, Math.floor(barH * 0.62));
+    ctx.font = `bold ${fs}px monospace`;
+    const t = sc.title.slice(0, Math.floor(story.shown));
+    ctx.fillStyle = '#e9c46a'; ctx.fillText(t, W / 2, barTop + barH / 2);
+  } else {
+    // maior fonte em que o texto inteiro cabe na faixa
+    let fs = Math.max(12, Math.floor(barH * 0.36)), lines, lh;
+    for (; fs > 11; fs--) {
+      ctx.font = `${fs}px monospace`; lh = Math.round(fs * 1.3);
+      lines = wrapLines(sc.text, maxW);
+      if (lines.length * lh <= barH * 0.9) break;
+    }
+    const y0 = barTop + barH / 2 - (lines.length - 1) * lh / 2;
+    let left = Math.floor(story.shown);
+    lines.forEach((l, k) => {
+      const part = l.slice(0, Math.max(0, left)); left -= l.length + 1;
+      ctx.fillStyle = '#f4f1de'; ctx.fillText(part, W / 2, y0 + k * lh);
+    });
+  }
+  // na faixa de cima: progresso e dica
+  const topY = fy + 4.5 * S, dot = Math.max(6, Math.round(S * 0.7));
+  for (let k = 0; k < STORY.length; k++) {
+    ctx.fillStyle = k === story.i ? '#e9c46a' : 'rgba(244,241,222,.3)';
+    ctx.fillRect(Math.round(W / 2 - STORY.length * dot + k * dot * 2), Math.round(topY - dot / 2), dot, dot);
+  }
+  if (Math.floor(story.shown) >= (sc.text || sc.title).length) {
+    ctx.font = `${Math.max(11, Math.floor(S * 1.6))}px monospace`; ctx.textAlign = 'right';
+    ctx.fillStyle = `rgba(244,241,222,${0.45 + 0.25 * Math.sin(clock * 4)})`;
+    const last = story.i === STORY.length - 1;
+    ctx.fillText(`${last ? 'voltar ao menu' : 'continuar'} ▸  ·  ESC sai`, fx + fw - 4 * S, topY);
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  if (story.fade > 0) { ctx.fillStyle = `rgba(0,0,0,${story.fade})`; ctx.fillRect(0, 0, W, H); }   // transição entre quadros
+}
+
+// =====================================================================
+// Configurações (menu principal e pausa). Música e painel de atributos usam o que já existia.
+// =====================================================================
+const settings = { sfx: 0.8, shake: 1, tips: true, fps: false };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('gs_settings') || '{}')); } catch (e) {}
+sfx.setVolume(settings.sfx);
+const saveSettings = () => { try { localStorage.setItem('gs_settings', JSON.stringify(settings)); } catch (e) {} };
+const clamp01 = v => Math.max(0, Math.min(1, Math.round(v * 10) / 10));
+function setFullscreen(v) {
+  try {
+    if (v && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    if (!v && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch (e) {}
+}
+const SHAKE_OPTS = [[0, 'DESLIGADO'], [0.5, 'BAIXO'], [1, 'NORMAL'], [1.6, 'FORTE']];
+const SET_ROWS = [
+  { id: 'music', label: 'Música',             kind: 'slider', get: () => musicLevel, set: v => setMusicLevel(clamp01(v)) },
+  { id: 'sfx',   label: 'Efeitos sonoros',    kind: 'slider', get: () => settings.sfx, set: v => { settings.sfx = clamp01(v); sfx.setVolume(settings.sfx); saveSettings(); } },
+  { id: 'mute',  label: 'Som (tecla M)',      kind: 'toggle', get: () => !sfx.muted, set: v => { sfx.muted = !v; }, on: 'LIGADO', off: 'MUDO' },
+  { id: 'shake', label: 'Tremor da tela',     kind: 'cycle',  opts: SHAKE_OPTS, get: () => settings.shake, set: v => { settings.shake = v; saveSettings(); cam.trauma = Math.max(cam.trauma, 0.5); } },
+  { id: 'full',  label: 'Tela cheia',         kind: 'toggle', get: () => !!document.fullscreenElement, set: setFullscreen },
+  { id: 'stats', label: 'Painel de atributos (Ctrl)', kind: 'toggle', get: () => showStats, set: v => { if (v !== showStats) toggleStats(); } },
+  { id: 'tips',  label: 'Dicas de controles', kind: 'toggle', get: () => settings.tips, set: v => { settings.tips = v; saveSettings(); } },
+  { id: 'fps',   label: 'Mostrar FPS',        kind: 'toggle', get: () => settings.fps, set: v => { settings.fps = v; saveSettings(); } },
+];
+const CONTROLS = [
+  ['WASD', 'mover'], ['MOUSE', 'mirar'], ['CLIQUE ESQ.', 'atirar'], ['CLIQUE DIR.', 'faca'],
+  ['SHIFT', 'correr'], ['R', 'recarregar'], ['1 2 3 / RODA', 'trocar arma'], ['Q', 'dinamite'],
+  ['F', 'pimenta'], ['C', 'cubo de gelo'], ['E', 'loja do Bill'], ['ESC / P', 'pausa'],
+];
+const setUI = { open: false, sel: 0 };
+function openSettings() { setUI.open = true; setUI.sel = 0; mouse.pressed = false; sfx.select(); }
+function closeSettings() { setUI.open = false; mouse.pressed = false; sfx.select(); }
+function resetSettings() {
+  setMusicLevel(0.7); settings.sfx = 0.8; sfx.setVolume(0.8); sfx.muted = false;
+  settings.shake = 1; settings.tips = true; settings.fps = false; if (!showStats) toggleStats();
+  saveSettings();
+}
+function changeRow(r, dir) {
+  if (r.kind === 'slider') r.set(r.get() + 0.1 * dir);
+  else if (r.kind === 'toggle') r.set(!r.get());
+  else {
+    const i = r.opts.findIndex(o => o[0] === r.get());
+    r.set(r.opts[((i < 0 ? 2 : i) + dir + r.opts.length) % r.opts.length][0]);
+  }
+  sfx.hover();
+}
+// posições (em coordenadas de tela)
+function settingsLayout() {
+  const W = canvas.width, H = canvas.height;
+  const pw = Math.min(900, W - 32), wide = pw >= 760;
+  const rh = Math.max(34, Math.min(46, (H - 210) / SET_ROWS.length));
+  const ph = Math.min(H - 32, 96 + SET_ROWS.length * rh + 84);
+  const px = Math.round((W - pw) / 2), py = Math.round((H - ph) / 2);
+  const colW = wide ? Math.round(pw * 0.6) : pw;              // coluna dos ajustes (controles à direita se couber)
+  const vw = Math.min(230, colW * 0.46), vx = px + colW - vw - 24;
+  const rows = SET_ROWS.map((r, i) => {
+    const y = py + 86 + i * rh, bh = rh - 10, o = { r, i, y, h: rh, val: { x: vx, y: y + 5, w: vw, h: bh } };
+    if (r.kind === 'slider') {
+      o.minus = { id: 'm' + i, x: vx, y: y + 5, w: bh, h: bh };
+      o.plus = { id: 'p' + i, x: vx + vw - bh, y: y + 5, w: bh, h: bh };
+      o.bar = { x: vx + bh + 10, y: y + rh / 2 - 5, w: vw - bh * 2 - 20, h: 10 };
+    }
+    return o;
+  });
+  const bw = Math.min(200, (pw - 72) / 2), by = py + ph - 62;
+  const btns = [
+    { id: 'reset', label: 'PADRÃO', sub: '', x: px + pw / 2 - bw - 8, y: by, w: bw, h: 44 },
+    { id: 'back',  label: 'VOLTAR', sub: '', x: px + pw / 2 + 8,      y: by, w: bw, h: 44 },
+  ];
+  return { px, py, pw, ph, wide, colW, rows, btns };
+}
+const inR = (b, x, y) => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+function updateSettings() {
+  const L = settingsLayout();
+  const hovRow = L.rows.find(o => mouse.x >= L.px && mouse.x <= L.px + L.colW && mouse.y >= o.y && mouse.y < o.y + o.h);
+  const hovBtn = L.btns.find(b => inR(b, mouse.x, mouse.y));
+  const key = hovRow ? 'set:r' + hovRow.i : hovBtn ? 'set:' + hovBtn.id : null;
+  if (key && key !== lastHover) { sfx.hover(); if (hovRow) setUI.sel = hovRow.i; }
+  lastHover = key;
+  if (mouse.pressed) {
+    if (hovBtn) { if (hovBtn.id === 'back') closeSettings(); else { resetSettings(); sfx.select(); } }
+    else if (hovRow) {
+      const o = hovRow, r = o.r;
+      if (r.kind === 'slider') {
+        if (inR(o.minus, mouse.x, mouse.y)) changeRow(r, -1);
+        else if (inR(o.plus, mouse.x, mouse.y)) changeRow(r, 1);
+        else if (mouse.x >= o.bar.x - 6 && mouse.x <= o.bar.x + o.bar.w + 6) { r.set((mouse.x - o.bar.x) / o.bar.w); sfx.hover(); }
+      } else if (inR(o.val, mouse.x, mouse.y) || mouse.x < o.val.x) changeRow(r, 1);
+    }
+  }
+  mouse.pressed = false;
+}
+function settingsKey(k) {
+  const n = SET_ROWS.length, r = SET_ROWS[setUI.sel];
+  if (k === 'escape' || k === 'p' || k === 'backspace') return closeSettings();
+  if (k === 'arrowup' || k === 'w') { setUI.sel = (setUI.sel + n - 1) % n; sfx.hover(); }
+  if (k === 'arrowdown' || k === 's') { setUI.sel = (setUI.sel + 1) % n; sfx.hover(); }
+  if (k === 'arrowleft' || k === 'a' || k === '-') changeRow(r, -1);
+  if (k === 'arrowright' || k === 'd' || k === '+' || k === '=') changeRow(r, 1);
+  if ((k === 'enter' || k === ' ') && r.kind !== 'slider') changeRow(r, 1);
+}
+function drawSettings() {
+  const L = settingsLayout(), { px, py, pw, ph } = L;
+  ctx.fillStyle = 'rgba(4,8,6,.6)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(12,18,12,.96)'; ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = '#e9c46a'; ctx.lineWidth = 3; ctx.strokeRect(px + 1.5, py + 1.5, pw - 3, ph - 3);
+  ctx.textAlign = 'center'; ctx.font = 'bold 30px monospace';
+  ctx.fillStyle = '#000'; ctx.fillText('CONFIGURAÇÕES', px + pw / 2 + 3, py + 50);
+  ctx.fillStyle = '#e9c46a'; ctx.fillText('CONFIGURAÇÕES', px + pw / 2, py + 47);
+  const fs = Math.max(14, Math.min(18, Math.floor(L.rows[0].h * 0.42)));
+  for (const o of L.rows) {
+    const r = o.r, sel = o.i === setUI.sel, v = o.val, cy = o.y + o.h / 2;
+    if (sel) { ctx.fillStyle = 'rgba(233,196,106,.13)'; ctx.fillRect(px + 12, o.y + 2, L.colW - 24, o.h - 4); }
+    ctx.textAlign = 'left'; ctx.font = `${fs}px monospace`;
+    ctx.fillStyle = sel ? '#ffe08a' : '#f4f1de'; ctx.fillText(r.label, px + 28, cy + fs * 0.35);
+    if (r.kind === 'slider') {
+      const val = r.get();
+      for (const [b, t] of [[o.minus, '−'], [o.plus, '+']]) {
+        const hov = inR(b, mouse.x, mouse.y);
+        ctx.fillStyle = hov ? '#f4f1de' : 'rgba(20,28,20,.9)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = '#f4f1de'; ctx.lineWidth = 2; ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+        ctx.fillStyle = hov ? '#10170f' : '#f4f1de'; ctx.textAlign = 'center'; ctx.font = 'bold 20px monospace';
+        ctx.fillText(t, b.x + b.w / 2, b.y + b.h / 2 + 7);
+      }
+      const bar = o.bar;
+      ctx.fillStyle = 'rgba(20,28,20,.9)'; ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
+      ctx.fillStyle = '#e9c46a'; ctx.fillRect(bar.x, bar.y, Math.round(bar.w * val), bar.h);
+      ctx.strokeStyle = '#f4f1de'; ctx.lineWidth = 2; ctx.strokeRect(bar.x, bar.y, bar.w, bar.h);
+      ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#a9b8a0'; ctx.textAlign = 'center';
+      ctx.fillText(`${Math.round(val * 100)}%`, bar.x + bar.w / 2, bar.y - 4);
+    } else {
+      const on = r.kind === 'toggle' ? r.get() : r.get() > 0;
+      const txt = r.kind === 'toggle' ? (r.get() ? r.on || 'SIM' : r.off || 'NÃO') : (r.opts.find(q => q[0] === r.get()) || SHAKE_OPTS[2])[1];
+      const hov = inR(v, mouse.x, mouse.y);
+      ctx.fillStyle = hov ? '#f4f1de' : on ? 'rgba(123,208,74,.25)' : 'rgba(20,28,20,.9)'; ctx.fillRect(v.x, v.y, v.w, v.h);
+      ctx.strokeStyle = on ? '#7bd04a' : '#a9b8a0'; ctx.lineWidth = 2; ctx.strokeRect(v.x + 1, v.y + 1, v.w - 2, v.h - 2);
+      ctx.textAlign = 'center'; ctx.font = `bold ${fs - 1}px monospace`;
+      ctx.fillStyle = hov ? '#10170f' : on ? '#bff59a' : '#a9b8a0';
+      ctx.fillText(`${r.kind === 'cycle' ? '◂ ' : ''}${txt}${r.kind === 'cycle' ? ' ▸' : ''}`, v.x + v.w / 2, v.y + v.h / 2 + fs * 0.35);
+    }
+  }
+  if (L.wide) {                                   // coluna dos controles
+    const cx = px + L.colW + 8, cw = pw - L.colW - 28, lh = Math.max(20, Math.min(26, (ph - 190) / CONTROLS.length));
+    ctx.fillStyle = 'rgba(244,241,222,.06)'; ctx.fillRect(cx, py + 78, cw, CONTROLS.length * lh + 40);
+    ctx.textAlign = 'left'; ctx.font = 'bold 14px monospace'; ctx.fillStyle = '#e9c46a';
+    ctx.fillText('CONTROLES', cx + 14, py + 102);
+    ctx.font = '13px monospace';
+    CONTROLS.forEach(([k, d], i) => {
+      const y = py + 128 + i * lh;
+      ctx.fillStyle = '#e9c46a'; ctx.fillText(k, cx + 14, y);
+      ctx.fillStyle = '#dfe6d6'; ctx.fillText(d, cx + 14 + Math.min(150, cw * 0.52), y);
+    });
+  }
+  ctx.textAlign = 'center';
+  drawButtons(L.btns, L.btns.find(b => inR(b, mouse.x, mouse.y)));
+  ctx.font = '12px monospace'; ctx.fillStyle = 'rgba(244,241,222,.5)';
+  ctx.fillText('↑↓ escolhe · ←→ ajusta · ESC volta', px + pw / 2, py + ph - 8);
+  ctx.textAlign = 'left';
+}
+// contador de FPS (canto superior direito)
+const fpsMeter = { last: 0, v: 60 };
+function drawFps() {
+  const now = performance.now(), dt = (now - fpsMeter.last) / 1000; fpsMeter.last = now;
+  if (dt > 0 && dt < 1) fpsMeter.v += (1 / dt - fpsMeter.v) * 0.05;
+  if (!settings.fps) return;
+  ctx.font = 'bold 12px monospace'; ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(canvas.width - 70, 4, 64, 18);
+  ctx.fillStyle = fpsMeter.v < 40 ? '#ff8a7a' : '#bff59a'; ctx.fillText(`${Math.round(fpsMeter.v)} FPS`, canvas.width - 12, 18);
+  ctx.textAlign = 'left';
 }
 
 // botões do menu (em coordenadas de tela)
@@ -1713,20 +1998,20 @@ function menuButtons() {
   const w = Math.max(220, Math.min(300, W * 0.26)), h = Math.max(48, Math.min(62, H * 0.085)), gap = 10;
   const x = W - w - Math.max(16, W * 0.025), y1 = H - h - Math.max(16, H * 0.035);
   return [
-    { id: 'test',  label: 'CAMPO DE TREINO', sub: '', x, y: y1 - h - gap, w, h },
-    { id: 'rogue', label: 'MODO HORDA',      sub: '', x, y: y1, w, h },
+    { id: 'rogue',    label: 'JOGAR',         sub: '', x, y: y1 - (h + gap) * 3, w, h },
+    { id: 'story',    label: 'HISTÓRIA',      sub: '', x, y: y1 - (h + gap) * 2, w, h },
+    { id: 'test',     label: 'TREINAMENTO',   sub: '', x, y: y1 - h - gap, w, h },
+    { id: 'settings', label: 'CONFIGURAÇÕES', sub: '', x, y: y1, w, h },
   ];
 }
 // botões da pausa
 function pauseButtons() {
   const w = Math.min(300, canvas.width - 40), h = 52, x = (canvas.width - w) / 2, y0 = canvas.height / 2 - 40;
-  const vy = y0 + (h + 10) * 3 + 6, vb = 44;
   return [
-    { id: 'resume',  label: 'CONTINUAR',      sub: '', x, y: y0, w, h },
-    { id: 'restart', label: 'RECOMEÇAR',      sub: '', x, y: y0 + h + 10, w, h },
-    { id: 'menu',    label: 'MENU PRINCIPAL', sub: '', x, y: y0 + (h + 10) * 2, w, h },
-    { id: 'volDown', label: '−', sub: '', x, y: vy, w: vb, h: vb, small: true },
-    { id: 'volUp',   label: '+', sub: '', x: x + w - vb, y: vy, w: vb, h: vb, small: true },
+    { id: 'resume',   label: 'CONTINUAR',      sub: '', x, y: y0, w, h },
+    { id: 'settings', label: 'CONFIGURAÇÕES',  sub: '', x, y: y0 + h + 10, w, h },
+    { id: 'restart',  label: 'RECOMEÇAR',      sub: '', x, y: y0 + (h + 10) * 2, w, h },
+    { id: 'menu',     label: 'MENU PRINCIPAL', sub: '', x, y: y0 + (h + 10) * 3, w, h },
   ];
 }
 const hoveredIn = list => list.find(b => mouse.x >= b.x && mouse.x <= b.x + b.w && mouse.y >= b.y && mouse.y <= b.y + b.h);
@@ -1742,7 +2027,7 @@ function hoverSfx(list, prefix) {
 
 function setPaused(v) {
   if (paused === v) return;
-  paused = v;
+  paused = v; setUI.open = false;
   mouse.down = false; mouse.pressed = false; mouse.rightPressed = false;
   keys.clear();
   sfx.select();
@@ -1750,6 +2035,7 @@ function setPaused(v) {
 function pauseAction(id) {
   if (id === 'volDown') return setMusicLevel(musicLevel - 0.1);
   if (id === 'volUp') return setMusicLevel(musicLevel + 0.1);
+  if (id === 'settings') return openSettings();
   if (id === 'resume') setPaused(false);
   else if (id === 'restart') startMode(mode);
   else if (id === 'menu') startMode('menu');
@@ -1848,7 +2134,12 @@ function updateDev() {
 
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (mode === 'menu') { if (k === '1') startMode('test'); if (k === '2') startMode('rogue'); return; }
+  if (setUI.open && (mode === 'menu' || paused)) { settingsKey(k); return; }
+  if (mode === 'menu') {
+    if (story.open) { if (k === 'escape') closeStory(); else if ([' ', 'enter', 'e'].includes(k)) storyAdvance(); return; }
+    if (k === '1') startMode('test'); if (k === '2') startMode('rogue'); if (k === 'h') openStory(); if (k === 'c') openSettings();
+    return;
+  }
   if (k === 'control' && gameOver) { toggleStats(); return; }
   if (gameOver) {                         // tela de game over: R recomeça, ESC volta ao menu
     if (k === 'r') startMode(mode);
@@ -1952,7 +2243,8 @@ function startWave() {
   run.phase = 'fight';
   const novo = NEW_ENEMY_AT[run.wave];
   const turn = isNightWave(run.wave) !== isNightWave(run.wave - 1) ? (isNightWave(run.wave) ? '   ·   A NOITE CAIU' : '   ·   AMANHECEU') : '';
-  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés${turn}`, isNightWave(run.wave) ? '#9db4ff' : '#e9c46a', novo ? 3.6 : 2.0, true);
+  const faster = run.wave > 1 && (run.wave - 1) % 5 === 0 && run.wave <= 26 ? '   ·   ELES ESTÃO MAIS RÁPIDOS' : '';
+  banner(`WAVE ${run.wave}`, `${run.cfg.count} jacarés${turn}${faster}`, isNightWave(run.wave) ? '#9db4ff' : '#e9c46a', novo ? 3.6 : 2.0, true);
   if (novo) { run.banner.threat = ENEMY_TYPES[novo]; sfx.threat(); }
   sfx.waveStart();
   plantMines();
@@ -1986,7 +2278,7 @@ function endShopVisit() {
 }
 function updateWaves(dt) {
   if (run.banner && (run.banner.t += dt) > run.banner.dur) run.banner = null;
-  if (gameOver) return;
+  if (gameOver || intro.on) return;                    // a horda só começa depois da abertura
   run.time += dt;
   if (run.phase === 'shop') {                 // visita do velho Bill: o tempo só corre com a loja fechada
     if (!cut.on && bill.state === 'idle' && (run.phaseT -= dt) <= 0) endShopVisit();
@@ -2022,7 +2314,7 @@ function updateWaves(dt) {
 // Dentes: a moeda do jogo. Caem dos jacarés no modo horda (os mais fortes soltam mais)
 // =====================================================================
 const TEETH = {
-  drop: { basic: [0.2, 1, 1], tank: [1, 2, 3], range: [0.8, 1, 2], rusher: [0.25, 1, 1], healer: [0.9, 1, 2] },   // [chance, mín. e máx. de dentes]   // [chance, valor mínimo, valor máximo]: cada 5 vira um dente grande
+  drop: { basic: [0.25, 1, 1], tank: [1, 2, 3], range: [0.8, 1, 2], rusher: [0.25, 1, 1], healer: [0.9, 1, 2] },   // [chance, mín. e máx. de dentes]   // [chance, valor mínimo, valor máximo]: cada 5 vira um dente grande
   vacuum: 900,       // velocidade com que os dentes voam até o jogador no fim da wave
   magnet: 140,       // distância em que o dente voa até o jogador
   scale: 3,
@@ -2031,9 +2323,9 @@ const teeth = [];
 let toothPop = 0;
 // tipo do dente: quanto mais longe na partida, mais chance de dentes valiosos (5, prata 10, ouro 25)
 function toothChances(w) {
-  const p25 = Math.max(0, Math.min(0.05, (w - 14) * 0.01));    // ouro: a partir da wave 15, até 5%
-  const p10 = Math.max(0, Math.min(0.12, (w - 7) * 0.015));    // prata: a partir da wave 8, até 12%
-  const p5 = Math.min(0.28, 0.06 + w * 0.012);                 // grande: 7% na wave 1, até 28%
+  const p25 = Math.max(0, Math.min(0.03, (w - 15) * 0.005));   // ouro: a partir da wave 16, até 3%
+  const p10 = Math.max(0, Math.min(0.08, (w - 8) * 0.01));     // prata: a partir da wave 9, até 8%
+  const p5 = Math.min(0.2, 0.06 + w * 0.008);                  // grande: 7% na wave 1, até 20%
   return [[25, p25], [10, p10], [5, p5], [1, Math.max(0, 1 - p25 - p10 - p5)]];
 }
 function rollToothValue() {
@@ -2044,7 +2336,8 @@ function rollToothValue() {
 function dropTeeth(e) {
   if (mode !== 'rogue') return;
   const [chance, lo, hi] = TEETH.drop[e.T.id] || [0, 0, 0];
-  if (Math.random() > Math.min(1, chance + teethBonus())) return;
+  // com mais jacarés por wave, cada um tem menos chance de soltar dente (a renda cresce devagar)
+  if (Math.random() > Math.min(1, chance / (1 + 0.06 * Math.max(0, run.wave - 1)) + teethBonus())) return;
   const n = lo + Math.floor(Math.random() * (hi - lo + 1));
   for (let i = 0; i < n; i++)
     teeth.push({ x: e.x, y: e.y + e.T.h * e.T.sc / 2 - 6, z: 20, vx: rand(-110, 110), vy: rand(-50, 50), vz: rand(220, 320),
@@ -2145,6 +2438,7 @@ const billSpotX = () => house.x + HOUSE_W * HOUSE_SCALE / 2 + BILL.spot.gap + CA
 function billArrive() {
   Object.assign(bill, { active: true, state: 'arrive', x: WORLD_W + 160, y: house.y + BILL.spot.dy, dir: -1, walk: 0, talk: null, laugh: 0 });
   bill.firstMeet = !billMet();
+  shop.visit++; shop.bought = {};                     // nova visita: estoque renovado
   if (bill.firstMeet) { cut.on = true; cut.waitClick = false; }           // primeira vez: cutscene
   else banner('O VELHO BILL CHEGOU', 'chegue perto do carrinho e aperte E', '#c39bd3', 2.6);
   shop.open = false;
@@ -2200,8 +2494,76 @@ function updateBill(dt) {
     if (tk.shown >= tk.text.length && (tk.t += dt) > tk.dur) bill.talk = null;
   } else bill.laugh *= Math.exp(-4 * dt);
 }
+// =====================================================================
+// Abertura do modo horda: o jacaré sai de dentro da casa e reclama dos vizinhos
+// =====================================================================
+const INTRO = { line: 'os vizinhos não me dão um dia de folga', walkSpeed: 0.42, wait: 0.5, textSpeed: 30 };
+const intro = { on: false, state: '', t: 0, talk: null };
+function startIntro() {
+  Object.assign(intro, { on: true, state: 'inside', t: 0, talk: null });
+  cut.on = true; cut.waitClick = false;
+  player.y = houseRect().b - 40;                         // começa atrás da parede da frente (escondido pela casa)
+  intro.targetY = houseRect().b + player.h / 2 + 24;     // para na frente da porta
+}
+function updateIntro(dt) {
+  if (!intro.on) return;
+  intro.t += dt;
+  if (intro.state === 'inside' && intro.t > INTRO.wait) { intro.state = 'walk'; sfx.select(); }
+  else if (intro.state === 'walk' && player.y >= intro.targetY) {
+    player.y = intro.targetY; intro.state = 'talk'; intro.t = 0;
+    intro.talk = { text: INTRO.line, shown: 0 };
+    cut.waitClick = true;
+  } else if (intro.state === 'talk') {
+    const tk = intro.talk, before = Math.floor(tk.shown);
+    tk.shown = Math.min(tk.text.length, tk.shown + INTRO.textSpeed * dt);
+    if (Math.floor(tk.shown) > before && Math.floor(tk.shown) % 2 === 0 && tk.text[Math.floor(tk.shown) - 1] !== ' ') sfx.hover();
+  }
+}
+// clique / E: pula a caminhada, completa o texto ou termina a abertura
+function introAdvance() {
+  if (intro.state !== 'talk') {
+    player.y = intro.targetY; intro.state = 'talk'; intro.t = 0;
+    intro.talk = { text: INTRO.line, shown: INTRO.line.length }; cut.waitClick = true;
+    return;
+  }
+  if (intro.talk.shown < intro.talk.text.length) { intro.talk.shown = intro.talk.text.length; return; }
+  intro.on = false; cut.on = false; cut.waitClick = false; intro.talk = null;
+  banner('DEFENDA SUA CASA', 'os jacarés vão atrás dela — não deixe ela cair!', '#e9c46a', 3.4, true);
+  run.banner.intro = true;
+  tips.t = 0;
+  sfx.select();
+}
+function drawIntro() {
+  if (!intro.on) return;
+  const W = canvas.width, H = canvas.height, tk = intro.talk;
+  if (tk && tk.shown > 0) {
+    const head = toScreen(player.x, player.y - player.h / 2 - 16);
+    ctx.font = 'bold 16px monospace';
+    const lines = wrapLines(tk.text, Math.min(380, W - 60));
+    const lh = 20, pad = 12, bw = Math.max(...lines.map(l => ctx.measureText(l).width)) + pad * 2, bh = lines.length * lh + pad * 2 - 4;
+    const bx = Math.max(10, Math.min(W - bw - 10, head.x - bw / 2)), by = Math.max(cut.bars * H * 0.09 + 30, head.y - bh - 14);
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(bx + 4, by + 5, bw, bh);
+    ctx.fillStyle = '#fff6e0'; ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#1b1410'; ctx.lineWidth = 3; ctx.strokeRect(bx, by, bw, bh);
+    const tx = Math.max(bx + 14, Math.min(bx + bw - 14, head.x));
+    ctx.fillStyle = '#fff6e0'; ctx.beginPath(); ctx.moveTo(tx - 9, by + bh - 2); ctx.lineTo(tx + 9, by + bh - 2); ctx.lineTo(tx, by + bh + 12); ctx.fill();
+    ctx.strokeStyle = '#1b1410'; ctx.beginPath(); ctx.moveTo(tx - 9, by + bh + 1); ctx.lineTo(tx, by + bh + 12); ctx.lineTo(tx + 9, by + bh + 1); ctx.stroke();
+    ctx.font = 'bold 16px monospace'; ctx.fillStyle = '#2a1d16';
+    let left = Math.floor(tk.shown);
+    lines.forEach((l, i) => { const part = l.slice(0, Math.max(0, left)); left -= l.length + 1; ctx.fillText(part, bx + pad, by + pad + 13 + i * lh); });
+    if (tk.shown >= tk.text.length && Math.floor(clock * 3) % 2) {
+      ctx.beginPath(); ctx.moveTo(bx + bw - 18, by + bh - 12); ctx.lineTo(bx + bw - 8, by + bh - 12); ctx.lineTo(bx + bw - 13, by + bh - 6); ctx.fill();
+    }
+  }
+  ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(244,241,222,.8)';
+  ctx.fillText(intro.state === 'talk' ? 'clique ou aperte E para continuar' : 'clique ou aperte E para pular', W / 2, H - H * 0.09 * cut.bars / 2 + 5);
+  ctx.textAlign = 'left';
+}
+
 // avança a cutscene (clique, E, Enter ou espaço)
 function cutAdvance() {
+  if (intro.on) return introAdvance();
   if (!cut.on || !cut.waitClick || !bill.talk) return;
   if (bill.talk.shown < bill.talk.text.length) { bill.talk.shown = bill.talk.text.length; return; }
   cut.on = false; cut.waitClick = false; bill.talk.dur = 1.2; bill.talk.t = 0;
@@ -2331,40 +2693,44 @@ function drawBillOverlay() {
 // =====================================================================
 // estado da loja: níveis dos upgrades (por partida), mochila de consumíveis e aba aberta
 const shopLv0 = () => ({ shotgun: 0, uzi: 0, revolvers: 0, cabin: 0, mines: 0, antony: 0, magnet: 0 });
-const shop = { open: false, t: 0, lv: shopLv0(), inv: { dynamite: 0, pepper: 0, ice: 0 }, tab: 'armas', msg: '', msgT: 0, shake: 0, flash: null };
+const shop = { visit: 0, bought: {}, open: false, t: 0, lv: shopLv0(), inv: { dynamite: 0, pepper: 0, ice: 0 }, tab: 'armas', msg: '', msgT: 0, shake: 0, flash: null };
 const SHOP_TABS = [{ id: 'armas', name: 'ARMAS' }, { id: 'defesa', name: 'DEFESA' }, { id: 'consumo', name: 'CONSUMÍVEIS' }];
 // cada nível custa mais que o anterior; consumíveis têm preço fixo e limite na mochila
 const SHOP_ITEMS = [
   // ---- ARMAS ----
-  { tab: 'armas', id: 'shotgun', name: 'Escopeta', max: 6, price: () => 10 + 8 * shop.lv.shotgun,
+  { tab: 'armas', id: 'shotgun', name: 'Escopeta', max: 6, price: () => [15, 25, 40, 60, 85, 115][shop.lv.shotgun],
     desc: () => `+1 cartucho na escopeta (${ammoMax()} → ${ammoMax() + 1})`,
     buy: () => { shop.lv.shotgun++; } },
-  { tab: 'armas', id: 'uzi', name: 'Uzi', max: 3, price: () => [25, 40, 60][shop.lv.uzi],
+  { tab: 'armas', id: 'uzi', name: 'Uzi', max: 3, price: () => [40, 80, 140][shop.lv.uzi],
     desc: () => shop.lv.uzi ? `nível ${shop.lv.uzi + 1}: mais dano e mais rápida` : 'tiros rápidos, menos dano: boa contra grupos  ·  tecla 2 (usa 9 mm)',
     buy: () => { shop.lv.uzi++; if (shop.lv.uzi === 1) { player.mags.uzi = WEAPONS.uzi.mag; player.reserve9 = Math.max(player.reserve9, AMMO9.start); } } },
-  { tab: 'armas', id: 'revolvers', name: 'Revólveres', max: 3, price: () => [25, 40, 60][shop.lv.revolvers],
+  { tab: 'armas', id: 'revolvers', name: 'Revólveres', max: 3, price: () => [40, 80, 140][shop.lv.revolvers],
     desc: () => shop.lv.revolvers ? `nível ${shop.lv.revolvers + 1}: mais dano e mais rápidos` : 'dois revólveres, um tiro de cada: precisos e rápidos  ·  tecla 3 (usa 9 mm)',
     buy: () => { shop.lv.revolvers++; if (shop.lv.revolvers === 1) { player.mags.revolvers = WEAPONS.revolvers.mag; player.reserve9 = Math.max(player.reserve9, AMMO9.start); } } },
   // ---- DEFESA ----
-  { tab: 'defesa', id: 'cabin', name: 'Cabana', max: 5, price: () => 10 + 8 * shop.lv.cabin,
+  { tab: 'defesa', id: 'cabin', name: 'Cabana', max: 5, price: () => [15, 30, 50, 80, 120][shop.lv.cabin],
     desc: () => `defesa contra mordidas e tiros: ${shop.lv.cabin * 10}% → ${shop.lv.cabin * 10 + 10}%`,
     buy: () => { shop.lv.cabin++; } },
-  { tab: 'defesa', id: 'mines', name: 'Mina terrestre', max: 6, price: () => 15 + 10 * shop.lv.mines,
+  { tab: 'defesa', id: 'mines', name: 'Mina terrestre', max: 6, price: () => [20, 35, 55, 80, 110, 150][shop.lv.mines],
     desc: () => `${shop.lv.mines} → ${shop.lv.mines + 1} mina(s) plantada(s) perto da casa a cada wave`,
     buy: () => { shop.lv.mines++; } },
-  { tab: 'defesa', id: 'antony', name: 'Primo Antony', max: 3, price: () => [35, 55, 75][shop.lv.antony],
+  { tab: 'defesa', id: 'antony', name: 'Primo Antony', max: 3, price: () => [50, 100, 170][shop.lv.antony],
     desc: () => shop.lv.antony ? `nível ${shop.lv.antony + 1}: atira mais rápido e aguenta mais${shop.lv.antony + 1 === 3 ? ' (espalha 3 tiros)' : ''}` : '"certeza que ele aparece pra dar uma forcinha!" (se cair, compre de novo)',
     buy: () => { shop.lv.antony++; spawnAntony(); } },
   // ---- CONSUMÍVEIS ----
-  { tab: 'consumo', id: 'dynamite', name: 'Dinamite', key: 'Q', stack: 5, price: () => 6,
+  { tab: 'consumo', id: 'dynamite', name: 'Dinamite', key: 'Q', stack: 5, price: () => consPrice(8),
     desc: () => 'arremesse na mira: explosão em área', buy: () => { shop.inv.dynamite++; } },
-  { tab: 'consumo', id: 'pepper', name: 'Pimenta dedo-de-moça', key: 'F', stack: 3, price: () => 10,
+  { tab: 'consumo', id: 'pepper', name: 'Pimenta dedo-de-moça', key: 'F', stack: 3, price: () => consPrice(14),
     desc: () => 'por 15 s seus tiros incendeiam os inimigos', buy: () => { shop.inv.pepper++; } },
-  { tab: 'consumo', id: 'ice', name: 'Cubo de gelo', key: 'C', stack: 3, price: () => 8,
+  { tab: 'consumo', id: 'ice', name: 'Cubo de gelo', key: 'C', stack: 3, price: () => consPrice(10),
     desc: () => 'arremesse na mira: congela os inimigos em área', buy: () => { shop.inv.ice++; } },
 ];
+const SOLD_OUT = 'o Bill só trouxe um desse hoje: volte na próxima visita';
+const consPrice = base => base + 2 * Math.max(0, shop.visit - 1);   // consumíveis encarecem a cada visita
 function shopCan(it) {
-  if (it.max) return shop.lv[it.id] < it.max || 'nível máximo';
+  if (it.max && shop.lv[it.id] >= it.max) return 'nível máximo';
+  if (it.max && mode === 'rogue' && shop.bought[it.id]) return SOLD_OUT;   // 1 nível de cada por visita
+  if (it.max) return true;
   return shop.inv[it.id] < it.stack || 'mochila cheia';
 }
 function ammoMax() { return AMMO_MAX + shop.lv.shotgun; }                 // escopeta: 6 a 12 cartuchos
@@ -2416,9 +2782,9 @@ const has9mm = () => shop.lv.uzi > 0 || shop.lv.revolvers > 0;
 // =====================================================================
 const WEAPONS = {
   shotgun:   { name: 'ESCOPETA' },
-  uzi:       { name: 'UZI', mag: 30, reload: 1.5, spread: 0.09, pierce: 1, scale: 4, speed: 1700,
+  uzi:       { name: 'UZI', mag: 30, reload: 1.5, spread: 0.09, pierce: 1, scale: 12, speed: 1700,
                dmg: lv => 7 + 2 * (lv - 1), cd: lv => [0.09, 0.078, 0.066][lv - 1] || 0.066 },   // ~80 de dano/s no nível 1
-  revolvers: { name: 'REVÓLVERES', mag: 12, reload: 1.3, spread: 0.015, pierce: 3, scale: 5, speed: 2000,
+  revolvers: { name: 'REVÓLVERES', mag: 12, reload: 1.3, spread: 0.015, pierce: 3, scale: 10, speed: 2000,
                dmg: lv => 20 + 5 * (lv - 1), cd: lv => [0.24, 0.2, 0.16][lv - 1] || 0.16 },   // ~85/s, atravessa 3
 };
 const WEAPON_ORDER = ['shotgun', 'uzi', 'revolvers'];
@@ -2837,6 +3203,7 @@ function shopBuy(row) {
   const price = it.price();
   if (run.teeth < price) { shop.msg = pick(BILL_BROKE); shop.msgT = 2.4; shop.shake = 1; sfx.deny(); return; }
   run.teeth -= price; toothPop = 1;
+  if (it.max) shop.bought[it.id] = true;
   shop.flash = it.id; shop.msg = pick(BILL_BYE); shop.msgT = 2;
   sfx.buy();
   it.buy();
@@ -2966,7 +3333,7 @@ function drawShop() {
       ctx.fillStyle = afford ? '#f4f1de' : '#e63946'; ctx.fillText(pt, row.x + row.w - pw2 - 12, cy + 7);
       if (toothImg.complete) ctx.drawImage(toothImg, row.x + row.w - pw2 - 46, cy - 14, 28, 28);
     } else {
-      ctx.fillStyle = '#c39bd3'; ctx.textAlign = 'right'; ctx.fillText('MÁX', row.x + row.w - 12, cy + 7); ctx.textAlign = 'left';
+      ctx.fillStyle = '#c39bd3'; ctx.textAlign = 'right'; ctx.fillText(can === SOLD_OUT ? 'ESGOTADO' : 'MÁX', row.x + row.w - 12, cy + 7); ctx.textAlign = 'left';
     }
   }
   ctx.font = '12px monospace'; ctx.fillStyle = '#7d6c8a';
@@ -2986,7 +3353,7 @@ function drawShop() {
 // =====================================================================
 const cards = { list: [], t: 0, picked: -1, pickT: 0 };
 function openCards() {
-  const pool = UPGRADES.slice();
+  const pool = UPGRADES.filter(u => !u.max || lv[u.id] < u.max);   // cartas no nível máximo não aparecem mais
   cards.list = [];
   for (let i = 0; i < 3; i++) cards.list.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   cards.t = 0; cards.picked = -1; cards.pickT = 0;
@@ -3089,12 +3456,15 @@ function update(dt) {
   nightK += Math.sign(nt - nightK) * Math.min(Math.abs(nt - nightK), dt / NIGHT.fade);
   if (mode === 'menu') {
     updateTrees(dt);
+    if (story.open) { updateStory(dt); return; }
+    if (setUI.open) { updateSettings(); return; }
     hoverSfx(menuButtons(), 'menu:');
-    if (mouse.pressed) { const b = hoveredButton(); if (b) startMode(b.id); }
+    if (mouse.pressed) { const b = hoveredButton(); if (b) { if (b.id === 'story') openStory(); else if (b.id === 'settings') openSettings(); else startMode(b.id); } }
     mouse.pressed = false;
     return;
   }
   if (paused) {                       // tudo congelado; só os botões da pausa respondem
+    if (setUI.open) { updateSettings(); mouse.rightPressed = false; mouse.down = false; return; }
     hoverSfx(pauseButtons(), 'pause:');
     if (mouse.pressed) { const b = hoveredIn(pauseButtons()); if (b) pauseAction(b.id); }
     mouse.pressed = false; mouse.rightPressed = false; mouse.down = false;
@@ -3121,6 +3491,8 @@ function update(dt) {
   if (keys.has('w')) dy -= 1;
   if (keys.has('s')) dy += 1;
   if (locked) { dx = 0; dy = 0; }
+  const introWalk = intro.on && intro.state === 'walk';
+  if (introWalk) dy = 1;                          // abertura: sai pela porta andando
   const len = Math.hypot(dx, dy);
   if (len > 0) { dx /= len; dy /= len; }
   if (gameOver) { dx = 0; dy = 0; }
@@ -3132,7 +3504,7 @@ function update(dt) {
     particles.push({ x: player.x - dx * 18 + rand(-8, 8), y: player.y + 34 + rand(-3, 3), vx: -dx * rand(30, 70) + rand(-20, 20),
       vy: rand(-25, -5), life: rand(0.3, 0.45), age: 0, size: rand(4, 7), grow: 14, color: 'dust', drag: 3 });
   }
-  const spd = SPEED * (player.running ? RUN.mul : 1) * moveMul();
+  const spd = introWalk ? SPEED * INTRO.walkSpeed : SPEED * (player.running ? RUN.mul : 1) * moveMul();
 
   const kd = Math.exp(-12 * dt);           // knockback some rápido
   player.vx *= kd; player.vy *= kd;
@@ -3141,12 +3513,14 @@ function update(dt) {
   player.y += (dy * spd + player.vy) * dt;
   player.x = Math.max(player.w / 2, Math.min(WORLD_W - player.w / 2, player.x));
   player.y = Math.max(player.h / 2, Math.min(WORLD_H - player.h / 2, player.y));
-  pushOutOfHouse(player, PLAYER_HITBOX.w * SCALE / 2, PLAYER_HITBOX.h * SCALE / 2);
+  if (!intro.on) pushOutOfHouse(player, PLAYER_HITBOX.w * SCALE / 2, PLAYER_HITBOX.h * SCALE / 2);
+  updateIntro(dt);
   updateWalk(dt, len > 0, Math.hypot(player.x - prevX, player.y - prevY), dx);
 
   // mira
   const mw = mouseWorld(), h = hand();
   player.aim = Math.atan2(mw.y - h.y, mw.x - h.x);
+  if (intro.on) player.aim = 0.35;                // na abertura olha para a frente, arma abaixada
   if (FACE_MOUSE) player.facing = Math.cos(player.aim) < 0 ? -1 : 1;
   else if (dx !== 0) player.facing = dx;
 
@@ -3289,7 +3663,7 @@ function update(dt) {
   player.flash -= dt;
   crossPulse *= Math.exp(-9 * dt);
   cam.trauma = Math.max(0, cam.trauma - dt * 3.5);
-  const shake = cam.trauma * cam.trauma * 14 * SHAKE_SCALE;   // amplitude máxima ~4 px
+  const shake = cam.trauma * cam.trauma * 14 * SHAKE_SCALE * settings.shake;   // amplitude máxima ~4 px (x ajuste do jogador)
   cam.sx = rand(-1, 1) * shake; cam.sy = rand(-1, 1) * shake;
 
   // projéteis
@@ -3304,7 +3678,7 @@ function update(dt) {
     const out = b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H;
     // testa o ponto atual e o meio do passo (projéteis rápidos não atravessam o inimigo)
     const mx = (b.x + b.px) / 2, my = (b.y + b.py) / 2;
-    const pad = SHOT.bulletScale * (bulletMul() - 1) * 1.5;   // balas maiores acertam um pouco mais longe
+    const pad = Math.max(0, (b.scale || SHOT.bulletScale * bulletMul()) - SHOT.bulletScale) * 1.5;   // balas maiores acertam um pouco mais longe
     const target = enemies.find(e => e.alive && !b.hits.includes(e) && (inEnemy(e, b.x, b.y, pad) || inEnemy(e, mx, my, pad)));
     if (target) {
       // atravessa: acerta este jacaré e segue em frente, um pouco mais fraco e mais lento
@@ -3839,19 +4213,15 @@ function drawParticles() {
   ctx.globalAlpha = 1;
 }
 
+// mira (mira.gif: 2 quadros de 11x11). Quadro 2 (cruz fechada) só enquanto clica. Cresce um pouco a cada tiro.
+const crossImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAgklEQVR4nH2R0Q3AIAhEwbiBrNEddPIO0TXoDDQQIWqq70daTjgBBSo4VB6BBX4v9DiPQmZetUBEEhe0cilFDKj2vcaWhwo5KmKLdhPYkIVFO6SdAP4IC9IZbQyoLh44VfPYT7ltSv82enIl6ViIaCvQ/5pXHfpSDnOOxYTn3uG4wQ8TQWxpgksBzgAAAABJRU5ErkJggg=='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAeElEQVR4nJWR0Q2AMAhEwXQDWMMddPIO4Ro4wxmqJC01Jt4XTR/kOBi0UUjlACXZuXLUpQfNLLOkqoiGMoC88zQZhmhgEZlBVOS3qtJCP1SGF+q9oE/t61c4PrKNR79ssOf8lUYs52k0G160eGDTUQIcPEdDhvsLXkL4RtTPGMwlAAAAAElFTkSuQmCC')];
+const CROSS = { scale: 4 };
 function drawCrosshair() {
-  const x = Math.round(mouse.x), y = Math.round(mouse.y);
-  const g = 3 + crossPulse * 9, r = 9 + crossPulse * 9;
-  ctx.strokeStyle = '#f4f1de';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x - r, y); ctx.lineTo(x - g, y);
-  ctx.moveTo(x + g, y); ctx.lineTo(x + r, y);
-  ctx.moveTo(x, y - r); ctx.lineTo(x, y - g);
-  ctx.moveTo(x, y + g); ctx.lineTo(x, y + r);
-  ctx.stroke();
-  ctx.fillStyle = '#e63946';
-  ctx.fillRect(x - 1, y - 1, 2, 2);
+  const im = crossImgs[mouse.down || crossPulse > 0.35 ? 1 : 0];
+  if (!im.complete) return;
+  const s = Math.round(11 * (CROSS.scale + crossPulse * 1.5));
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(im, Math.round(mouse.x - s / 2), Math.round(mouse.y - s / 2), s, s);
 }
 
 // arma do Range, sempre mirando na casa. Desenhada no espaço do sprite (já espelhado conforme o lado).
@@ -4282,16 +4652,9 @@ function drawPause() {
   const y = canvas.height / 2 - 76;
   ctx.fillStyle = '#000'; ctx.fillText('PAUSADO', canvas.width / 2 + 3, y + 3);
   ctx.fillStyle = '#f4f1de'; ctx.fillText('PAUSADO', canvas.width / 2, y);
+  if (setUI.open) { ctx.textAlign = 'left'; drawSettings(); return; }
   const list = pauseButtons();
   drawButtons(list, hoveredIn(list));
-  // volume da música: barra entre os botões − e +
-  const dn = list[3], up = list[4];
-  const bx = dn.x + dn.w + 12, bw = up.x - 12 - bx, by = dn.y + dn.h / 2;
-  ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#a9b8a0';
-  ctx.fillText(`MÚSICA  ${Math.round(musicLevel * 100)}%`, bx + bw / 2, by - 8);
-  ctx.fillStyle = 'rgba(20,28,20,.9)'; ctx.fillRect(bx, by, bw, 10);
-  ctx.fillStyle = '#e9c46a'; ctx.fillRect(bx, by, Math.round(bw * musicLevel), 10);
-  ctx.strokeStyle = '#f4f1de'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, 10);
   ctx.textAlign = 'left';
 }
 
@@ -4316,7 +4679,7 @@ function drawMenu() {
   }
   // botões no canto inferior direito, sobre uma placa escura
   const bs = menuButtons(), pad = 8;
-  const px = bs[0].x - pad, py = bs[0].y - pad, pw = bs[0].w + pad * 2, ph = bs[1].y + bs[1].h - bs[0].y + pad * 2;
+  const lastB = bs[bs.length - 1], px = bs[0].x - pad, py = bs[0].y - pad, pw = bs[0].w + pad * 2, ph = lastB.y + lastB.h - bs[0].y + pad * 2;
   ctx.fillStyle = 'rgba(10,16,10,.82)'; ctx.fillRect(px, py, pw, ph);
   ctx.textAlign = 'center';
   drawButtons(bs, hoveredButton());
@@ -4507,7 +4870,7 @@ function drawRunIcon(x, y) {
 // dicas no começo da partida (somem depois de usar ou depois de um tempo)
 const tips = { t: 0, usedRun: false, usedMelee: false };
 function drawStartTips() {
-  if (mode === 'menu' || gameOver || paused || shop.open || cut.on || (run.phase === 'cards' && cards.list.length)) return;
+  if (!settings.tips || mode === 'menu' || gameOver || paused || shop.open || cut.on || (run.phase === 'cards' && cards.list.length)) return;
   const all = tips.usedRun && tips.usedMelee;
   const a = Math.min(1, tips.t / 0.6) * Math.max(0, Math.min(1, ((all ? 0 : 12) - tips.t) / 1.2 + (all ? 0 : 0)));
   if (a <= 0.01) return;
@@ -4657,7 +5020,7 @@ function render() {
   drawEnemyEyes();
 
   if (mode === 'menu') {
-    drawMenu();
+    if (story.open) drawStory(); else { drawMenu(); if (setUI.open) drawSettings(); }
   } else {
     drawHouseMarker();
     drawAmmo();
@@ -4669,12 +5032,14 @@ function render() {
     drawTeethHud();
     drawRunHud();
     drawBillOverlay();
+    drawIntro();
     drawCards();
     drawShop();
     drawGameOver();
     drawPause();
   }
   drawCrosshair();
+  drawFps();
 }
 
 // =====================================================================
