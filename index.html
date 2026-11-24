@@ -36,6 +36,11 @@ const SPEED = 360;        // pixels de tela por segundo
 // corrida (segurar Shift): mais rápido, sem limite
 const RUN = {
   mul: 1.6,           // velocidade correndo (x SPEED)
+  stamina: 100,       // fôlego (cartas aumentam)
+  drain: 34,          // gasto por segundo correndo (~3 s de corrida cheia)
+  regen: 30,          // recupera por segundo parado/andando
+  delay: 0.5,         // espera antes de começar a recuperar
+  resume: 30,         // esgotou: só volta a correr com 30 de fôlego
   dustEvery: 0.06,    // poeira nos pés (s)
 };
 const T = 16;             // tamanho do tile em px do sprite
@@ -108,7 +113,24 @@ const UPGRADES = [
   { id: 'meleeRng',  title: 'Braço Longo',     desc: '+5% de alcance da faca',               cat: 'faca'    },
   { id: 'teeth',     title: 'Arrancador',      desc: '+5% de chance dos inimigos dropar dentes', cat: 'geral' },
   { id: 'moveSpd',   title: 'Pernas Ligeiras', desc: '+5% de velocidade de movimento',       cat: 'geral'   },
+  { id: 'stamina',   title: 'Fôlego de Jacaré', desc: '+30% de fôlego para correr',         cat: 'geral'   },
+  { id: 'teethMag',  title: 'Ímã de Dentes',   desc: '+35% de alcance para puxar dentes',   cat: 'geral'   },
+  { id: 'ammoBox',   title: 'Caixa Reforçada', desc: '+25% de munição nas caixas de fim de wave', cat: 'armas' },
+  { id: 'thorns',    title: 'Farpas na Porta', desc: 'quem morde a casa leva 8 de dano',     cat: 'casa'    },
+  { id: 'ammoDrop',  title: 'Catador de Cartuchos', desc: '+30% de chance dos inimigos derrubarem munição', cat: 'armas' },
 ];
+// SUPER cartas: aparecem no fim das waves 5, 10, 15... (mais raras e bem mais fortes; cada uma só uma vez)
+const SUPER_UPGRADES = [
+  { id: 'sExplode',  title: 'Jacaré-Bomba',     desc: 'todo jacaré explode ao morrer (15 de dano em volta)', cat: 'super', max: 1 },
+  { id: 'sFortress', title: 'Fortaleza',        desc: '+30% de vida máxima da casa e conserta tudo agora', cat: 'super', max: 1 },
+  { id: 'sFury',     title: 'Fúria do Pântano', desc: '+20% de dano e +12% de velocidade de ataque', cat: 'super', max: 1 },
+  { id: 'sSpin',     title: 'Faca Giratória',   desc: 'a faca acerta em volta toda e alcança +10%', cat: 'super', max: 1 },
+  { id: 'sCrit',     title: 'Mira Letal',       desc: '+10% de crítico e o crítico dá 2,5x o dano', cat: 'super', max: 1 },
+  { id: 'sGold',     title: 'Boca de Ouro',     desc: 'os jacarés soltam 50% mais dentes',    cat: 'super', max: 1 },
+  { id: 'sBelt',     title: 'Cinturão de Balas', desc: '+12 de reserva máxima e enche toda a munição agora', cat: 'super', max: 1 },
+  { id: 'sLungs',    title: 'Pulmão de Aço',    desc: 'correr cansa pela metade e você corre 10% mais rápido', cat: 'super', max: 1 },
+];
+const ALL_UPGRADES = () => UPGRADES.concat(SUPER_UPGRADES);
 // ícones das cartas (recortados de icones-upgrades.png)
 const UPGRADE_ICONS = {
   crit: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAAJCAYAAADtj3ZXAAABAElEQVR4nGNkQANy+QH/v979w8Bw/DgDg6UlA7cyC8O7/V8Y2OU4wOyvSw6D1b19+5aRCaZB2Mfnv7CwMEQjAwPDT2lDMA3isz89D2f/hIqD1DKCGT4+/8EaHv0AKwQpgGlw32TDsFSNg4Hh7jkwX8T7HVyeCWQCSBPImZ9nPWR4s1WI4fNeYbAmGLgiqM7AoGwEZoPkYRYwwZwBB8pGEMU4gIj3O3BYgMKACWQKiAESAEvcPceg8/4mTo0wy0CBxwQKNRADFkhgA9CAg/hUBpHEr2ALwOD4cYZHEzcwggMMFnrggAC5AqoAphgckEhRBbIQJA7XjB7P6BpgcYusFgCk7XpUUupXEAAAAABJRU5ErkJggg=='),   // icone-crit.png
@@ -131,17 +153,23 @@ const ICON_BADGE_IMGS = {
   relogio: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAJCAYAAAD+WDajAAAAhklEQVR4nGNggIL/i0T+/z+h+v//6/D/MDEUAFKAzGdCkVATxFDAADLq+Pm7/yct3Amm4UaD7AELIAEw/4Tqf7Cxpy/dAStMK5nM4OybD+ErGzGwgAhTdhW4FXs3T2Q4ceEeA8PdcwyMMKNPsO8A6zDVU2Gw+OnBwGhxGywHtxvkEBANEwMAzihb2d8wQckAAAAASUVORK5CYII='),   // icone-relogio.png
 };
 const ICON_BADGE = { crit: '+', vamp: '+', atkSpd: '+', shotDmg: '+', reload: 'cd', houseHp: '+', meleeCd: 'cd',
-  meleeDmg: '+', bulletSz: '+', pellets: '+', meleeKb: '+', meleeRng: '+', teeth: '+', moveSpd: '+' };
-const CAT_COLOR = { geral: '#e9c46a', shotgun: '#f4a261', armas: '#ef8354', faca: '#8ecae6', casa: '#7bd04a' };
-function resetStats() { for (const u of UPGRADES) lv[u.id] = 0; }
+  meleeDmg: '+', bulletSz: '+', pellets: '+', meleeKb: '+', meleeRng: '+', teeth: '+', moveSpd: '+',
+  stamina: '+', teethMag: '+', ammoBox: '+', thorns: '+', ammoDrop: '+' };
+const CAT_COLOR = { geral: '#e9c46a', shotgun: '#f4a261', armas: '#ef8354', faca: '#8ecae6', casa: '#7bd04a', super: '#ffd166' };
+function resetStats() { for (const u of ALL_UPGRADES()) lv[u.id] = 0; }
 resetStats();
 // valores derivados (usados pelo jogo no lugar das constantes)
-const critChance    = () => 0.05 * lv.crit;
+const critChance    = () => 0.05 * lv.crit + 0.1 * lv.sCrit;
+const critMul       = () => CRIT_MULT + 0.5 * lv.sCrit;        // Mira Letal: crítico 2,5x
+const dmgMul        = () => (1 + 0.1 * lv.shotDmg) * (1 + 0.2 * lv.sFury);
+const atkMul        = () => (1 + 0.1 * lv.atkSpd) * (1 + 0.12 * lv.sFury);
+const staminaMax    = () => RUN.stamina * (1 + 0.3 * lv.stamina);
+const meleeArc      = () => lv.sSpin ? Math.PI * 2.01 : MELEE_ARC;
 const vampirism     = () => 0.01 * Math.min(5, lv.vamp);
-const shotCooldown  = () => SHOT.cooldown / (1 + 0.1 * lv.atkSpd);
-const pelletDamage  = () => PELLET_DAMAGE * (1 + 0.1 * lv.shotDmg);
+const shotCooldown  = () => SHOT.cooldown / atkMul();
+const pelletDamage  = () => PELLET_DAMAGE * dmgMul();
 const reloadShell   = () => RELOAD_SHELL / (1 + 0.1 * lv.reload);
-const houseMax      = () => HOUSE_HP * (1 + 0.15 * lv.houseHp);
+const houseMax      = () => HOUSE_HP * (1 + 0.15 * lv.houseHp) * (1 + 0.3 * lv.sFortress);
 const meleeCooldown = () => MELEE_COOLDOWN * Math.pow(0.9, lv.meleeCd);
 const meleeDamage   = () => MELEE_DAMAGE + 10 * lv.meleeDmg;
 const teethBonus    = () => 0.05 * lv.teeth;            // +5 pontos percentuais na chance de dropar dentes
@@ -152,7 +180,7 @@ const pelletLook = () => ({ kind: bulletMul() >= SHOT.bigAt ? 'uzi' : 'revolvers
   pad: SHOT.bulletScale * (bulletMul() - 1) * 1.5, whiten: SHOT.whiten });
 const pelletCount   = () => SHOT.pellets + 2 * lv.pellets;
 const meleeKnock    = () => MELEE_KNOCKBACK * (1 + 0.15 * lv.meleeKb);
-const meleeRangeMul = () => 1 + 0.05 * lv.meleeRng;
+const meleeRangeMul = () => (1 + 0.05 * lv.meleeRng) * (1 + 0.1 * lv.sSpin);
 const meleeRange    = () => MELEE_RANGE * meleeRangeMul();
 
 // Munição (HUD no canto inferior direito)
@@ -160,7 +188,7 @@ const AMMO_MAX = 6;          // base; a loja aumenta até AMMO_CAP
 const AMMO_CAP = 12;          // cartuchos na escopeta
 const RESERVE_START = 6;     // cartuchos de reserva no início (munição é recurso: use a faca)
 const RESERVE_MAX = 30;      // limite da reserva (no modo horda cresce +2 por wave, até 60)
-const reserveMax = () => mode === 'rogue' ? Math.min(60, 24 + 2 * run.wave) : RESERVE_MAX;
+const reserveMax = () => (mode === 'rogue' ? Math.min(60, 24 + 2 * run.wave) : RESERVE_MAX) + 12 * (lv.sBelt || 0);
 const RELOAD_SHELL = 0.25;   // segundos por cartucho (2 frames de 125 ms) — 6 cartuchos = 1,5 s
 const AMMO_SCALE = 3;     // gauges 9x16 ampliadas
 const AMMO_GAP = 4;       // espaço entre gauges (px de tela)
@@ -208,10 +236,10 @@ const ENEMY_RESPAWN = 2.5;               // segundos até reaparecer depois de m
 const ROGUE = {
   // jacaré básico: valores FIXOS em todas as waves (o que cresce é a quantidade)
   enemyHp: 30,           // morre com 3 projéteis (meio tiro de perto)
-  enemySpeed: 60,        // lento (o jogador anda a 360 px/s)
+  enemySpeed: 70,        // lento (o jogador anda a 360 px/s)
   maxEnemies: 150,       // limite de jacarés vivos ao mesmo tempo
-  firstBreak: 4,         // segundos antes da wave 1 (dá tempo do aviso DEFENDA SUA CASA)
-  breakTime: 4,          // pausa entre waves (para pegar as recompensas)
+  firstBreak: 3,         // segundos antes da wave 1 (dá tempo do aviso DEFENDA SUA CASA)
+  breakTime: 1.5,        // pausa curta entre waves: escolheu a carta, 1,5 s e já vem a próxima
   rewardAmmo: 4,         // caixa de munição ao fim de cada wave: 4 + 1,5 por wave (escassa de propósito)
   rewardHeal: 0.2,       // curativo: recupera 20% da vida máxima da casa
 };
@@ -220,9 +248,9 @@ const ROGUE = {
 const enemySpeedMul = () => mode === 'rogue' ? 1 + 0.08 * Math.min(5, Math.floor(Math.max(0, run.wave - 1) / 5)) : 1;
 function waveConfig(n) {
   return {
-    count: 6 + (n - 1) * 5,                                   // 6, 11, 16, 21... (+5 por wave)
-    interval: Math.max(0.35, 1.4 * Math.pow(0.9, n - 1)),     // chegam cada vez mais seguidos
-    group: 1 + Math.floor((n - 1) / 2),                       // wave 3: duplas, 5: trios, 7: grupos de 4...
+    count: 8 + (n - 1) * 5,                                   // 8, 13, 18, 23... (+5 por wave)
+    interval: Math.max(0.3, 1.0 * Math.pow(0.9, n - 1)),      // chegam cada vez mais seguidos (começa já em 1 s)
+    group: 1 + Math.floor(n / 2),                             // wave 2: duplas, 4: trios, 6: grupos de 4...
     tanks: n >= 5 ? 1 + Math.floor((n - 5) / 2) : 0,          // wave 5-6: 1 tank, 7-8: 2, 9-10: 3...
     ranges: n >= 10 ? Math.min(RANGE.maxPerWave, 3 + (n - 10)) : 0,   // wave 10: 3, 11: 4, 12+: 5 (teto)
     rushers: n >= 15 ? Math.min(12, 4 + 2 * (n - 15)) : 0,           // wave 15: 4, 16: 6... (teto 12)
@@ -351,7 +379,7 @@ const ENEMY_TYPES = {
   // tank: sc 5 = desenhado 25% maior que o básico (escala inteira, pixel art nítido)
   tank:  { id: 'tank', name: 'TANK', desc: 'muita vida  ·  lento', sc: 5, w: 25, h: 25, hitbox: { w: 18, h: 23 }, legOffset: { x: 7, y: 18 },
            eye: { x: 9, y: 2 }, stepLen: 11, knockMul: 0.3, body: tankBodyImg, blink: tankBlinkImg, legs: tankLegImgs,
-           hp: 300, speed: 35, bite: 20 },
+           hp: 300, speed: 50, bite: 20 },
   range: { id: 'range', name: 'RANGE', sc: SCALE, w: 24, h: 21, hitbox: { w: 11, h: 17 }, legOffset: { x: 7, y: 17 },
            eye: { x: 10, y: 1 }, stepLen: 15, knockMul: 1, body: rangeBodyImg, blink: rangePeekImg, legs: rangeLegImgs,
            blinkEvery: [2, 5], blinkDur: 0.45,   // aqui o "piscar" é abrir o olho para espiar
@@ -1221,7 +1249,7 @@ function sparkle(x, y) {
 }
 
 function rollDrop(x, y) {
-  let r = Math.random();
+  let r = Math.random() / (1 + 0.3 * lv.ammoDrop);   // Catador de Cartuchos: +30% de chance por nível
   for (const d of DROP_TABLE) {
     if (r < d.chance) {
       const kinds = ['ammo'].concat(has9mm() ? ['ammo9'] : []);       // 9 mm só cai se tiver uzi ou revólveres
@@ -1239,7 +1267,7 @@ const pickupCenterY = b => b.y - 14 + pickupFloat(b) - b.pop * 30;   // nasce co
 
 // recompensa de fim de wave (some em DROP_LIFE, como os outros drops)
 function spawnReward(kind, x, y) {
-  const amount = kind === 'ammo' ? ROGUE.rewardAmmo + Math.round(1.5 * run.wave) : kind === 'ammo9' ? 16 + 2 * run.wave : 0;
+  const amount = Math.round((kind === 'ammo' ? ROGUE.rewardAmmo + Math.round(1.5 * run.wave) : kind === 'ammo9' ? 16 + 2 * run.wave : 0) * (1 + 0.25 * lv.ammoBox));
   pickups.push({ kind, x, y, amount, scale: kind === 'heal' ? 3 : 4.2,
     t: rand(0, 6), age: 0, shine: 0, nextShine: 0.5, pop: 1, life: DROP_LIFE, reward: true });
   particles.push({ x, y: y - 20, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
@@ -1313,6 +1341,10 @@ function updatePickups(dt) {
     } else if ((b.nextShine -= dt) <= 0) {
       b.shine = 0;
       sparkle(b.x + rand(-BOX_W, BOX_W) * b.scale * 0.4, pickupCenterY(b) + rand(-BOX_H, BOX_H) * b.scale * 0.3);
+    }
+    if (b.reward && b.age > 0.7 && canCollect(b) && !gameOver) {      // recompensa da wave: voa até o jogador
+      const dx = player.x - b.x, dy = player.y - b.y, d = Math.hypot(dx, dy) || 1, sp = 500 + (b.age - 0.7) * 1400;
+      b.x += dx / d * Math.min(d, sp * dt); b.y += dy / d * Math.min(d, sp * dt); b.age = Math.min(b.age, 1);
     }
     const near = Math.hypot(player.x - b.x, player.y - b.y) < BOX_RADIUS + b.scale * 4;
     if (near && canCollect(b)) { collectPickup(b); pickups.splice(i, 1); continue; }
@@ -1447,7 +1479,7 @@ function drawDamageNumber(p, k) {
 }
 function hitEnemy(e, b, ang, dmg = PELLET_DAMAGE) {
   const crit = Math.random() < critChance();
-  if (crit) dmg *= CRIT_MULT;
+  if (crit) dmg *= critMul();
   dmg = shieldAbsorb(e, dmg);
   const dealt = Math.min(dmg, e.hp);
   e.hp -= dmg;
@@ -1490,6 +1522,11 @@ function shieldAbsorb(e, dmg) {
 function killEnemy(e) {
   if (e.scare) { e.hp = e.maxHp; return; }
   e.alive = false;
+  if (lv.sExplode && mode !== 'test') {            // Jacaré-Bomba: explode ao morrer (pode encadear)
+    particles.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0.3, age: 0, size: 10, grow: 260, color: 'ring', drag: 0 });
+    for (let i = 0; i < 10; i++) { const a = rand(0, Math.PI * 2), sp = rand(80, 260); particles.push({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.2, 0.4), age: 0, size: rand(3, 6), color: Math.random() < 0.5 ? '#ff9f1c' : '#ffd166', drag: 5 }); }
+    blastEnemies(e.x, e.y, 80, 15, 25);
+  }
   if (e.hat) { const hk = e.hat; e.hat = null; launchHat(hk, e.x, e.y + e.T.h * e.T.sc / 2, e.T.h * e.T.sc * 0.95, rand(-140, 140), rand(-60, 60), rand(420, 520)); }
   if (e.T.healer && mode !== 'test') healerLastBreath(e);
   sfx.kill();
@@ -2017,6 +2054,10 @@ function damageHouse(e) {
       size: rand(3, 6), color: Math.random() < .5 ? '#7a3b2e' : '#4a2a20', drag: 5 });
   }
   if (e.hot) houseFire(px, py);        // dia quente: a mordida põe fogo na casa
+  if (lv.thorns && e.alive) {           // Farpas na Porta
+    const d = 8 * lv.thorns; e.hp -= d; e.flash = 0.1; showDamage(e, d, false);
+    if (e.hp <= 0) killEnemy(e);
+  }
   if (house.hp <= 0) destroyHouse();
 }
 
@@ -2067,7 +2108,7 @@ function startMode(m) {
   cards.list = [];
   sfx.select();
   gameOver = false;
-  Object.assign(player, { running: false, zapT: 0, weapon: 'shotgun', mags: { uzi: 0, revolvers: 0 }, reserve9: 0, pepperT: 0, hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
+  Object.assign(player, { running: false, zapT: 0, stam: undefined, exhausted: false, stamWait: 0, weapon: 'shotgun', mags: { uzi: 0, revolvers: 0 }, reserve9: 0, pepperT: 0, hp: PLAYER_HP, ammo: AMMO_MAX, reserve: RESERVE_START, reloading: false, reloadT: 0, meleeT: -1, meleeCd: 0, invuln: 0, hurt: 0, vx: 0, vy: 0, cooldown: 0.2,
     x: WORLD_W / 2, y: WORLD_H / 2 });
   // roguelike: casa de verdade (vida, alvo dos jacarés). Campo de treino: só cosmética.
   Object.assign(house, { hp: houseMax(), flash: 0, shake: 0, pop: 0, active: m === 'rogue', decor: m === 'test', fires: [] });
@@ -2632,6 +2673,24 @@ function updateReload(dt) {
 // =====================================================================
 function banner(text, sub, color = '#f4f1de', dur = 2.4, big = false) { run.banner = { text, sub, color, t: 0, dur, big }; }
 
+const LAST = { count: 3, speed: 1.7 };   // os 3 últimos de cada wave ficam 70% mais rápidos e aparecem setas na borda
+// setas vermelhas na borda apontando para os últimos jacarés fora da tela
+function drawLastMarkers() {
+  if (mode !== 'rogue' || run.phase !== 'fight' || gameOver) return;
+  const W = canvas.width, H = canvas.height;
+  for (const e of enemies) {
+    if (!e.alive || !e.rush) continue;
+    const q = toScreen(e.x, e.y), sx = q.x * ZOOM, sy = q.y * ZOOM;
+    if (sx > 0 && sx < W && sy > 0 && sy < H) continue;
+    const cx = W / 2, cy = H / 2, a = Math.atan2(sy - cy, sx - cx);
+    const k = Math.min((W / 2 - 40) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - 40) / Math.abs(Math.sin(a) || 1e-6));
+    const x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k, pulse = 1 + Math.sin(clock * 8) * 0.15;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#140804'; ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-12, -14); ctx.lineTo(-12, 14); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ff5a4f'; ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-8, -10); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
 function startWave() {
   run.wave++;
   run.cfg = waveConfig(run.wave);
@@ -2679,7 +2738,48 @@ function finishWave() {
   if (has9mm()) spawnReward('ammo9', house.x - 175, y);                    // 9 mm (uzi e revólveres), se tiver uma delas
 }
 
+// gaveta roxa brilhante embaixo da tela enquanto o Bill espera (depois de fechar a loja): ENTER ou clique para seguir
+const billDrawer = { k: 0 };
+const billDrawerOn = () => mode === 'rogue' && run.phase === 'shop' && shop.visited && !shop.open && bill.active && bill.state === 'idle' && !cut.on && !paused && !gameOver;
+function billDrawerRect() {
+  const w = 280, h = 40;
+  return { x: Math.round(canvas.width / 2 - w / 2), y: Math.round(canvas.height - 18 - (h + 8) * billDrawer.k), w, h };
+}
+// gaveta em pixel art: moldura com cantos chanfrados, roxo escuro, tecla ENTER desenhada e setinhas piscando
+function drawBillDrawer() {
+  billDrawer.k += ((billDrawerOn() ? 1 : 0) - billDrawer.k) * 0.18;
+  if (billDrawer.k < 0.02) return;
+  const r = billDrawerRect(), hov = hoveredIn([r]) === r, P = 3, pulse = 0.5 + 0.5 * Math.sin(clock * 3);
+  const x = r.x, y = r.y, w = r.w, h = r.h;
+  ctx.save(); ctx.globalAlpha = Math.min(1, billDrawer.k * 1.4);
+  const box = (bx, by, bw, bh, c) => { ctx.fillStyle = c; ctx.fillRect(bx + P, by, bw - 2 * P, bh); ctx.fillRect(bx, by + P, bw, bh - 2 * P); };   // retângulo com cantos chanfrados
+  box(x - P, y - P + 3, w + 2 * P, h + 2 * P, 'rgba(0,0,0,.45)');                    // sombra
+  box(x - P, y - P, w + 2 * P, h + 2 * P, `rgb(${(110 + 40 * pulse) | 0},${(60 + 30 * pulse) | 0},${(180 + 40 * pulse) | 0})`);   // borda roxa respirando
+  box(x, y, w, h, hov ? '#3a1d66' : '#24123f');
+  ctx.fillStyle = 'rgba(190,150,255,.18)'; ctx.fillRect(x + P, y + P, w - 2 * P, P);    // filete de luz em cima
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + P, y + h - 2 * P, w - 2 * P, P);  // sombra embaixo
+  // tecla ENTER em pixel art
+  ctx.font = 'bold 13px monospace';
+  const key = 'ENTER', txt = 'prosseguir', kw = Math.ceil(ctx.measureText(key).width) + 14, kh = 22;
+  ctx.font = 'bold 15px monospace'; const tw = ctx.measureText(txt).width;
+  const tot = kw + 12 + tw + 26, x0 = Math.round(x + w / 2 - tot / 2), ky = Math.round(y + h / 2 - kh / 2) - 1;
+  box(x0, ky + P, kw, kh, '#6b5a8e');                                                  // lateral da tecla
+  box(x0, ky, kw, kh, '#efe7ff');
+  ctx.fillStyle = '#c9b8ee'; ctx.fillRect(x0 + P, ky + kh - P, kw - 2 * P, 2);
+  ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#2a1150'; ctx.fillText(key, x0 + kw / 2, ky + 15);
+  ctx.textAlign = 'left'; ctx.font = 'bold 15px monospace';
+  ctx.fillStyle = '#0d0618'; ctx.fillText(txt, x0 + kw + 13, y + h / 2 + 6);
+  ctx.fillStyle = '#e9ddff'; ctx.fillText(txt, x0 + kw + 12, y + h / 2 + 5);
+  // setinhas > > piscando (pixel)
+  const ax = Math.round(x0 + kw + 12 + tw + 8), ay = Math.round(y + h / 2) - 5;
+  for (let i = 0; i < 2; i++) {
+    ctx.fillStyle = Math.floor(clock * 4) % 2 === i ? '#c4a3ff' : '#5b3f8a';
+    for (const [dx, dy] of [[0, 0], [2, 2], [4, 4], [2, 6], [0, 8]]) ctx.fillRect(ax + i * 8 + dx, ay + dy, 2, 2);
+  }
+  ctx.restore();
+}
 function startShopVisit() {
+  shop.visited = false;
   run.phase = 'shop';
   run.phaseT = BILL.shopTime;
   billArrive();
@@ -2721,6 +2821,13 @@ function updateWaves(dt) {
     run.toSpawn -= n;
     run.spawnTimer = run.cfg.interval;
   }
+  if (run.toSpawn === 0) {                       // reta final: os últimos correm até a casa (ninguém fica enrolando)
+    const left = enemies.filter(e => e.alive && !e.homeRel);
+    if (left.length && left.length <= LAST.count) for (const e of left) if (!e.rush) {
+      e.rush = true; e.speed *= LAST.speed;
+      particles.push({ x: e.x, y: e.y - e.T.h * e.T.sc * 0.7, vx: 0, vy: -60, life: 0.7, age: 0, size: 0, color: 'text', text: '!', tint: '#ff5a4f', drag: 2 });
+    }
+  }
   if (run.toSpawn === 0 && !enemies.some(e => e.alive)) finishWave();
 }
 
@@ -2752,7 +2859,7 @@ function dropTeeth(e) {
   const [chance, lo, hi] = TEETH.drop[e.T.id] || [0, 0, 0];
   // com mais jacarés por wave, cada um tem menos chance de soltar dente (a renda cresce devagar)
   if (Math.random() > Math.min(1, chance / (1 + 0.06 * Math.max(0, run.wave - 1)) + teethBonus())) return;
-  const n = lo + Math.floor(Math.random() * (hi - lo + 1));
+  const base = lo + Math.floor(Math.random() * (hi - lo + 1)), n = base + (lv.sGold ? Math.floor(base * 0.5 + Math.random()) : 0);   // Boca de Ouro: +50%
   for (let i = 0; i < n; i++)
     teeth.push({ x: e.x, y: e.y + e.T.h * e.T.sc / 2 - 6, z: 20, vx: rand(-110, 110), vy: rand(-50, 50), vz: rand(220, 320),
       age: 0, flip: Math.random() < 0.5, spin: rand(0, 6), fly: false, value: rollToothValue() });
@@ -2762,7 +2869,7 @@ function vacuumTeeth() {
   for (const t of teeth) { t.fly = true; t.vacuum = true; }
   if (teeth.length) sfx.select();
 }
-const magnetRange = () => TEETH.magnet * (1 + 0.6 * shop.lv.magnet);
+const magnetRange = () => TEETH.magnet * (1 + 0.6 * shop.lv.magnet) * (1 + 0.35 * lv.teethMag);
 function updateTeeth(dt) {
   toothPop *= Math.exp(-6 * dt);
   for (let i = teeth.length - 1; i >= 0; i--) {
@@ -3280,7 +3387,7 @@ function fireAlt() {
   }
   player.reloading = false; player.reloadT = 0;
   player.mags[id]--;
-  player.cooldown = W.cd(wl) / (1 + 0.1 * lv.atkSpd);
+  player.cooldown = W.cd(wl) / atkMul();
   let m = muzzlePos();
   const dual = isDual(id);
   if (dual) {                                     // armas duplas: alterna, um tiro de cada arma
@@ -3294,7 +3401,7 @@ function fireAlt() {
   }
   const a = player.aim + rand(-W.spread, W.spread), sp = W.speed * rand(0.95, 1.05);
   bullets.push({ x: m.x, y: m.y, px: m.x, py: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.6, age: 0,
-    hits: [], dmgMul: 1, dmg: W.dmg(wl) * (1 + 0.1 * lv.shotDmg), pierce: W.pierce, scale: W.scale * bulletMul(), pad: W.pad * bulletMul(), kind: id, fire: player.pepperT > 0 });
+    hits: [], dmgMul: 1, dmg: W.dmg(wl) * dmgMul(), pierce: W.pierce, scale: W.scale * bulletMul(), pad: W.pad * bulletMul(), kind: id, fire: player.pepperT > 0 });
   player.flash = 0.04; player.flashAngle = player.aim;
   for (let i = 0; i < 4; i++) {
     const pa = player.aim + rand(-0.5, 0.5), ps = rand(200, 500);
@@ -4064,7 +4171,7 @@ function drawAltAmmo() {
     ctx.fillStyle = '#000'; ctx.fillRect(x0, y0 - 14, total, 6);
     ctx.fillStyle = '#ffe08a'; ctx.fillRect(x0, y0 - 14, Math.round(total * p2), 6);
   }
-  drawMeleeIcon(canvas.width - AMMO_MARGIN - 52, canvas.height - AMMO_MARGIN - 16 * AMMO_SCALE - 76);
+  drawMeleeIcon(canvas.width - AMMO_MARGIN - HUD_ICON, canvas.height - AMMO_MARGIN - 16 * AMMO_SCALE - HUD_ICON - 28);
   const sc = 1 + reservePop * 0.35;
   ctx.save();
   ctx.translate(x0 - 14, y0 + totalH / 2 + 10); ctx.scale(sc, sc);
@@ -4098,7 +4205,10 @@ function drawConsumablesHud() {
     ctx.restore();
   });
 }
-function openShop() { shop.open = true; shop.t = 0; shop.msg = ''; shop.scroll = 0; shop.scrollX = 0; mouse.down = false; sfx.select(); }
+function openShop() { shop.open = true; shop.t = 0; shop.msg = ''; shop.scroll = 0; shop.scrollX = 0;
+  shop.order = {}; for (const it of SHOP_ITEMS) shop.order[it.id] = shopSortPrice(it);
+  if (run.phase === 'shop') shop.visited = true;   // a gaveta ENTER só aparece depois de passar pela loja
+  mouse.down = false; sfx.select(); }
 function closeShop() { if (!shop.open) return; shop.open = false; mouse.down = false; sfx.select(); }
 const SHOP_VISIBLE = 3;
 function shopSortPrice(it) {
@@ -4116,7 +4226,8 @@ function shopRects() {
   const pw = Math.min(1500, W - 40), ph = Math.min(900, H - 40), px = Math.round((W - pw) / 2), py = Math.round((H - ph) / 2);
   const left = Math.round(Math.min(330, pw * 0.25)), rx = px + left + 10, rw = pw - left - 34;
   // itens do mais barato ao mais caro (esgotado / nível máximo vai para o fim)
-  const items = SHOP_ITEMS.filter(it => it.tab === shop.tab).map(it => ({ it, p: shopSortPrice(it) })).sort((a, b) => a.p - b.p).map(o => o.it);
+  const ord = shop.order || {};                // ordem por preço tirada ao abrir a loja: não muda enquanto compra
+  const items = SHOP_ITEMS.filter(it => it.tab === shop.tab).sort((a, b) => (ord[a.id] ?? 0) - (ord[b.id] ?? 0));
   const ty = py + 80, tw = (rw - 16) / SHOP_TABS.length, tabH = 58;
   const top = ty + tabH + 16, bottom = py + ph - 64, n = items.length;
   // 3 cards por vez; com mais, setas e roda do mouse rolam para os lados
@@ -4466,8 +4577,14 @@ function drawShop() {
 const cards = { list: [], t: 0, picked: -1, pickT: 0 };
 function openCards() {
   const pool = UPGRADES.filter(u => !u.max || lv[u.id] < u.max);   // cartas no nível máximo não aparecem mais
+  const sup = SUPER_UPGRADES.filter(u => lv[u.id] < u.max);
+  cards.super = mode === 'rogue' && run.wave % 5 === 0 && sup.length > 0;   // waves 5, 10, 15...: SUPER cartas
   cards.list = [];
-  for (let i = 0; i < 3; i++) cards.list.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  for (let i = 0; i < 3; i++) {
+    const src = cards.super && sup.length ? sup : pool;
+    cards.list.push(src.splice(Math.floor(Math.random() * src.length), 1)[0]);
+  }
+  if (cards.super) { sfx.threat(); cards.shine = 0; }
   cards.t = 0; cards.picked = -1; cards.pickT = 0;
   mouse.down = false;
 }
@@ -4484,6 +4601,10 @@ function pickCard(i) {
   const oldMax = houseMax();
   lv[u.id]++;
   if (u.id === 'houseHp') house.hp += houseMax() - oldMax;       // a vida extra já vem cheia
+  if (u.id === 'sFortress') house.hp = houseMax();               // Fortaleza: conserta tudo
+  if (u.id === 'sBelt') { player.ammo = ammoMax(); player.reserve = reserveMax(); if (has9mm()) { player.reserve9 = AMMO9.max; refillAltMags(); } }
+  if (u.id === 'stamina') player.stam = staminaMax();
+  if (cards.super) { cam.trauma = Math.min(1, cam.trauma + 0.3); for (let i = 0; i < 30; i++) { const a = rand(0, Math.PI * 2), sp = rand(150, 500); particles.push({ x: player.x, y: player.y - 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.4, 0.9), age: 0, size: rand(3, 7), color: Math.random() < 0.5 ? '#ffd166' : '#fff6a8', drag: 4 }); } }
   statFlash[u.id] = 1;
   sfx.upgrade();
 }
@@ -4519,7 +4640,7 @@ function meleeStrike() {
     let diff = Math.atan2(dy, dx) - a;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     const reach = meleeRange() + e.T.hitbox.w * e.T.sc / 2;
-    if (dist < reach && (Math.abs(diff) < MELEE_ARC / 2 || dist < e.T.hitbox.w * e.T.sc)) {
+    if (dist < reach && (Math.abs(diff) < meleeArc() / 2 || dist < e.T.hitbox.w * e.T.sc)) {
       hits++;
       const ang = Math.atan2(dy, dx);
       const kb = meleeKnock() * Math.min(1, e.T.knockMul * 2);   // a faca empurra pesados o dobro que o tiro (tank: 60%)
@@ -4529,7 +4650,7 @@ function meleeStrike() {
   }
   // faíscas do corte ao longo do arco
   for (let i = 0; i < 20; i++) {
-    const t = a + rand(-MELEE_ARC / 2, MELEE_ARC / 2), r = rand(40, meleeRange());
+    const t = a + rand(-meleeArc() / 2, meleeArc() / 2), r = rand(40, meleeRange());
     particles.push({ x: h.x + Math.cos(t) * r, y: h.y + Math.sin(t) * r, vx: Math.cos(t) * 80, vy: Math.sin(t) * 80,
       life: rand(0.1, 0.22), age: 0, size: rand(2, 4), color: '#ffffff', drag: 8 });
   }
@@ -4613,7 +4734,16 @@ function update(dt) {
   if (gameOver) { dx = 0; dy = 0; }
 
   // corrida
-  player.running = keys.has('shift') && len > 0 && !gameOver;
+  const stMax = staminaMax();
+  if (player.stam === undefined) player.stam = stMax;
+  player.running = keys.has('shift') && len > 0 && !gameOver && !player.exhausted && player.stam > 0;
+  if (player.running) {
+    player.stam -= RUN.drain * (lv.sLungs ? 0.5 : 1) * dt; player.stamWait = RUN.delay;
+    if (player.stam <= 0) { player.stam = 0; player.exhausted = true; sfx.dry(); }
+  } else if ((player.stamWait = (player.stamWait || 0) - dt) <= 0) {
+    player.stam = Math.min(stMax, player.stam + RUN.regen * dt);
+    if (player.exhausted && player.stam >= RUN.resume) player.exhausted = false;
+  }
   if (player.running && (player.dustT -= dt) <= 0) {      // poeirinha saindo dos pés
     player.dustT = RUN.dustEvery;
     particles.push({ x: player.x - dx * 18 + rand(-8, 8), y: player.y + 34 + rand(-3, 3), vx: -dx * rand(30, 70) + rand(-20, 20),
@@ -4621,7 +4751,7 @@ function update(dt) {
   }
   player.zapT = Math.max(0, (player.zapT || 0) - dt);
   if (player.zapT > 0 && Math.random() < 0.3) particles.push({ x: player.x + rand(-18, 18), y: player.y + rand(-30, 10), vx: rand(-60, 60), vy: rand(-80, -20), life: 0.2, age: 0, size: rand(2, 4), color: Math.random() < 0.5 ? '#ffffff' : '#bfe6ff', drag: 4 });   // faíscas do raio
-  const spd = (introWalk ? SPEED * INTRO.walkSpeed : SPEED * (player.running ? RUN.mul : 1) * moveMul()) * (player.zapT > 0 ? 0.4 : 1);
+  const spd = (introWalk ? SPEED * INTRO.walkSpeed : SPEED * (player.running ? RUN.mul * (1 + 0.1 * lv.sLungs) : 1) * moveMul()) * (player.zapT > 0 ? 0.4 : 1);
 
   const kd = Math.exp(-12 * dt);           // knockback some rápido
   player.vx *= kd; player.vy *= kd;
@@ -4650,6 +4780,7 @@ function update(dt) {
   // tiro
   player.cooldown -= dt;
   updateMelee(dt);
+  if (mouse.pressed && billDrawer.k > 0.5 && billDrawerOn() && hoveredIn([billDrawerRect()])) { endShopVisit(); sfx.select(); mouse.pressed = false; mouse.down = false; }   // clique na gaveta roxa
   if (mouse.down && !build.on && player.cooldown <= 0 && !gameOver && player.meleeT < 0 && !(player.zapT > 0)) {
     if (player.weapon !== 'shotgun') fireAlt();
     else if (player.ammo > 0) {
@@ -5708,6 +5839,16 @@ function drawCardIcon(u, cx, cy, sz) {
     }
     return;
   }
+  const extra = { stamina: legImgs[0], teethMag: toothImg, ammoBox: AMMO_BOX_IMGS.ammo, thorns: FENCE_IMGS.rail, ammoDrop: ammoFullImg,
+    sExplode: CONS_IMGS.dynamite, sFortress: houseImg, sFury: gunSprite, sSpin: knifeIconImg, sGold: toothImg, sBelt: AMMO_BOX_IMGS.ammo, sLungs: legImgs[1] }[u.id];
+  if (u.id === 'sCrit') return drawPix(PIX.crit, cx - 3.5 * sz / 7, cy - 3.5 * sz / 7, sz / 7, '#ffd166');
+  if (extra && extra.complete !== false) {
+    const k = Math.max(1, Math.floor(sz / Math.max(extra.width, extra.height)));
+    const tint = u.id === 'sFury' ? tintOf(extra, '#ff5a4f') : u.id === 'sGold' ? tintOf(extra, '#ffd166') : extra;
+    ctx.drawImage(tint, Math.round(cx - extra.width * k / 2), Math.round(cy - extra.height * k / 2), extra.width * k, extra.height * k);
+    if (u.id === 'sSpin') { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, sz * 0.5, 0.3, Math.PI * 1.8); ctx.stroke(); }
+    return;
+  }
   const img2 = { atkSpd: gunSprite, shotDmg: gunSprite, pellets: gunSprite, reload: ammoFullImg, bulletSz: null,
     houseHp: houseImg, meleeCd: meleeImgs[0], meleeDmg: meleeImgs[0], meleeKb: meleeImgs[0], meleeRng: meleeImgs[0] }[u.id];
   if (u.id === 'crit') return drawPix(PIX.crit, cx - 3.5 * sz / 7, cy - 3.5 * sz / 7, sz / 7, '#ffd166');
@@ -5740,8 +5881,11 @@ function drawCards() {
   const titleA = Math.min(1, cards.t / 0.3);
   ctx.globalAlpha = titleA;
   ctx.font = 'bold 30px monospace';
-  ctx.fillStyle = '#000'; ctx.fillText('ESCOLHA UM UPGRADE', canvas.width / 2 + 3, rects[0].y - 26);
-  ctx.fillStyle = '#e9c46a'; ctx.fillText('ESCOLHA UM UPGRADE', canvas.width / 2, rects[0].y - 29);
+  const ttl = cards.super ? 'SUPER UPGRADE!' : 'ESCOLHA UM UPGRADE';
+  if (cards.super) { ctx.font = `bold ${Math.round(36 + Math.sin(clock * 6) * 2)}px monospace`; ctx.save(); ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 24; }
+  ctx.fillStyle = '#000'; ctx.fillText(ttl, canvas.width / 2 + 3, rects[0].y - 26);
+  ctx.fillStyle = cards.super ? `hsl(${45 + Math.sin(clock * 4) * 8},100%,${65 + Math.sin(clock * 8) * 8}%)` : '#e9c46a'; ctx.fillText(ttl, canvas.width / 2, rects[0].y - 29);
+  if (cards.super) ctx.restore();
   ctx.globalAlpha = 1;
   for (const r of rects) {
     // entrada: sobe e aparece, uma de cada vez
@@ -5760,7 +5904,16 @@ function drawCards() {
     ctx.globalAlpha = a;
     ctx.translate(r.x + r.w / 2, y + r.h / 2); ctx.scale(sc, sc); ctx.translate(-r.w / 2, -r.h / 2);
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(5, 6, r.w, r.h);                 // sombra
-    ctx.fillStyle = '#18221a'; ctx.fillRect(0, 0, r.w, r.h);
+    const sup = r.u.cat === 'super';
+    if (sup) { ctx.save(); ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 22 + Math.sin(clock * 5 + r.i) * 8; }
+    ctx.fillStyle = sup ? '#2a1d08' : '#18221a'; ctx.fillRect(0, 0, r.w, r.h);
+    if (sup) {
+      ctx.restore();
+      const g = ctx.createLinearGradient(0, 0, 0, r.h); g.addColorStop(0, 'rgba(255,209,102,.22)'); g.addColorStop(1, 'rgba(120,60,0,.1)'); ctx.fillStyle = g; ctx.fillRect(0, 0, r.w, r.h);
+      const sx = ((clock * 220 + r.i * 90) % (r.w + 160)) - 80;          // brilho dourado passando
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, r.w, r.h); ctx.clip(); ctx.fillStyle = 'rgba(255,240,180,.16)';
+      ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx + 50, 0); ctx.lineTo(sx + 10, r.h); ctx.lineTo(sx - 40, r.h); ctx.fill(); ctx.restore();
+    }
     ctx.fillStyle = col; ctx.fillRect(0, 0, r.w, 6);                                  // faixa da categoria
     ctx.strokeStyle = on || chosen ? '#fff' : col; ctx.lineWidth = on || chosen ? 3 : 2;
     ctx.strokeRect(1, 1, r.w - 2, r.h - 2);
@@ -5775,7 +5928,7 @@ function drawCards() {
     ctx.font = `${Math.round(12 * fk)}px monospace`; ctx.fillStyle = '#c9d4c0';
     wrapText(r.u.desc, r.w - 26).forEach((l, i) => ctx.fillText(l, r.w / 2, r.h * 0.34 + 50 + 26 * fk + i * 17 * fk));
     ctx.font = `bold ${Math.round(11 * fk)}px monospace`; ctx.fillStyle = col;
-    ctx.fillText(r.u.cat.toUpperCase() + '  ·  ' + (lv[r.u.id] ? `nível ${lv[r.u.id]} → ${lv[r.u.id] + 1}` : 'NOVO'), r.w / 2, r.h - 18 - 14 * fk);
+    ctx.fillText(sup ? '★ SUPER ★' : r.u.cat.toUpperCase() + '  ·  ' + (lv[r.u.id] ? `nível ${lv[r.u.id]} → ${lv[r.u.id] + 1}` : 'NOVO'), r.w / 2, r.h - 18 - 14 * fk);
     ctx.fillStyle = 'rgba(244,241,222,.55)'; ctx.fillText(`[${r.i + 1}]`, r.w / 2, r.h - 12);
     ctx.restore();
   }
@@ -5796,7 +5949,7 @@ function statLines() {
     ['crit',     'Crítico',        pct(critChance())],
     ['vamp',     'Vampirismo',     pct(vampirism())],
     ['atkSpd',   'Vel. ataque',    `${(1 / shotCooldown()).toFixed(2)}/s`],
-    ['shotDmg',  'Dano armas',     pct(1 + 0.1 * lv.shotDmg)],
+    ['shotDmg',  'Dano armas',     pct(dmgMul())],
     ['pellets',  'Projéteis',      `${pelletCount()}`],
     ['bulletSz', 'Tamanho bala',   pct(bulletMul())],
     ['reload',   'Recarga',        `${reloadShell().toFixed(2)}s/cart.`],
@@ -6012,21 +6165,22 @@ function drawGameOver() {
   ctx.textAlign = 'left';
 }
 
+const HUD_ICON = 76;        // ícones da faca e da corrida (canto direito)
 function drawMeleeIcon(x, y) {
-  const s = 52, ready = player.meleeCd <= 0;
+  const s = HUD_ICON, ready = player.meleeCd <= 0;
   const pop = player.meleeReadyPop, sc = 1 + pop * 0.25;
   ctx.save();
   ctx.translate(x + s / 2, y + s / 2);
   ctx.scale(sc, sc);
   ctx.translate(-s / 2, -s / 2);
   ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
-  if (knifeIconImg.complete) ctx.drawImage(knifeIconImg, Math.round((s - knifeIconImg.width * 3) / 2), Math.round((s - knifeIconImg.height * 3) / 2), knifeIconImg.width * 3, knifeIconImg.height * 3);
+  if (knifeIconImg.complete) ctx.drawImage(knifeIconImg, Math.round((s - knifeIconImg.width * 4) / 2), Math.round((s - knifeIconImg.height * 4) / 2), knifeIconImg.width * 4, knifeIconImg.height * 4);
   if (!ready) {   // escurece de cima para baixo conforme o tempo que falta
     const k = player.meleeCd / meleeCooldown();
     ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, s, Math.round(s * k));
-    ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-    ctx.fillStyle = '#000'; ctx.fillText(Math.ceil(player.meleeCd), s / 2 + 1, s / 2 + 7);
-    ctx.fillStyle = '#f4f1de'; ctx.fillText(Math.ceil(player.meleeCd), s / 2, s / 2 + 6);
+    ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#000'; ctx.fillText(Math.ceil(player.meleeCd), s / 2 + 2, s / 2 + 10);
+    ctx.fillStyle = '#f4f1de'; ctx.fillText(Math.ceil(player.meleeCd), s / 2, s / 2 + 8);
     ctx.textAlign = 'left';
   }
   ctx.strokeStyle = ready ? '#f4f1de' : 'rgba(244,241,222,.35)'; ctx.lineWidth = 2;
@@ -6034,26 +6188,31 @@ function drawMeleeIcon(x, y) {
   if (pop > 0.05) { ctx.fillStyle = `rgba(255,255,255,${pop * 0.7})`; ctx.fillRect(0, 0, s, s); }
   hudKeyLabel('BOTÃO DIR.', s / 2, -6);
   ctx.restore();
-  drawRunIcon(x, y - 76);
+  drawRunIcon(x, y - HUD_ICON - 30);
 }
 // legenda pequena em cima dos ícones do HUD
 function hudKeyLabel(t, cx, y) {
-  ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
-  const w = ctx.measureText(t).width + 8;
-  ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(cx - w / 2, y - 10, w, 13);
+  ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+  const w = ctx.measureText(t).width + 10;
+  ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(cx - w / 2, y - 13, w, 17);
   ctx.fillStyle = '#e9c46a'; ctx.fillText(t, cx, y);
   ctx.textAlign = 'left';
 }
 // ícone da corrida (acende enquanto corre)
 function drawRunIcon(x, y) {
-  const s = 52, on = player.running;
+  const s = HUD_ICON, on = player.running, ex = player.exhausted;
   ctx.save(); ctx.translate(x, y);
   ctx.fillStyle = on ? 'rgba(233,196,106,.35)' : 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, s, s);
   const L = legImgs[on ? Math.floor(clock * 10) % 2 : 1];
-  if (L.complete) ctx.drawImage(L, Math.round((s - L.width * 3) / 2), Math.round((s - L.height * 3) / 2) + 6, L.width * 3, L.height * 3);
+  if (L.complete) ctx.drawImage(L, Math.round((s - L.width * 4) / 2), Math.round((s - L.height * 4) / 2) + 2, L.width * 4, L.height * 4);
   ctx.fillStyle = on ? '#fff' : 'rgba(244,241,222,.6)';                 // risquinhos de velocidade
-  for (let i = 0; i < 3; i++) ctx.fillRect(8 + (on ? (clock * 60 + i * 9) % 10 : 0), 12 + i * 7, 10 - i * 2, 2);
-  ctx.strokeStyle = on ? '#e9c46a' : '#f4f1de'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, s - 2, s - 2);
+  for (let i = 0; i < 3; i++) ctx.fillRect(10 + (on ? (clock * 60 + i * 9) % 12 : 0), 14 + i * 9, 14 - i * 3, 3);
+  // fôlego: barra embaixo (vermelha piscando quando esgota)
+  const k = Math.max(0, Math.min(1, (player.stam ?? staminaMax()) / staminaMax())), bh = 9;
+  ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(4, s - bh - 4, s - 8, bh);
+  ctx.fillStyle = ex ? (Math.floor(clock * 8) % 2 ? '#e63946' : '#7a1f1f') : k > 0.35 ? '#7bd04a' : '#e9c46a';
+  ctx.fillRect(5, s - bh - 3, Math.round((s - 10) * k), bh - 2);
+  ctx.strokeStyle = ex ? '#e63946' : on ? '#e9c46a' : '#f4f1de'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, s - 2, s - 2);
   hudKeyLabel('SHIFT', s / 2, -6);
   ctx.restore();
 }
@@ -6117,7 +6276,7 @@ function drawAmmo() {
     ctx.fillStyle = '#000'; ctx.fillRect(x0, y0 - 14, total, 6);
     ctx.fillStyle = '#ffe08a'; ctx.fillRect(x0, y0 - 14, Math.round(total * k), 6);
   }
-  drawMeleeIcon(canvas.width - AMMO_MARGIN - 52, canvas.height - AMMO_MARGIN - 16 * AMMO_SCALE - 76);
+  drawMeleeIcon(canvas.width - AMMO_MARGIN - HUD_ICON, canvas.height - AMMO_MARGIN - 16 * AMMO_SCALE - HUD_ICON - 28);
   // contador "pente / reserva"
   const txt = `${player.ammo}/${player.reserve}`;
   const sc = 1 + reservePop * 0.35;
@@ -6231,6 +6390,8 @@ function render() {
     drawTeethHud();
     drawRunHud();
     drawBillOverlay();
+    drawBillDrawer();
+    drawLastMarkers();
     drawIntro();
     drawCards();
     drawShop();
