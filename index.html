@@ -277,8 +277,8 @@ const houseNightImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFYAAAA
 // dente (moeda do jogo) e o velho Bill, mercador, com o carrinho de loja
 const toothImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdElEQVR4nGNgoCf4dmr+fxAmWzMI/Hx2HsUQJmI1c5omMPx6fgFDjolUl/x9coGByyyRkWQ/fsPhBeIVIKlBlmch5EdkAHL6t1MMKIaz4NWBwxCKAhEdMDFQC3xDCkR8AUmUIf8JxAYywEgQ2DThTDiDAgAAqbeAlAXih2QAAAAASUVORK5CYII=');          // dente.png (16x16)
 UPGRADE_ICONS.teeth = toothImg; UPGRADE_ICONS.moveSpd = legImgs[1];   // ícones das cartas novas
-const toothCoinImgs = { 1: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAHCAYAAADAp4fuAAAAQklEQVR4nGNggIJvp+b/B2EYHywAAj+fnQdLMIEITtMEhl/PL8AVMcFZDAwMf59cYOAyS2TEqh3DXBANUYokAWICAH+QO6IMDx/mAAAAAElFTkSuQmCC'),   // dente-1.png (vale 1)
-  5: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAJCAYAAAAPU20uAAAAQElEQVR4nGNggIJvp+b/B2EGbODbqfn/QeDns/MYiphAApymCQy/nl/AqpkJqyhVFWA4EptDURSh+4YRXRG6RgAp2UOpqQ0g2wAAAABJRU5ErkJggg==') };   // dente-5.png (vale 5)
+const toothCoinImgs = { 1: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAICAYAAAAx8TU7AAAATklEQVR4nGNgYGBg+A8FIDYIsIA4z+dmMQjomYElGRkZGZlAMiABEPj1/AJYAiwIA2ySBgwglWCZZ3MyUcxEUYkCQKq+nZqPohouARMEAL8kOAVeIfQuAAAAAElFTkSuQmCC'), 5: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAOCAYAAAAMn20lAAAAXElEQVR4nGNggIL/UMAABSwwwedzs+AKGEEAWVBAzwxMc5omMDDBtMIEmWUMwDRcAh3glgDZI5k8jeHDpVNE6kAX+PvkAsIfMGd/P72ADFexSRqATcCpAwUgByIAzr0rEG7Rcw0AAAAASUVORK5CYII='),
+  10: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAOCAYAAAAMn20lAAAAY0lEQVR4nGNggIL/UMAABSwwwcmLdsEVMIIAsqCpngqYtjBQYmCCaYUJKsqKgWm4BDrALQGyJzfOjeH0pTtE6kAXuP/4FaoAyNnHz9/9/+LNZ7BHiTdKXJiHAeQgnDow7IGxAUu+M3JIxLIKAAAAAElFTkSuQmCC'), 25: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAOCAYAAAAMn20lAAAAYElEQVR4nGNggIL/UMAABSwwQYbFonAFjCCALMigJgihzW8xMMG0wgWVjcAUQgIGRFbgkIACJpA9DLGvGRhuvUeVwFD6JgKHxN1zqHyw706owvz5H6dRWHXgdS6GLhgbAKfiPQzJPJgYAAAAAElFTkSuQmCC') };   // dentes.png: 1 pequeno, 5 grande, 10 prata, 25 ouro
 const billBodyImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAABcklEQVR4nJWUsU7DMBCGz1E6dbTZAEViYkatYGBjzM7CA7DB3rk7z1B1ZgpLxZaBQlWJLRMoUhFL4zFTEaA7xdHZxEn4pdT16fL5v8slAjokpfxxY1pr4csPumDDq3OIpqd0oXDfdIgRneRLwJv3jnewvn6gvZSyBueTZaPTEGGYlCcCotjm5pMUSrY3sDaFdbID44DIiW+zAbT2cJsNYD26J5d8bbvRJ4El68UnbZ6CD1rPvvetpMPZJfWSy9dDgT8ILYqiDi5f3yG+GNN/PX2m9QRurJLLedoIDNwAwghkkkcHdPHyXbeND4XDjDvSagOu2nobGjdKKSpbKWWXgg5RGVgO+Ti1lpw8vtiDjg5XGyjfvvo7dF1aMg6Tfg5DvjFQq+Sqh8MjTN31G2yuP6NQPWVeMjr0fSQC6FLlUMd39AbVc8gO4PJ+19xPmCsEYhtKZ8A7gQbqxvANksltDaWY1qIX0HcIh5LredrP4X+c/wJrR7l7MjyA3wAAAABJRU5ErkJggg==');  // velho-bill.png (20x20, olha para a ESQUERDA)
 const billLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAATUlEQVR4nGP8z+DAQCxggjFEhC//F/HhgWDhy/9NZnD/l88XALMxFJNk8pu3uowMx4/DJdjarzFIb7iI2xkMlpZwiVtfPjGo8LKjKAYA6PkZdMrVaxsAAAAASUVORK5CYII='), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAFCAYAAACTphZWAAAAUklEQVR4nGP8z+DAQCxgEhG+/F/EhweChS//R5YE8U1mcP+XzxcAyzERbSzI5DdvdRkZjh/HqYCt/RqD9IaLCGcwWFpiVQgy6NaXTwwqvOxgPgA4jh10vU5kYgAAAABJRU5ErkJggg==')];   // bill-pernas.gif
 const billHandImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAGCAYAAAAPDoR2AAAATElEQVR4nGNkgAJhYeH/MPbbt28ZQTQLTII7xpZBVPM3w+vrrAwMSw7/BylgRJaAAZCCr0sOMzDBRbAAJpB2kCpkXTAAthjdQTBHAQCp8yA552sYvAAAAABJRU5ErkJggg==');    // bill-mao.png (7x6)
@@ -1964,6 +1964,7 @@ function finishWave() {
   run.phaseT = ROGUE.breakTime;
   openCards();
   const full = house.hp >= houseMax();
+  vacuumTeeth();
   banner(`WAVE ${run.wave} COMPLETA`, full ? '+ munição' : '+ munição   + curativo da casa', '#7bd04a', 2.2);
   sfx.waveClear();
   // recompensas na frente da porta
@@ -2021,23 +2022,38 @@ function updateWaves(dt) {
 // Dentes: a moeda do jogo. Caem dos jacarés no modo horda (os mais fortes soltam mais)
 // =====================================================================
 const TEETH = {
-  drop: { basic: [0.2, 1, 1], tank: [1, 3, 7], range: [0.8, 1, 3], rusher: [0.25, 1, 1], healer: [0.9, 2, 4] },   // [chance, valor mínimo, valor máximo]: cada 5 vira um dente grande
-  life: 14,          // segundos até sumir (pisca nos últimos 3)
+  drop: { basic: [0.2, 1, 1], tank: [1, 2, 3], range: [0.8, 1, 2], rusher: [0.25, 1, 1], healer: [0.9, 1, 2] },   // [chance, mín. e máx. de dentes]   // [chance, valor mínimo, valor máximo]: cada 5 vira um dente grande
+  vacuum: 900,       // velocidade com que os dentes voam até o jogador no fim da wave
   magnet: 140,       // distância em que o dente voa até o jogador
   scale: 3,
 };
 const teeth = [];
 let toothPop = 0;
+// tipo do dente: quanto mais longe na partida, mais chance de dentes valiosos (5, prata 10, ouro 25)
+function toothChances(w) {
+  const p25 = Math.max(0, Math.min(0.05, (w - 14) * 0.01));    // ouro: a partir da wave 15, até 5%
+  const p10 = Math.max(0, Math.min(0.12, (w - 7) * 0.015));    // prata: a partir da wave 8, até 12%
+  const p5 = Math.min(0.28, 0.06 + w * 0.012);                 // grande: 7% na wave 1, até 28%
+  return [[25, p25], [10, p10], [5, p5], [1, Math.max(0, 1 - p25 - p10 - p5)]];
+}
+function rollToothValue() {
+  let r = Math.random();
+  for (const [v, ch] of toothChances(run.wave)) { if (r < ch) return v; r -= ch; }
+  return 1;
+}
 function dropTeeth(e) {
   if (mode !== 'rogue') return;
   const [chance, lo, hi] = TEETH.drop[e.T.id] || [0, 0, 0];
   if (Math.random() > Math.min(1, chance + teethBonus())) return;
-  let v = lo + Math.floor(Math.random() * (hi - lo + 1));
-  while (v > 0) {                                   // dente grande vale 5, pequeno vale 1
-    const value = v >= 5 ? 5 : 1; v -= value;
+  const n = lo + Math.floor(Math.random() * (hi - lo + 1));
+  for (let i = 0; i < n; i++)
     teeth.push({ x: e.x, y: e.y + e.T.h * e.T.sc / 2 - 6, z: 20, vx: rand(-110, 110), vy: rand(-50, 50), vz: rand(220, 320),
-      age: 0, flip: Math.random() < 0.5, spin: rand(0, 6), fly: false, value });
-  }
+      age: 0, flip: Math.random() < 0.5, spin: rand(0, 6), fly: false, value: rollToothValue() });
+}
+// fim da wave: todos os dentes que sobraram no chão voam até o jogador (nenhum se perde)
+function vacuumTeeth() {
+  for (const t of teeth) { t.fly = true; t.vacuum = true; }
+  if (teeth.length) sfx.select();
 }
 const magnetRange = () => TEETH.magnet * (1 + 0.6 * shop.lv.magnet);
 function updateTeeth(dt) {
@@ -2048,11 +2064,11 @@ function updateTeeth(dt) {
     const dx = player.x - t.x, dy = player.y + 20 - t.y, dist = Math.hypot(dx, dy);
     if (!t.fly && t.age > 0.45 && dist < magnetRange() && player.hp > 0) t.fly = true;
     if (t.fly) {                                    // ímã: acelera até o jogador
-      const sp = 260 + t.age * 60 + (magnetRange() - Math.min(dist, magnetRange())) * 4;
+      const sp = t.vacuum ? TEETH.vacuum + t.age * 120 : 260 + t.age * 60 + (magnetRange() - Math.min(dist, magnetRange())) * 4;
       t.x += dx / (dist || 1) * sp * dt; t.y += dy / (dist || 1) * sp * dt; t.z *= Math.exp(-8 * dt);
       if (dist < 26) {
         run.teeth += t.value; toothPop = 1; sfx.tooth();
-        if (t.value > 1) particles.push({ x: t.x, y: t.y - 40, vx: 0, vy: -60, life: 0.8, age: 0, size: 0, color: 'text', text: `+${t.value}`, tint: '#fff6d8', drag: 1.5 });
+        if (t.value > 1) particles.push({ x: t.x, y: t.y - 40, vx: 0, vy: -60, life: 0.8, age: 0, size: 0, color: 'text', text: `+${t.value}`, tint: TOOTH_TINT[t.value], drag: 1.5 });
         particles.push({ x: t.x, y: t.y - 10, vx: 0, vy: 0, life: 0.25, age: 0, size: 6, grow: 120, color: 'ring', drag: 0 });
         teeth.splice(i, 1);
       }
@@ -2063,27 +2079,24 @@ function updateTeeth(dt) {
     if (t.z <= 0) { t.z = 0; t.vz = Math.abs(t.vz) > 80 ? -t.vz * 0.35 : 0; t.vx *= 0.5; t.vy *= 0.5; }
     const k = Math.exp(-(t.z > 0 ? 0.5 : 6) * dt);
     t.vx *= k; t.vy *= k;
-    t.x += t.vx * dt; t.y += t.vy * dt;
-    if (t.age > TEETH.life) {
-      particles.push({ x: t.x, y: t.y - 8, vx: 0, vy: -15, life: 0.35, age: 0, size: 6, grow: 20, color: 'dust', drag: 2 });
-      teeth.splice(i, 1);
-    }
+    t.x += t.vx * dt; t.y += t.vy * dt;               // fica no chão até ser pego (não some mais)
   }
 }
+const TOOTH_GLOW = { 5: '255,240,200', 10: '210,225,255', 25: '255,210,80' };
+const TOOTH_TINT = { 5: '#fff6d8', 10: '#dfe8ff', 25: '#ffd166' };
 function drawTooth(t) {
   const im2 = toothCoinImgs[t.value];
   if (!im2.complete) return;
-  const left = TEETH.life - t.age;
-  if (!t.fly && left < 3 && Math.floor(left * (left < 1 ? 16 : 8)) % 2 === 0) return;
   const S = TEETH.scale, w = im2.width * S, h = im2.height * S, bob = t.z > 0 ? 0 : Math.sin(clock * 3 + t.spin) * 2;
   ctx.fillStyle = 'rgba(0,0,0,.25)';
   ctx.beginPath(); ctx.ellipse(t.x, t.y, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
   ctx.save();
   ctx.translate(Math.round(t.x), Math.round(t.y - t.z - h / 2 - 2 + bob));
   if (t.flip) ctx.scale(-1, 1);
-  if (t.value > 1 && !t.fly) {                       // dente grande brilha um pouco
-    ctx.fillStyle = `rgba(255,240,200,${0.18 + Math.sin(clock * 5 + t.spin) * 0.08})`;
-    ctx.beginPath(); ctx.arc(0, 0, w * 0.9, 0, Math.PI * 2); ctx.fill();
+  if (t.value > 1 && !t.fly) {                       // dentes valiosos brilham (prata e ouro mais forte)
+    const gl = TOOTH_GLOW[t.value];
+    ctx.fillStyle = `rgba(${gl},${(t.value >= 10 ? 0.3 : 0.18) + Math.sin(clock * 5 + t.spin) * 0.08})`;
+    ctx.beginPath(); ctx.arc(0, 0, w * (t.value >= 10 ? 1.2 : 0.9), 0, Math.PI * 2); ctx.fill();
   }
   ctx.drawImage(im2, -w / 2, -h / 2, w, h);
   ctx.restore();
