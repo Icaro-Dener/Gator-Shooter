@@ -99,38 +99,51 @@ const PELLET_DAMAGE = 10;
 const CRIT_MULT = 2;               // crítico dobra o dano
 const lv = {};                      // níveis de cada upgrade
 const UPGRADES = [
-  { id: 'crit',      title: 'Olho de Jacaré',  desc: '+5% de chance de crítico',            cat: 'geral'   },
-  { id: 'vamp',      title: 'Vampirismo',      desc: '+1% do dano causado vira vida da casa (máx. 5%)', cat: 'geral', max: 5 },
-  { id: 'atkSpd',    title: 'Gatilho Leve',    desc: '+10% de velocidade de ataque (todas as armas)', cat: 'armas' },
-  { id: 'shotDmg',   title: 'Chumbo Grosso',   desc: '+10% de dano (todas as armas)',        cat: 'armas'   },
-  { id: 'reload',    title: 'Mãos Rápidas',    desc: '+10% de velocidade de recarga (todas as armas)', cat: 'armas' },
-  { id: 'houseHp',   title: 'Tábuas Extras',   desc: '+15% de vida máxima da casa',          cat: 'casa'    },
-  { id: 'meleeCd',   title: 'Lâmina Ágil',     desc: '-10% de recarga da faca',              cat: 'faca'    },
-  { id: 'meleeDmg',  title: 'Fio Afiado',      desc: '+10 de dano da faca',                  cat: 'faca'    },
-  { id: 'bulletSz',  title: 'Calibre Maior',   desc: 'balas 10% maiores (todas as armas)',   cat: 'armas'   },
-  { id: 'pellets',   title: 'Cartucho Cheio',  desc: '+2 projéteis por tiro',                cat: 'shotgun' },
-  { id: 'meleeKb',   title: 'Golpe Pesado',    desc: '+15% de empurrão da faca',             cat: 'faca'    },
-  { id: 'meleeRng',  title: 'Braço Longo',     desc: '+5% de alcance da faca',               cat: 'faca'    },
-  { id: 'teeth',     title: 'Arrancador',      desc: '+5% de chance dos inimigos dropar dentes', cat: 'geral' },
-  { id: 'moveSpd',   title: 'Pernas Ligeiras', desc: '+5% de velocidade de movimento',       cat: 'geral'   },
-  { id: 'stamina',   title: 'Fôlego de Jacaré', desc: '+30% de fôlego para correr',         cat: 'geral'   },
-  { id: 'teethMag',  title: 'Ímã de Dentes',   desc: '+35% de alcance para puxar dentes',   cat: 'geral'   },
-  { id: 'ammoBox',   title: 'Caixa Reforçada', desc: '+25% de munição nas caixas de fim de wave', cat: 'armas' },
-  { id: 'thorns',    title: 'Farpas na Porta', desc: 'quem morde a casa leva 8 de dano',     cat: 'casa'    },
-  { id: 'ammoDrop',  title: 'Catador de Cartuchos', desc: '+30% de chance dos inimigos derrubarem munição', cat: 'armas' },
+  { id: 'vamp',      title: 'Olhar Sanguinário',   desc: '+1% de vampirismo: cada abate recupera vida da casa (máx. 10)', cat: 'olhar', max: 10 },
+  { id: 'poison',    title: 'Olhar Tóxico',        desc: '+2% de veneno: seus tiros envenenam por 3 s', cat: 'olhar' },
+  { id: 'crit',      title: 'Olhar Voraz',         desc: '+10% de chance de crítico',                cat: 'olhar'  },
+  { id: 'shotDmg',   title: 'Chumbo Grosso',       desc: '+10% de dano das armas de fogo',           cat: 'armas'  },
+  { id: 'bulletSz',  title: 'Calibre Amplificado', desc: '+10% de tamanho dos projéteis',            cat: 'armas'  },
+  { id: 'pellets',   title: 'Espoleta Premium',    desc: '+2 projéteis por disparo',                 cat: 'armas'  },
+  { id: 'reload',    title: 'Recarga Rápida',      desc: '-10% de tempo de recarga',                 cat: 'armas'  },
+  { id: 'meleeDmg',  title: 'Lâmina Afiada',       desc: '+10% de dano corpo a corpo',               cat: 'faca'   },
+  { id: 'meleeCd',   title: 'Golpe Rápido',        desc: '-10% de recarga da faca',                  cat: 'faca'   },
+  { id: 'meleeRng',  title: 'Aumento Cortante',    desc: '+10% de alcance da faca',                  cat: 'faca'   },
+  { id: 'meleeKb',   title: 'Coice Brutal',        desc: '+10% de empurrão da faca',                 cat: 'faca'   },
+  { id: 'houseHp',   title: 'Tábuas Extras',       desc: '+15% de vida máxima da casa',              cat: 'casa'   },
+  { id: 'medic',     title: 'Médico de Campo',     desc: '+10% de cura nos kits médicos',            cat: 'casa'   },
+  { id: 'ammoDrop',  title: 'Catador de Cartucho', desc: '+5% de balas nas caixas e +5% de chance de cair caixa', cat: 'armas' },
+  { id: 'teeth',     title: 'Arrancador',          desc: '+10% de dentes dropados',                  cat: 'geral'  },
+  { id: 'moveSpd',   title: 'Galope Apressado',    desc: '+15% de velocidade de movimento',          cat: 'geral'  },
+  { id: 'stamina',   title: 'Fôlego Rústico',      desc: '+30% de fôlego para correr',               cat: 'geral'  },
+  { id: 'thorns',    title: 'Farpas na Porta',     desc: 'quem morde a casa leva 8 de dano',         cat: 'casa'   },
+  { id: 'hatMaster', title: 'Mestre dos Chapéus',  desc: '+10% em todos os atributos por 3 s ao pegar um chapéu', cat: 'geral' },
 ];
-// SUPER cartas: aparecem no fim das waves 5, 10, 15... (mais raras e bem mais fortes; cada uma só uma vez)
+// RAROS: só um por partida (quando pega um, os outros somem)
+const RARE_UPGRADES = [
+  { id: 'rFreeze',   title: 'Disparo Congelante',  desc: '20% de chance do tiro congelar o inimigo (fica lento)', cat: 'raro', max: 1 },
+  { id: 'rFire',     title: 'Tiro Quente',         desc: 'seus tiros têm 20% de chance de pôr fogo nos inimigos', cat: 'raro', max: 1 },
+  { id: 'rToxic',    title: 'Sangue Tóxico',       desc: 'inimigos envenenados deixam uma poça de veneno ao morrer', cat: 'raro', max: 1, need: () => lv.poison > 0 },
+];
+const RARE = { chance: 0.22, from: 3 };          // chance de uma das 3 cartas virar rara (a partir da wave 3)
+// SUPER cartas: aparecem depois de vencer o chefão (mais raras e bem mais fortes; cada uma só uma vez)
 const SUPER_UPGRADES = [
-  { id: 'sExplode',  title: 'Jacaré-Bomba',     desc: 'todo jacaré explode ao morrer (15 de dano em volta)', cat: 'super', max: 1 },
+  { id: 'sGold',     title: 'Boca de Ouro',     desc: 'os jacarés soltam 50% mais dentes',    cat: 'super', max: 1 },
+  { id: 'sLungs',    title: 'Pulmão de Aço',    desc: 'correr cansa pela metade e você corre 10% mais rápido', cat: 'super', max: 1 },
   { id: 'sFortress', title: 'Fortaleza',        desc: '+30% de vida máxima da casa e conserta tudo agora', cat: 'super', max: 1 },
   { id: 'sFury',     title: 'Fúria do Pântano', desc: '+20% de dano e +12% de velocidade de ataque', cat: 'super', max: 1 },
   { id: 'sSpin',     title: 'Faca Giratória',   desc: 'a faca acerta em volta toda e alcança +10%', cat: 'super', max: 1 },
-  { id: 'sCrit',     title: 'Mira Letal',       desc: '+10% de crítico e o crítico dá 2,5x o dano', cat: 'super', max: 1 },
-  { id: 'sGold',     title: 'Boca de Ouro',     desc: 'os jacarés soltam 50% mais dentes',    cat: 'super', max: 1 },
   { id: 'sBelt',     title: 'Cinturão de Balas', desc: '+12 de reserva máxima e enche toda a munição agora', cat: 'super', max: 1 },
-  { id: 'sLungs',    title: 'Pulmão de Aço',    desc: 'correr cansa pela metade e você corre 10% mais rápido', cat: 'super', max: 1 },
+  { id: 'sExplode',  title: 'Jacaré-Bomba',     desc: 'todo jacaré explode ao morrer (15 de dano em volta)', cat: 'super', max: 1 },
+  { id: 'sCrit',     title: 'Mira Letal',       desc: '+10% de crítico e o crítico dá 2,5x o dano', cat: 'super', max: 1 },
 ];
-const ALL_UPGRADES = () => UPGRADES.concat(SUPER_UPGRADES);
+const ALL_UPGRADES = () => UPGRADES.concat(RARE_UPGRADES, SUPER_UPGRADES);
+const RETIRED_UPGRADES = ['atkSpd', 'teethMag', 'ammoBox'];   // cartas antigas: ficam em 0
+// ícones das cartas: sprites/interface/icones-upgrades-v2.png (3 x 10 quadros de 32 px, na ordem abaixo)
+const UPG_SHEET = img('data:image/png;base64,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');
+const UPG_ICON_ORDER = ['vamp', 'poison', 'crit', 'shotDmg', 'bulletSz', 'pellets', 'reload', 'meleeDmg', 'meleeCd', 'meleeRng', 'meleeKb', 'houseHp',
+  'medic', 'ammoDrop', 'teeth', 'moveSpd', 'stamina', 'thorns', 'hatMaster', 'rFreeze', 'rFire', 'rToxic',
+  'sGold', 'sLungs', 'sFortress', 'sFury', 'sSpin', 'sBelt', 'sExplode', 'sCrit'];
 // ícones das cartas (recortados de icones-upgrades.png)
 const UPGRADE_ICONS = {
   crit: img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAAJCAYAAADtj3ZXAAABAElEQVR4nGNkQANy+QH/v979w8Bw/DgDg6UlA7cyC8O7/V8Y2OU4wOyvSw6D1b19+5aRCaZB2Mfnv7CwMEQjAwPDT2lDMA3isz89D2f/hIqD1DKCGT4+/8EaHv0AKwQpgGlw32TDsFSNg4Hh7jkwX8T7HVyeCWQCSBPImZ9nPWR4s1WI4fNeYbAmGLgiqM7AoGwEZoPkYRYwwZwBB8pGEMU4gIj3O3BYgMKACWQKiAESAEvcPceg8/4mTo0wy0CBxwQKNRADFkhgA9CAg/hUBpHEr2ALwOD4cYZHEzcwggMMFnrggAC5AqoAphgckEhRBbIQJA7XjB7P6BpgcYusFgCk7XpUUupXEAAAAABJRU5ErkJggg=='),   // icone-crit.png
@@ -155,32 +168,39 @@ const ICON_BADGE_IMGS = {
 const ICON_BADGE = { crit: '+', vamp: '+', atkSpd: '+', shotDmg: '+', reload: 'cd', houseHp: '+', meleeCd: 'cd',
   meleeDmg: '+', bulletSz: '+', pellets: '+', meleeKb: '+', meleeRng: '+', teeth: '+', moveSpd: '+',
   stamina: '+', teethMag: '+', ammoBox: '+', thorns: '+', ammoDrop: '+' };
-const CAT_COLOR = { geral: '#e9c46a', shotgun: '#f4a261', armas: '#ef8354', faca: '#8ecae6', casa: '#7bd04a', super: '#ffd166' };
-function resetStats() { for (const u of ALL_UPGRADES()) lv[u.id] = 0; }
+const CAT_COLOR = { geral: '#e9c46a', olhar: '#ff7b6b', shotgun: '#f4a261', armas: '#ef8354', faca: '#8ecae6', casa: '#7bd04a', raro: '#c77dff', super: '#ffd166' };
+function resetStats() { for (const u of ALL_UPGRADES()) lv[u.id] = 0; for (const id of RETIRED_UPGRADES) lv[id] = 0; }
 resetStats();
 // valores derivados (usados pelo jogo no lugar das constantes)
-const critChance    = () => 0.05 * lv.crit + 0.1 * lv.sCrit;
+// Mestre dos Chapéus: pegar um chapéu dá +10% (por nível) em tudo por 3 s
+const HAT_BUFF = { dur: 3, per: 0.1 };
+let hatBuffT = 0;
+const hatMul        = () => hatBuffT > 0 ? 1 + HAT_BUFF.per * lv.hatMaster : 1;
+const critChance    = () => (0.1 * lv.crit + 0.1 * lv.sCrit) * hatMul();
 const critMul       = () => CRIT_MULT + 0.5 * lv.sCrit;        // Mira Letal: crítico 2,5x
-const dmgMul        = () => (1 + 0.1 * lv.shotDmg) * (1 + 0.2 * lv.sFury);
-const atkMul        = () => (1 + 0.1 * lv.atkSpd) * (1 + 0.12 * lv.sFury);
+const dmgMul        = () => (1 + 0.1 * lv.shotDmg) * (1 + 0.2 * lv.sFury) * hatMul();
+const atkMul        = () => (1 + 0.1 * lv.atkSpd) * (1 + 0.12 * lv.sFury) * hatMul();
 const staminaMax    = () => RUN.stamina * (1 + 0.3 * lv.stamina);
 const meleeArc      = () => lv.sSpin ? Math.PI * 2.01 : MELEE_ARC;
-const vampirism     = () => 0.01 * Math.min(5, lv.vamp);
+const vampirism     = () => 0.01 * Math.min(10, lv.vamp);
+const VAMP_KILL = 0.25;                                     // cada abate cura vampirismo x 25% da vida máx. da casa (1 nível = 0,5 de 200)
+const poisonPct     = () => 0.02 * lv.poison;               // veneno: % da vida máx. do alvo por segundo, por 3 s
+const healPct       = () => ROGUE.rewardHeal + 0.1 * lv.medic;   // Médico de Campo: +10% por kit
 const shotCooldown  = () => SHOT.cooldown / atkMul();
 const pelletDamage  = () => PELLET_DAMAGE * dmgMul();
-const reloadShell   = () => RELOAD_SHELL / (1 + 0.1 * lv.reload);
+const reloadShell   = () => RELOAD_SHELL * Math.pow(0.9, lv.reload) / hatMul();
 const houseMax      = () => HOUSE_HP * (1 + 0.15 * lv.houseHp) * (1 + 0.3 * lv.sFortress);
-const meleeCooldown = () => MELEE_COOLDOWN * Math.pow(0.9, lv.meleeCd);
-const meleeDamage   = () => MELEE_DAMAGE + 10 * lv.meleeDmg;
-const teethBonus    = () => 0.05 * lv.teeth;            // +5 pontos percentuais na chance de dropar dentes
-const moveMul       = () => 1 + 0.05 * lv.moveSpd;
+const meleeCooldown = () => MELEE_COOLDOWN * Math.pow(0.9, lv.meleeCd) / hatMul();
+const meleeDamage   = () => Math.round(MELEE_DAMAGE * (1 + 0.1 * lv.meleeDmg) * hatMul());
+const teethMul      = () => 1 + 0.1 * lv.teeth;          // Arrancador: +10% de dentes
+const moveMul       = () => (1 + 0.15 * lv.moveSpd) * hatMul();
 const bulletMul     = () => 1 + 0.1 * lv.bulletSz;
 // chumbo da escopeta: usa o sprite do tiro do revólver; com Calibre Maior a partir de +50% vira o sprite do tiro da uzi
 const pelletLook = () => ({ kind: bulletMul() >= SHOT.bigAt ? 'uzi' : 'revolvers', scale: SHOT.spriteScale * bulletMul(),
   pad: SHOT.bulletScale * (bulletMul() - 1) * 1.5, whiten: SHOT.whiten });
 const pelletCount   = () => SHOT.pellets + 2 * lv.pellets;
-const meleeKnock    = () => MELEE_KNOCKBACK * (1 + 0.15 * lv.meleeKb);
-const meleeRangeMul = () => (1 + 0.05 * lv.meleeRng) * (1 + 0.1 * lv.sSpin);
+const meleeKnock    = () => MELEE_KNOCKBACK * (1 + 0.1 * lv.meleeKb) * hatMul();
+const meleeRangeMul = () => (1 + 0.1 * lv.meleeRng) * (1 + 0.1 * lv.sSpin);
 const meleeRange    = () => MELEE_RANGE * meleeRangeMul();
 
 // Munição (HUD no canto inferior direito)
@@ -252,7 +272,7 @@ function waveConfig(n) {
     interval: Math.max(0.3, 1.0 * Math.pow(0.93, n - 1)),     // chegam cada vez mais seguidos (começa em 1 s, -7% por wave)
     group: Math.min(5, 1 + Math.floor(n / 2)),                // wave 2: duplas, 4: trios, 6: grupos de 4, 8+: grupos de 5 (teto)
     tanks: n >= 5 ? 1 + Math.floor((n - 5) / 2) : 0,          // wave 5-6: 1 tank, 7-8: 2, 9-10: 3...
-    ranges: n >= 10 ? Math.min(RANGE.maxPerWave, 3 + (n - 10)) : 0,   // wave 10: 3, 11: 4, 12+: 5 (teto)
+    ranges: n >= 10 ? Math.min(RANGE.maxPerWave, 1 + Math.floor((n - 10) / 3)) : 0,   // wave 10-12: 1, 13-15: 2, 16+: 3 (teto)
     rushers: n >= 15 ? Math.min(12, 4 + 2 * (n - 15)) : 0,           // wave 15: 4, 16: 6... (teto 12)
     healers: n >= 20 ? Math.min(4, 1 + Math.floor((n - 20) / 2)) : 0, // wave 20-21: 1, 22-23: 2... (teto 4)
   };
@@ -381,19 +401,19 @@ const rangeShotgunImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAA
 const rangeLegImgs = [img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAECAYAAAC+0w63AAAAVElEQVR4nGP8z+DAAAMiwpf/30pmZBDSYWAQKfzP8GarEETc+x3Dm7e6jHCFDAwMTMgcGHh3Bcq49R6bNKZGkKlqc/8jXFCIYOPVCHMq3CCoU7EBAJLPGQkZcoPbAAAAAElFTkSuQmCC'), img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAECAYAAAC+0w63AAAAYUlEQVR4nGP8z+DAICJ8+f+tZEYGIR0GMBAp/M/w5q0uI5gtfPn/m34wE0WcCaIUAt5dQZWEAZAYg5ogA8gAkEFwjSCFanPBfAwAkgNhEe93YM0wANYIcyouAHbuViEUMQDGICoC2b2x0QAAAABJRU5ErkJggg==')];   // range-pernas.gif (14x4)
 const revolverImg  = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAAICAYAAAAm06XyAAAAhElEQVR4nGNgIAEICwv/R+YzogvgA1v2nGLwcTFjePv2LSOIzwIi6vuWYVVsqqcCZ5++dAdFI0GbQTaBNCEb5INkANwUfH68lczIIKTDwMCgJggWF/F+BzaACZ9mkAIQVpv7n+HdFZAp71Hk8dqM7govSVGGO59/Mtz68gnF70QbgBxGACc+ONEgcb8hAAAAAElFTkSuQmCC');   // revolver.png (15x8, com a mão; cano para a esquerda)
 const RANGE = {
-  damage: 10,              // dano de cada bala do revólver na casa
-  fireEvery: [1.5, 2.5],   // segundos entre tiros
-  aimTime: 0.45,           // para e abre o olho antes de atirar
-  bulletSpeed: 300,        // px/s (devagar e bem visível: dá para desviar)
+  damage: 5,               // dano de cada bala do revólver na casa (nerf: era 10)
+  fireEvery: [2.8, 4.2],   // segundos entre tiros (nerf: era 1,5-2,5)
+  aimTime: 0.7,            // para e abre o olho antes de atirar (mais tempo para reagir)
+  bulletSpeed: 250,        // px/s (devagar e bem visível: dá para desviar)
   bulletSize: [3, 3],      // escala do sprite redondo (16x16): revólver e chumbo da escopeta iguais
   bulletSpin: 1.6,         // rad/s: a bala gira devagar
   bulletScale: 9,          // bala branca grande (maior que a da escopeta do jogador, que é 6)
   orbitX: 0.3, orbitY: 0.25,    // círculo onde ele fica rondando (fração do mundo, em volta da casa)
-  dualChance: 0.15,        // 15%: dois revólveres (atira duas vezes seguidas)
+  dualChance: 0.06,        // 6%: dois revólveres (atira duas vezes seguidas)
   shotgunChance: 0.05,     // 5%: escopeta
-  shotgun: { pellets: 5, spread: 0.35, damage: 6, scale: 6 },
-  maxPerWave: 5,           // teto de ranges por wave
-  inaccuracy: [0.34, 0.08],   // erro da mira (rad): começa grande e cai 0,07 a cada 5 waves desde a 10, até o mínimo
+  shotgun: { pellets: 4, spread: 0.4, damage: 3, scale: 6 },
+  maxPerWave: 3,           // teto de ranges por wave
+  inaccuracy: [0.42, 0.18],   // erro da mira (rad): começa grande e cai 0,07 a cada 5 waves desde a 10, até o mínimo
 };
 
 // tipos de inimigo. Vida e velocidade são FIXAS; as waves só mudam a quantidade.
@@ -407,7 +427,7 @@ const ENEMY_TYPES = {
   range: { id: 'range', name: 'RANGE', sc: SCALE, w: 24, h: 21, hitbox: { w: 11, h: 17 }, legOffset: { x: 7, y: 17 },
            eye: { x: 10, y: 1 }, stepLen: 15, knockMul: 1, body: rangeBodyImg, blink: rangePeekImg, legs: rangeLegImgs,
            blinkEvery: [2, 5], blinkDur: 0.45,   // aqui o "piscar" é abrir o olho para espiar
-           hp: 90, speed: 60, ranged: true },
+           hp: 60, speed: 60, ranged: true },
   // rusher: corre muito, vida baixa; mordida fraca (2) mas bem mais rápida que a do básico
   rusher: { id: 'rusher', name: 'RUSHER', sc: SCALE, w: 18, h: 16, hitbox: { w: 11, h: 13 }, legOffset: { x: 2, y: 13 },
            eye: { x: 7, y: 3 }, stepLen: 9, knockMul: 1.3, body: rusherBodyImg, blink: rusherBlinkImg, legs: rusherLegImgs,
@@ -685,11 +705,43 @@ function bossPart(e, hx) {
 }
 const bossHeadPos = e => ({ x: e.x + (BOSS.headTo / 2 - ACU.cx) * e.T.sc * (e.facing < 0 ? 1 : -1), y: e.y - 4 * e.T.sc });
 const bossTailPos = e => ({ x: e.x + (92 - ACU.cx) * e.T.sc * (e.facing < 0 ? 1 : -1), y: e.y });
+const QTE = { keys: ['q', 'f', 'e'], n: 3, first: 0.7, win: 0.5, rageWin: 0.4, gap: 0.12, dmg: 220 };
+const qte = { on: false, seq: [], i: 0, t: 0, win: 0, ok: 0, fail: false, done: false, flash: 0 };
+function startQte(e) {
+  Object.assign(qte, { on: true, seq: Array.from({ length: QTE.n }, () => QTE.keys[Math.floor(Math.random() * 3)]), i: 0, t: -QTE.gap, win: QTE.first, fail: false, done: false, flash: 0, boss: e });
+}
+function qteKey(k) {
+  if (!qte.on || qte.done || qte.t < 0) return;
+  if (k === qte.seq[qte.i]) {
+    qte.i++; qte.flash = 1; sfx.select();
+    if (qte.i >= qte.seq.length) { qte.done = true; qte.ok = true; return; }
+    qte.t = -QTE.gap; qte.win = qte.boss && qte.boss.rage ? QTE.rageWin : QTE.win;
+  } else { qte.done = true; qte.ok = false; sfx.deny(); }
+}
+function drawQte() {
+  if (!qte.on || !player.held) return;
+  const sx = (player.x - cam.x - cam.sx) * ZOOM, sy = (player.y - cam.y - cam.sy) * ZOOM - 150;
+  const k = qte.seq[qte.i], bs = 76, x = Math.round(sx - bs / 2), y = Math.round(Math.max(40, sy - bs));
+  const left = qte.t < 0 ? 1 : Math.max(0, 1 - qte.t / qte.win);
+  ctx.save(); ctx.textAlign = 'center';
+  ctx.font = 'bold 20px monospace'; ctx.lineWidth = 5; ctx.strokeStyle = '#000';
+  ctx.strokeText('SE SOLTE!', sx, y - 14); ctx.fillStyle = '#ff6b5b'; ctx.fillText('SE SOLTE!', sx, y - 14);
+  const pulse = 1 + Math.sin(clock * 30) * 0.04 + qte.flash * 0.15;
+  ctx.translate(sx, y + bs / 2); ctx.scale(pulse, pulse);
+  ctx.fillStyle = '#000'; ctx.fillRect(-bs / 2 - 4, -bs / 2 - 4, bs + 8, bs + 8);
+  ctx.fillStyle = left < 0.35 ? '#e63946' : '#ffd166'; ctx.fillRect(-bs / 2, -bs / 2, bs, bs);
+  ctx.fillStyle = '#2a1d16'; ctx.fillRect(-bs / 2 + 5, -bs / 2 + 5, bs - 10, bs - 10);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 46px monospace'; ctx.fillText((k || '').toUpperCase(), 0, 16);
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(-bs / 2, bs / 2 + 8, bs, 8);                 // tempo
+  ctx.fillStyle = left < 0.35 ? '#e63946' : '#7bd04a'; ctx.fillRect(-bs / 2, bs / 2 + 8, bs * left, 8);
+  for (let i = 0; i < qte.seq.length; i++) { ctx.fillStyle = i < qte.i ? '#7bd04a' : '#555'; ctx.fillRect(-qte.seq.length * 9 + i * 18 + 2, bs / 2 + 24, 12, 12); }
+  ctx.restore();
+}
 function bossConfuse(e, why) {
   e.st = 'confused'; e.stT = 0; e.hitDone = false; e.chain = 0;
   e.confDur = e.rage ? BOSS.rageConfused : BOSS.confused;
   sfx.slam(); cam.trauma = Math.min(1, cam.trauma + 0.5); bossDust(e, 12, 160);
-  showText(e.x, e.y - 90, why === 'knife' ? 'INTERROMPIDO!' : why === 'tail' ? 'CAUDA ARRANCADA!' : why === 'release' ? 'SOLTOU!' : 'ERROU!', why === 'tail' ? '#ff6b5b' : '#ffd166');
+  showText(e.x, e.y - 90, why === 'knife' ? 'INTERROMPIDO!' : why === 'tail' ? 'CAUDA ARRANCADA!' : why === 'release' ? 'SOLTOU!' : why === 'qte' ? 'SE SOLTOU!' : 'ERROU!', why === 'tail' ? '#ff6b5b' : '#ffd166');
 }
 // texto flutuante simples (usa as partículas de dano)
 function drawBossText(p, k) {
@@ -751,7 +803,7 @@ function updateBoss(e, dt) {
     if (Math.random() < dt * 10) bossDust(e, 1, 60);
     if (e.rage && Math.random() < dt * 8) wreck(e.x, feetY, 150, { trees: false, eat: true, power: 360 });   // berserker: atropela o que estiver no caminho
     const near = fences.some(f => Math.hypot(f.x - e.x, f.base - feetY) < 320) || mines.some(m => Math.hypot(m.x - e.x, m.y - feetY) < 320);
-    if (mouthD < B.reach && front && e.biteCd <= 0 && !player.fly && !player.held) { set('pgrab'); player.held = true; player.stunT = 9; sfx.bite(); e.lunge = 1; showText(H.x, H.y - 70, 'PEGO!', '#ff6b5b'); }
+    if (mouthD < B.reach && front && e.biteCd <= 0 && !player.fly && !player.held) { set('pgrab'); player.held = true; player.stunT = 9; sfx.bite(); e.lunge = 1; showText(H.x, H.y - 70, 'PEGO!', '#ff6b5b'); startQte(e); }
     else if (!e.tailless && e.tailCd <= 0 && (tailD < (e.rage ? B.rageTailR : B.tailR) * 0.9 || near && Math.random() < dt * 1.5)) set('tail');
     else if (e.chargeCd <= 0) { e.side = Math.sign(e.x - house.x) || 1; e.lane = (R.t + R.b) / 2; set('approach'); }
   } else if (e.st === 'approach') {               // vai para o lado da casa para investir de lado
@@ -803,8 +855,16 @@ function updateBoss(e, dt) {
   } else if (e.st === 'pgrab') {                   // jogador na boca: sacode e arremessa para o outro lado do mapa
     player.x = H.x + rand(-6, 6); player.y = H.y + 30 + rand(-6, 6); player.vx = player.vy = 0;
     if (Math.random() < dt * 8) cam.trauma = Math.min(1, cam.trauma + 0.15);
-    if (e.stT > B.hold) {
-      player.held = false;
+    if (qte.on) { qte.t += dt; qte.flash *= Math.exp(-10 * dt); if (!qte.done && qte.t > qte.win) { qte.done = true; qte.ok = false; } }
+    if (qte.on && qte.done && qte.ok) {               // acertou as teclas: escapa e enfia a faca na boca dele
+      qte.on = false; player.held = false; player.stunT = 0; player.invuln = Math.max(player.invuln || 0, 1);
+      const a = Math.atan2(player.y - e.y, player.x - H.x); player.vx = Math.cos(a) * 700; player.vy = Math.sin(a) * 700;
+      e.hp -= QTE.dmg; e.flash = 0.15; e.headFlash = 1; showDamage(e, QTE.dmg, true); sfx.crit();
+      for (let i = 0; i < 14; i++) particles.push({ x: H.x, y: H.y, vx: rand(-260, 260), vy: rand(-260, 60), life: rand(0.3, 0.6), age: 0, size: rand(3, 6), color: Math.random() < 0.6 ? '#ac3232' : '#ffffff', drag: 5 });
+      e.biteCd = e.rage ? 2.5 : 4; bossConfuse(e, 'qte');
+      if (e.hp <= 0) killEnemy(e);
+    } else if ((qte.on && qte.done) || (!qte.on && e.stT > B.hold)) {
+      qte.on = false; player.held = false;
       const x1 = player.x < house.x ? WORLD_W - rand(220, 360) : rand(220, 360), y1 = Math.max(200, Math.min(WORLD_H - 200, house.y + rand(-320, 320)));
       player.fly = { x0: player.x, y0: player.y, x1, y1, t: 0 }; player.stunT = 9;
       sfx.swing(); e.biteCd = e.rage ? 1.5 : 2.5; set('circle');
@@ -1844,13 +1904,13 @@ function rollDrop(x, y) {
   const kinds = ['ammo'].concat(has9mm() ? ['ammo9'] : []);         // 9 mm só cai se tiver uzi ou revólveres
   const need = kinds.map(ammoNeed);
   const early = mode === 'rogue' && run.wave <= 2 ? EARLY_DROP : 1;     // waves 1 e 2: cai mais (ainda sem cartas)
-  let r = Math.random() / (1 + 0.3 * lv.ammoDrop) / Math.max(...need) / early;   // Catador de Cartuchos: +30% por nível
+  let r = Math.random() / (1 + 0.05 * lv.ammoDrop) / Math.max(...need) / early;   // Catador de Cartucho: +5% por nível
   for (const d of DROP_TABLE) {
     if (r < d.chance) {
       let pickR = Math.random() * need.reduce((a, b) => a + b, 0), ki = 0;   // a munição que está faltando cai mais
       while (pickR >= need[ki] && ki < kinds.length - 1) pickR -= need[ki++];
       const kind = kinds[ki];
-      pickups.push({ kind, x, y, amount: d.amount * AMMO_KINDS[kind].mult, scale: d.scale, big: d === DROP_TABLE[0], t: rand(0, 6), age: 0,
+      pickups.push({ kind, x, y, amount: Math.round(d.amount * AMMO_KINDS[kind].mult * (1 + 0.05 * lv.ammoDrop)), scale: d.scale, big: d === DROP_TABLE[0], t: rand(0, 6), age: 0,
         shine: 0, nextShine: rand(...BOX_SHINE_EVERY), pop: 1, life: DROP_LIFE });
       return;
     }
@@ -1858,12 +1918,44 @@ function rollDrop(x, y) {
   }
 }
 
+// presente (pixel art em código): abre e dá um consumível (dinamite, pimenta ou gelo)
+const GIFT = { chance: 0.02, tank: 0.12, life: 9 };
+const GIFT_ROWS = [
+  '...y...y...',
+  '....y.y....',
+  '..yy.y.yy..',
+  'kkkkkykkkkk',
+  'kRRRRyRRRRk',
+  'krRRRyRRRrk',
+  'kkkkkykkkkk',
+  '.kRRRyRRRk.',
+  '.kRRRyRRRk.',
+  '.krRRyRRrk.',
+  '.kkkkkkkkk.',
+];
+let giftImgC = null;
+const giftImg = () => giftImgC || (giftImgC = pixImg(GIFT_ROWS));   // criado no primeiro uso (a paleta vem depois no arquivo)
+const GIFT_ITEMS = [{ id: 'dynamite', name: 'DINAMITE', stack: 5 }, { id: 'pepper', name: 'PIMENTA', stack: 3 }, { id: 'ice', name: 'GELO', stack: 3 }];
+function rollGift(e) {
+  if (Math.random() > (e.T.id === 'tank' ? GIFT.tank : GIFT.chance) && !dev.gifts) return;
+  pickups.push({ kind: 'gift', x: e.x, y: e.y + e.T.h * e.T.sc / 2 - 10, scale: 4, t: rand(0, 6), age: 0, shine: 0, nextShine: 0.4, pop: 1, life: GIFT.life });
+}
+const giftRoom = () => GIFT_ITEMS.filter(g => (shop.inv[g.id] || 0) < g.stack);
+function collectGift(b) {
+  const room = giftRoom(), g = room[Math.floor(Math.random() * room.length)];
+  shop.inv[g.id] = (shop.inv[g.id] || 0) + 1; consPop[g.id] = 1;
+  sfx.upgrade();
+  const cy = pickupCenterY(b);
+  for (let i = 0; i < 18; i++) { const a = (i / 18) * Math.PI * 2, sp = rand(150, 320); particles.push({ x: b.x, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.3, 0.5), age: 0, size: rand(3, 5), color: ['#e63946', '#ffd166', '#ffffff'][i % 3], drag: 6 }); }
+  particles.push({ x: b.x, y: cy, vx: 0, vy: 0, life: 0.35, age: 0, size: 10, grow: 260, color: 'ring', drag: 0 });
+  showText(b.x, cy - 40, `+1 ${g.name}`, '#ffd166');
+}
 const pickupFloat = b => Math.sin(b.t * 2.6) * 5;
 const pickupCenterY = b => b.y - 14 + pickupFloat(b) - b.pop * 30;   // nasce com um pulinho
 
 // recompensa de fim de wave (some em DROP_LIFE, como os outros drops)
 function spawnReward(kind, x, y) {
-  const amount = Math.round((kind === 'ammo' ? ROGUE.rewardAmmo + 2 * run.wave : kind === 'ammo9' ? 16 + 2 * run.wave : 0) * (1 + 0.25 * lv.ammoBox));
+  const amount = Math.round((kind === 'ammo' ? ROGUE.rewardAmmo + 2 * run.wave : kind === 'ammo9' ? 16 + 2 * run.wave : 0) * (1 + 0.05 * lv.ammoDrop));
   pickups.push({ kind, x, y, amount, scale: kind === 'heal' ? 3 : 4.2,
     t: rand(0, 6), age: 0, shine: 0, nextShine: 0.5, pop: 1, life: DROP_LIFE, reward: true });
   particles.push({ x, y: y - 20, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
@@ -1889,12 +1981,13 @@ function updateTrainingAmmo(dt) {
 function canCollect(b) {
   if (gameOver) return false;
   if (b.kind === 'heal') return house.active && house.hp < houseMax();
+  if (b.kind === 'gift') return giftRoom().length > 0;
   const K = AMMO_KINDS[b.kind];
   return player[K.res] < K.max();
 }
 
 function collectHeal(b) {
-  const gained = Math.round(Math.min(b.fullHeal ? houseMax() : houseMax() * ROGUE.rewardHeal, houseMax() - house.hp));
+  const gained = Math.round(Math.min(b.fullHeal ? houseMax() : houseMax() * healPct(), houseMax() - house.hp));
   house.hp += gained;
   house.heal = 1;
   sfx.heal();
@@ -1910,6 +2003,7 @@ function collectHeal(b) {
 
 function collectPickup(b) {
   if (b.kind === 'heal') return collectHeal(b);
+  if (b.kind === 'gift') return collectGift(b);
   const K = AMMO_KINDS[b.kind];
   const gained = Math.min(b.amount, K.max() - player[K.res]);
   player[K.res] += gained;
@@ -1953,8 +2047,8 @@ function updatePickups(dt) {
 }
 
 function drawPickup(b) {
-  const spr = b.kind === 'heal' ? medkitImg : AMMO_BOX_IMGS[b.kind] || boxImg;
-  if (!spr.complete) return;
+  const spr = b.kind === 'heal' ? medkitImg : b.kind === 'gift' ? giftImg() : AMMO_BOX_IMGS[b.kind] || boxImg;
+  if (spr.complete === false) return;
   // pisca nos últimos 3 segundos
   const left = b.life - b.age;
   if (left < 2 && Math.floor(left * (left < 0.8 ? 16 : 8)) % 2 === 0) return;
@@ -1997,10 +2091,10 @@ function drawPickup(b) {
   // rótulo
   ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
-  const label = b.kind === 'heal' ? (b.fullHeal ? 'CASA 100%' : `+${Math.round(ROGUE.rewardHeal * 100)}% CASA`) : `+${b.amount}`;
+  const label = b.kind === 'gift' ? 'PRESENTE' : b.kind === 'heal' ? (b.fullHeal ? 'CASA 100%' : `+${Math.round(healPct() * 100)}% CASA`) : `+${b.amount}`;
   const ly = Math.round(cy - h / 2 - 6);
   ctx.fillStyle = '#000'; ctx.fillText(label, b.x + 1, ly + 1);
-  ctx.fillStyle = b.kind === 'heal' ? '#7bd04a' : b.big ? '#ffe08a' : '#f4f1de';
+  ctx.fillStyle = b.kind === 'heal' ? '#7bd04a' : b.kind === 'gift' ? '#ff8a8a' : b.big ? '#ffe08a' : '#f4f1de';
   ctx.fillText(label, b.x, ly);
   ctx.textAlign = 'left';
 }
@@ -2080,11 +2174,6 @@ function hitEnemy(e, b, ang, dmg = PELLET_DAMAGE) {
   dmg = shieldAbsorb(e, dmg);
   const dealt = Math.min(dmg, e.hp);
   e.hp -= dmg;
-  // vampirismo: parte do dano vira vida da casa
-  if (house.active && vampirism() > 0 && house.hp > 0) {
-    house.hp = Math.min(houseMax(), house.hp + dealt * vampirism());
-    house.heal = Math.max(house.heal || 0, 0.25);
-  }
   showDamage(e, dmg, crit);
   if (crit) {
     for (let i = 0; i < 5; i++)
@@ -2106,6 +2195,52 @@ function hitEnemy(e, b, ang, dmg = PELLET_DAMAGE) {
 }
 
 // escudo verde do healer: absorve o dano antes da vida
+// =====================================================================
+// Status dos tiros: veneno (Olhar Tóxico), lento (Disparo Congelante), fogo (Tiro Quente) e poças (Sangue Tóxico)
+// =====================================================================
+const POISON = { dur: 3, tick: 0.5, cap: 600 };           // dps = % x vida máx. (no máx. 600: o chefão não derrete)
+const SLOW = { chance: 0.2, dur: 2.2, mul: 0.45 };
+const HOTSHOT = { chance: 0.2 };
+const PUDDLE = { r: 70, life: 4, tick: 0.5 };
+const puddles = [];
+function poisonEnemy(e) {
+  if (!(poisonPct() > 0) || e.scare) return;
+  e.poisonT = POISON.dur; e.poisonDps = poisonPct() * Math.min(POISON.cap, e.maxHp);
+}
+function shotEffects(e) {
+  if (e.scare) return;
+  poisonEnemy(e);
+  if (lv.rFreeze && !e.hot && !e.T.boss && Math.random() < SLOW.chance) { e.slowT = SLOW.dur; for (let i = 0; i < 6; i++) particles.push({ x: e.x + rand(-16, 16), y: e.y + rand(-24, 8), vx: rand(-60, 60), vy: rand(-90, -20), life: rand(0.3, 0.5), age: 0, size: rand(2, 4), color: Math.random() < 0.5 ? '#bfefff' : '#ffffff', drag: 4 }); }
+  if (lv.rFire && Math.random() < HOTSHOT.chance) ignite(e);
+}
+const slowK = e => e.slowT > 0 ? SLOW.mul : 1;
+function addPuddle(x, y) {
+  puddles.push({ x, y, t: 0, tick: 0, seed: Math.random() * 100 });
+  for (let i = 0; i < 8; i++) particles.push({ x: x + rand(-20, 20), y, vx: rand(-80, 80), vy: rand(-120, -40), life: rand(0.3, 0.6), age: 0, size: rand(3, 6), color: Math.random() < 0.5 ? '#7dff6a' : '#3f9b3a', drag: 3 });
+}
+function updatePuddles(dt) {
+  for (let i = puddles.length - 1; i >= 0; i--) {
+    const P = puddles[i]; P.t += dt;
+    if (P.t > PUDDLE.life) { puddles.splice(i, 1); continue; }
+    if ((P.tick -= dt) <= 0) {
+      P.tick = PUDDLE.tick;
+      for (const e of enemies) if (e.alive && !e.homeRel && Math.hypot(e.x - P.x, (e.y + e.T.h * e.T.sc / 2 - P.y) * 1.6) < PUDDLE.r) poisonEnemy(e);
+    }
+    if (Math.random() < dt * 5) particles.push({ x: P.x + rand(-PUDDLE.r * 0.7, PUDDLE.r * 0.7), y: P.y + rand(-12, 12), vx: 0, vy: rand(-40, -20), life: rand(0.4, 0.7), age: 0, size: rand(2, 4), color: '#9dff8a', drag: 1 });
+  }
+}
+function drawPuddles() {
+  for (const P of puddles) {
+    const k = Math.min(1, P.t / 0.25) * Math.min(1, (PUDDLE.life - P.t) / 0.6), r = PUDDLE.r * (0.6 + 0.4 * Math.min(1, P.t / 0.25));
+    ctx.save(); ctx.globalAlpha = 0.55 * k;
+    ctx.fillStyle = '#2f7a1f'; ctx.beginPath(); ctx.ellipse(P.x, P.y, r, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#6ee052'; ctx.beginPath(); ctx.ellipse(P.x - r * 0.15, P.y - 2, r * 0.7, r * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c8ff9a';
+    for (let j = 0; j < 4; j++) { const a = P.seed + j * 1.7 + P.t * 0.8; ctx.fillRect(Math.round(P.x + Math.cos(a) * r * 0.5), Math.round(P.y + Math.sin(a * 1.3) * r * 0.18), 4, 4); }
+    ctx.restore();
+  }
+}
+
 function shieldAbsorb(e, dmg) {
   if (!(e.shieldT > 0) || !(e.shield > 0)) return dmg;
   const a = Math.min(e.shield, dmg);
@@ -2124,6 +2259,12 @@ function killEnemy(e) {
     for (let i = 0; i < 10; i++) { const a = rand(0, Math.PI * 2), sp = rand(80, 260); particles.push({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.2, 0.4), age: 0, size: rand(3, 6), color: Math.random() < 0.5 ? '#ff9f1c' : '#ffd166', drag: 5 }); }
     blastEnemies(e.x, e.y, 80, 15, 25);
   }
+  if (house.active && vampirism() > 0 && house.hp > 0 && !e.scare) {   // Olhar Sanguinário: cada abate cura a casa
+    house.hp = Math.min(houseMax(), house.hp + vampirism() * houseMax() * VAMP_KILL * (e.T.boss ? 10 : 1));
+    house.heal = Math.max(house.heal || 0, 0.25);
+  }
+  if (lv.rToxic && e.poisonT > 0 && mode !== 'test') addPuddle(e.x, e.y + e.T.h * e.T.sc / 2 - 4);   // Sangue Tóxico
+  if (mode === 'rogue' && !e.T.boss) rollGift(e);
   if (e.hat) { const hk = e.hat; e.hat = null; launchHat(hk, e.x, e.y + e.T.h * e.T.sc / 2, e.T.h * e.T.sc * 0.95, rand(-140, 140), rand(-60, 60), rand(420, 520)); }
   if (e.T.healer && mode !== 'test') healerLastBreath(e);
   sfx.kill();
@@ -2245,6 +2386,7 @@ function pickHat(h) {
   if (player.hat) launchHat(player.hat, player.x, player.y + player.h / 2, player.h * 0.9, -player.facing * rand(120, 180), rand(-40, 40), rand(380, 460));   // só um por vez: o antigo cai
   player.hat = h.kind; player.hatPop = 1;
   sfx.upgrade();
+  if (lv.hatMaster) { hatBuffT = HAT_BUFF.dur; showText(player.x, player.y - 90, `MESTRE DOS CHAPÉUS +${Math.round(HAT_BUFF.per * lv.hatMaster * 100)}%`, '#ffd166'); }
   for (let i = 0; i < 14; i++) { const a = rand(0, Math.PI * 2), sp = rand(80, 220);
     particles.push({ x: player.x, y: player.y - player.h * 0.45, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, life: rand(0.3, 0.6), age: 0, size: rand(3, 6), color: Math.random() < 0.5 ? '#ffc825' : '#ff5000', drag: 5 }); }
 }
@@ -2748,7 +2890,7 @@ function startMode(m) {
   const startWaveParam = parseInt(new URLSearchParams(location.search).get('wave')) || 1;   // teste: ?wave=10
   Object.assign(run, { time: 0, kills: 0, spawnTimer: 0, wave: Math.max(0, startWaveParam - 1), phase: 'break', phaseT: ROGUE.firstBreak,
     toSpawn: 0, cfg: null, banner: null });
-  bullets.length = 0; particles.length = 0; shards.length = 0; decals.length = 0; houseAlert.k = 0; houseAlert.lastHp = null; restoreScenery(); supply.on = false; supply.cool = 0; enemies.length = 0; pickups.length = 0; enemyBullets.length = 0;
+  bullets.length = 0; particles.length = 0; shards.length = 0; decals.length = 0; houseAlert.k = 0; houseAlert.lastHp = null; restoreScenery(); supply.on = false; supply.cool = 0; puddles.length = 0; hatBuffT = 0; qte.on = false; enemies.length = 0; pickups.length = 0; enemyBullets.length = 0;
   ammoPop.fill(0); mouse.down = false;
   if (m === 'test') {
     for (const pos of ENEMY_POSITIONS)
@@ -3127,9 +3269,14 @@ function devRender() {
     <div class="grid">
       <button data-a="boss">bossfight (Jacaré Açu)</button>
     </div>
+    <h4>UPGRADES RAROS</h4>
+    <div class="grid">
+      ${RARE_UPGRADES.map(u => `<button data-a="rare" data-id="${u.id}">${u.title}</button>`).join('')}
+    </div>
     <h4>TRAPAÇAS</h4>
     <label><input type="checkbox" data-a="inf" ${dev.infAmmo ? 'checked' : ''}> munição infinita</label>
     <label><input type="checkbox" data-a="god" ${dev.godHouse ? 'checked' : ''}> casa invencível</label>
+    <label><input type="checkbox" data-a="gifts" ${dev.gifts ? 'checked' : ''}> todo inimigo solta presente</label>
     <label><input type="checkbox" data-a="night" ${dev.night ? 'checked' : ''}> noite</label>
     <label><input type="checkbox" data-a="rain" ${weather.on ? 'checked' : ''}> chuva</label>
     <div class="grid">
@@ -3164,6 +3311,8 @@ devEl.addEventListener('click', e => {
   if (a === 'god') dev.godHouse = b.checked;
   if (a === 'bill') { if (bill.active) billLeave(); else billArrive(); }
   if (a === 'boss') { startBossFight(); return; }
+  if (a === 'rare') { const id = b.dataset.id; for (const u of RARE_UPGRADES) lv[u.id] = 0; lv[id] = 1; if (id === 'rToxic' && !lv.poison) lv.poison = 1; statFlash[id] = 1; sfx.upgrade(); }
+  if (a === 'gifts') dev.gifts = b.checked;
   if (a === 'teeth') { run.teeth = (run.teeth || 0) + 20; toothPop = 1; }
   if (a === 'teeth100') { run.teeth = (run.teeth || 0) + 100; toothPop = 1; }
   if (a === 'billreset') setBillMet(false);
@@ -3218,10 +3367,10 @@ window.addEventListener('keydown', e => {
     if (['1', '2', '3'].includes(k)) setShopTab(SHOP_TABS[+k - 1].id);
     if (k === 'arrowleft' || k === 'a') shopScroll(-1);
     if (k === 'arrowright' || k === 'd') shopScroll(1);
-    if (k === '4') shopService('ammo');
     if (k === '5') shopService('heal');
     return;
   }
+  if (qte.on && player.held && !paused) { if (!e.repeat && QTE.keys.includes(k)) qteKey(k); if (k !== 'escape' && k !== 'p') return; }   // QTE: preso na boca do Açu
   if ((trip.on || player.stunT > 0) && !paused && k !== 'escape' && k !== 'p') return;   // entrando/saindo de casa ou atordoado: sem controle
   if (k === 'e' && !paused && !e.repeat && eTarget()) { if (eTarget() === 'door') startTrip(); else openShop(); return; }
   if (k === 'e' && !paused && !e.repeat && mode === 'rogue' && run.phase === 'shop' && !shop.visited && bill.active && bill.state === 'idle'
@@ -3629,7 +3778,7 @@ function dropTeeth(e) {
   if (mode !== 'rogue') return;
   const [chance, lo, hi] = TEETH.drop[e.T.id] || [0, 0, 0];
   // com mais jacarés por wave, cada um tem menos chance de soltar dente (a renda cresce devagar)
-  if (Math.random() > Math.min(1, chance / (1 + 0.06 * Math.max(0, run.wave - 1)) + teethBonus())) return;
+  if (Math.random() > Math.min(1, chance / (1 + 0.06 * Math.max(0, run.wave - 1)) * teethMul())) return;
   const base = lo + Math.floor(Math.random() * (hi - lo + 1)), n = base + (lv.sGold ? Math.floor(base * 0.5 + Math.random()) : 0);   // Boca de Ouro: +50%
   for (let i = 0; i < n; i++)
     teeth.push({ x: e.x, y: e.y + e.T.h * e.T.sc / 2 - 6, z: 20, vx: rand(-110, 110), vy: rand(-50, 50), vz: rand(220, 320),
@@ -3640,7 +3789,7 @@ function vacuumTeeth() {
   for (const t of teeth) { t.fly = true; t.vacuum = true; }
   if (teeth.length) sfx.select();
 }
-const magnetRange = () => TEETH.magnet * (1 + 0.6 * shop.lv.magnet) * (1 + 0.35 * lv.teethMag);
+const magnetRange = () => TEETH.magnet * (1 + 0.6 * shop.lv.magnet);
 function updateTeeth(dt) {
   toothPop *= Math.exp(-6 * dt);
   for (let i = teeth.length - 1; i >= 0; i--) {
@@ -4118,14 +4267,14 @@ const has9mm = () => shop.lv.uzi > 0 || shop.lv.revolvers > 0;
 // =====================================================================
 const WEAPONS = {
   shotgun:   { name: 'ESCOPETA' },
-  uzi:       { name: 'UZI', mag: 30, reload: 0.9, spread: 0.09, pierce: 1, scale: 4, pad: 16, speed: 1700,
+  uzi:       { name: 'UZI', mag: 30, reload: 0.9, spread: 0.16, pierce: 1, scale: 4, pad: 16, speed: 1700,
                // níveis 1-5: mais dano e mais rápida. Nível 6 = DUAS UZIS (uma em cada mão, alternando; pente 60)
                dmg: lv => 7 + 2 * (Math.min(lv, 5) - 1), cd: lv => lv >= 6 ? 0.03 : [0.09, 0.078, 0.066, 0.058, 0.052][lv - 1] || 0.052 },
   revolvers: { name: 'REVÓLVERES', mag: 12, reload: 1.3, spread: 0.015, pierce: 3, scale: 3.5, pad: 10, speed: 2000,
                dmg: lv => 20 + 5 * (lv - 1), cd: lv => [0.24, 0.2, 0.16][lv - 1] || 0.16 },   // ~85/s, atravessa 3
 };
 const WEAPON_ORDER = ['shotgun', 'uzi', 'revolvers'];
-const altReloadTime = () => WEAPONS[player.weapon].reload / (1 + 0.1 * lv.reload);   // carta Mãos Rápidas
+const altReloadTime = () => WEAPONS[player.weapon].reload * Math.pow(0.9, lv.reload) / hatMul();   // carta Recarga Rápida
 const REV_SPACING = 7;          // px do sprite entre os dois revólveres (um mais à frente que o outro)
 const UZI_SPACING = 6;          // duas uzis: a segunda um pouco mais à frente
 const uziDual = () => shop.lv.uzi >= 6;
@@ -4202,7 +4351,7 @@ const RAIN = { chance: 0.22, from: 3, waves: 2, cooldown: 3, fade: 0.35,
   dudChance: 0.25,           // dinamite molhada falha
   iceR: 1.3, iceDur: 1.6,    // gelo mais efetivo (raio e duração)
   bolt: [7, 13], boltDmg: 70, boltR: 90, drops: 260,
-  boltHouse: 30, boltAlly: 35, boltFence: 45, zap: 0.9,   // dano na casa / Antony / cerca; jogador fica atordoado (s)
+  boltHouse: 15, boltAlly: 15, boltFence: 15, zap: 0.9,   // dano na casa / Antony / cerca; jogador fica atordoado (s)
   boltWeight: { enemy: 1, house: 1.2, player: 0.5, ally: 0.8, fence: 0.12 },
   wind: 4, windSpeed: 2.2, lean: 5 };       // vento na chuva: balanço x4, mais rápido, e as plantas deitam para a esquerda
 const weather = { on: false, k: 0, left: 0, cool: 0, boltT: 9, flash: 0, bolt: null, drops: [], leaves: [] };
@@ -4833,7 +4982,7 @@ function updateAlly(dt) {
   for (let i = 0; i < n; i++) {
     const a = ally.aim + (n > 1 ? (i / (n - 1) - 0.5) * 0.25 : 0) + rand(-0.03, 0.03), sp = 1800;
     bullets.push({ x: mx, y: my, px: mx, py: my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.2, age: 0,
-      hits: [], dmgMul: 1, dmg: ANTONY.dmg(lv), pierce: 1, kind: 'revolvers', scale: SHOT.spriteScale, pad: 0 });
+      hits: [], dmgMul: 1, dmg: ANTONY.dmg(lv), pierce: 1, ally: true, kind: 'revolvers', scale: SHOT.spriteScale, pad: 0 });
   }
   for (let i = 0; i < 5; i++) {
     const pa = ally.aim + rand(-0.5, 0.5), ps = rand(200, 500);
@@ -5024,7 +5173,7 @@ function shopRects() {
     { id: 'arrow:1', d: 1, x: rx + rw - arrowW, y: top + chh / 2 - 50, w: arrowW, h: 100, off: shop.scroll >= shop.maxScroll }] : [];
   return { px, py, pw, ph, left, rx, rw, cards, arrows, area: { x: ax, y: top - 4, w: aw, h: chh + 12 }, n, bottom,
     tabs: SHOP_TABS.map((t, k) => ({ id: 'tab:' + t.id, tab: t, i: k, x: rx + k * (tw + 8), y: ty, w: tw, h: tabH })),
-    services: ['ammo', 'heal'].map((id, k) => ({ id: 'svc:' + id, svc: id, x: px + 20, y: sy + k * (sh + 12), w: left - 30, h: sh })),
+    services: ['heal'].map((id, k) => ({ id: 'svc:' + id, svc: id, x: px + 20, y: sy + (sh + 12) + k * (sh + 12), w: left - 30, h: sh })),   // o Bill não reabastece mais munição
     exit: { id: 'exit', x: px + pw - 172, y: py + 20, w: 150, h: 50 } };
 }
 // serviços do Bill (fora das abas): curar a casa e reabastecer a munição. Uma vez cada por visita;
@@ -5339,7 +5488,7 @@ function drawShop() {
       ctx.strokeStyle = '#140804'; ctx.lineWidth = 2; ctx.strokeRect(x0 + k * (dot + gp), y0, dot, dot);
     }
   }
-  shopText('1/2/3 abas  ·  ←/→ ou roda do mouse rolam  ·  4 reabastece  ·  5 cura a casa', r.rx, r.py + r.ph - 24, '15px monospace', '#ffe8c2');
+  shopText('1/2/3 abas  ·  ←/→ ou roda do mouse rolam  ·  5 cura a casa', r.rx, r.py + r.ph - 24, '15px monospace', '#ffe8c2');
   ctx.restore();
 }
 
@@ -5356,13 +5505,19 @@ function openCards() {
     const src = cards.super && sup.length ? sup : pool;
     cards.list.push(src.splice(Math.floor(Math.random() * src.length), 1)[0]);
   }
+  // carta RARA: só uma por partida; enquanto não pegou nenhuma, às vezes uma das três vira rara
+  const rares = RARE_UPGRADES.filter(u => !u.need || u.need());
+  if (!cards.super && !RARE_UPGRADES.some(u => lv[u.id]) && rares.length && (dev.rare || run.wave >= RARE.from && Math.random() < RARE.chance))
+    cards.list[Math.floor(Math.random() * 3)] = rares[Math.floor(Math.random() * rares.length)];
+  cards.rare = cards.list.some(u => u.cat === 'raro');
+  if (cards.rare) sfx.threat();
   if (cards.super) { sfx.threat(); cards.shine = 0; }
   cards.t = 0; cards.picked = -1; cards.pickT = 0;
   mouse.down = false;
 }
 function cardRects() {
-  const n = 3, gap = 18;
-  const w = Math.min(260, (canvas.width - 40 - gap * 2) / 3), h = Math.min(340, w * 1.3, canvas.height - 150);
+  const n = 3, gap = 22;
+  const w = Math.min(300, (canvas.width - 40 - gap * 2) / 3), h = Math.min(420, w * 1.42, canvas.height - 150);
   const x0 = (canvas.width - (w * n + gap * (n - 1))) / 2, y = canvas.height / 2 - h / 2 + 20;
   return cards.list.map((u, i) => ({ u, i, x: x0 + i * (w + gap), y, w, h }));
 }
@@ -5493,6 +5648,7 @@ function update(dt) {
   // movimento
   let dx = 0, dy = 0;
   player.stunT = Math.max(0, (player.stunT || 0) - dt);
+  if (hatBuffT > 0) { hatBuffT -= dt; if (Math.random() < dt * 14) particles.push({ x: player.x + rand(-22, 22), y: player.y + rand(-30, 20), vx: rand(-20, 20), vy: rand(-110, -60), life: rand(0.3, 0.6), age: 0, size: rand(2, 4), color: Math.random() < 0.5 ? '#ffd166' : '#fff3b0', drag: 2 }); }
   if (player.held && !enemies.some(o => o.alive && o.T.boss && o.st === 'pgrab')) { player.held = false; player.stunT = Math.min(player.stunT, 1); }   // o Açu largou (morreu etc.)
   const locked = cut.on || trip.on || player.stunT > 0;   // cutscene / entrando em casa / atordoado: sem controle
   if (locked && mouse.pressed) { if (cut.on) cutAdvance(); mouse.pressed = false; }
@@ -5599,6 +5755,7 @@ function update(dt) {
   updateTrees(dt);
   updateShards(dt);
   updateDecals(dt);
+  updatePuddles(dt);
   updateHouseAlert(dt);
   updateTrainingAmmo(dt);
   updateDev();
@@ -5643,11 +5800,21 @@ function update(dt) {
         if (e.hp <= 0) { killEnemy(e); continue; }
       }
     }
+    if (e.poisonT > 0) {                      // envenenado (Olhar Tóxico): dano a cada meio segundo
+      e.poisonT -= dt;
+      if ((e.poisonTick = (e.poisonTick || 0) - dt) <= 0) {
+        e.poisonTick = POISON.tick; const d = e.poisonDps * POISON.tick; e.hp -= d; e.hpShow = 2;
+        particles.push({ x: e.x + rand(-10, 10), y: e.y - 30, vx: rand(-10, 10), vy: -60, life: 0.6, age: 0, size: 0, color: 'text', text: `${Math.max(1, Math.round(d))}`, tint: '#7dff6a', drag: 2 });
+        for (let j = 0; j < 3; j++) particles.push({ x: e.x + rand(-14, 14), y: e.y + rand(-20, 10), vx: rand(-15, 15), vy: rand(-70, -30), life: rand(0.3, 0.5), age: 0, size: rand(3, 5), color: Math.random() < 0.5 ? '#7dff6a' : '#3f9b3a', drag: 2 });
+        if (e.hp <= 0) { killEnemy(e); continue; }
+      }
+    }
+    if (e.slowT > 0) e.slowT -= dt;
     if (e.scare) { updateScare(e, dt); continue; }
     if (e.T.boss) { if (!gameOver) updateBoss(e, dt); continue; }   // Jacaré Açu: IA própria
     if (e.frozenT > 0) { e.frozenT -= dt; e.attacking = false; continue; }   // congelado: não anda, não morde, não atira
-    if (e.T.healer) { if (!gameOver) updateHealer(e, dt); continue; }
-    if (e.T.ranged && house.active) { if (!gameOver) updateRanged(e, dt); continue; }
+    if (e.T.healer) { if (!gameOver) updateHealer(e, dt * slowK(e)); continue; }
+    if (e.T.ranged && house.active) { if (!gameOver) updateRanged(e, dt * slowK(e)); continue; }
     if (e.speed > 0 && !gameOver) {
       // alvo: o ponto mais próximo da casa (roguelike) ou o jogador
       let tx = player.x, ty = player.y;
@@ -5660,7 +5827,7 @@ function update(dt) {
       const ddx = tx - e.x, ddy = ty - e.y, dist = Math.hypot(ddx, ddy) || 1;
       if (Math.abs(ddx) > 4) e.facing = ddx < 0 ? -1 : 1;
       if (!e.attacking) {
-        const sp = e.speed * (1 + RAIN.enemySpeed * weather.k);   // na chuva andam mais rápido
+        const sp = e.speed * (1 + RAIN.enemySpeed * weather.k) * slowK(e);   // na chuva andam mais rápido; congelados, devagar
         e.x += ddx / dist * sp * dt;
         e.y += ddy / dist * sp * dt;
         e.walk += dt * sp;                 // distância andada (avança as pernas)
@@ -5679,7 +5846,7 @@ function update(dt) {
         const R = houseRect();
         return e.x > R.l - hw - 3 && e.x < R.r + hw + 3 && e.y > R.t - hh - 3 && e.y < R.b + hh + 3;
       })();
-      if (e.attacking && !gameOver && (e.bite -= dt) <= 0) { e.bite = e.T.biteEvery || BITE_EVERY; damageHouse(e); }
+      if (e.attacking && !gameOver && (e.bite -= dt * slowK(e)) <= 0) { e.bite = e.T.biteEvery || BITE_EVERY; damageHouse(e); }
     } else if (Math.abs(player.x - e.x) < ox && Math.abs(player.y - e.y) < oy) hurtPlayer(e);
   }
   // separação simples para não empilharem
@@ -5739,11 +5906,13 @@ function update(dt) {
     if (target) {
       // atravessa: acerta este jacaré e segue em frente, um pouco mais fraco e mais lento
       if (b.fire) ignite(target);
+      if (!b.ally) shotEffects(target);
       hitEnemy(target, b, ang, (b.dmg ?? pelletDamage()) * b.dmgMul);
       b.hits.push(target);
       b.dmgMul *= SHOT.pierceFalloff;
       b.vx *= 0.85; b.vy *= 0.85;
-      if (b.hits.length >= (b.pierce ?? SHOT.pierce) || target.T.id === 'tank') bullets.splice(i, 1);   // o tank segura a bala (não atravessa)
+      if (target.T.id === 'tank') b.life = b.age + (b.life - b.age) * 0.5;   // o tank freia a bala: passa, mas só vai até a metade do caminho
+      if (b.hits.length >= (b.pierce ?? SHOT.pierce)) bullets.splice(i, 1);
     } else if (out) {
       impact(Math.max(0, Math.min(WORLD_W, b.x)), Math.max(0, Math.min(WORLD_H, b.y)), ang, true);
       bullets.splice(i, 1);
@@ -6409,6 +6578,11 @@ function drawEnemy(e, ghost = false) {
     ctx.globalAlpha = Math.min(1, e.frozenT * 2) * 0.6; ctx.drawImage(tintOf(fr, '#bfefff'), -w / 2, -h - T.sc, w, h + T.sc); ctx.globalAlpha = 1;
   } else if (e.burnT > 0) {               // pegando fogo: brilho laranja tremendo
     ctx.globalAlpha = 0.22 + Math.sin(clock * 20 + e.x) * 0.08; ctx.drawImage(tintOf(fr, '#ff8a1f'), -w / 2, -h - T.sc, w, h + T.sc); ctx.globalAlpha = 1;
+  } else if (e.slowT > 0) {               // lento (Disparo Congelante): azul-gelo fraco
+    ctx.globalAlpha = Math.min(1, e.slowT * 2) * 0.38; ctx.drawImage(tintOf(fr, '#bfefff'), -w / 2, -h - T.sc, w, h + T.sc); ctx.globalAlpha = 1;
+  }
+  if (e.poisonT > 0) {                    // envenenado: verde pulsando
+    ctx.globalAlpha = (0.2 + Math.sin(clock * 9 + e.x) * 0.08) * Math.min(1, e.poisonT * 2); ctx.drawImage(tintOf(fr, '#5dff3a'), -w / 2, -h - T.sc, w, h + T.sc); ctx.globalAlpha = 1;
   }
   if (T.eye && nightK > 0.01) {          // guarda onde o olho ficou na tela (desenhado depois, por cima da escuridão)
     const open = T.id === 'range' ? e.blinkT > 0 : !(e.blinkT > 0 && T.blink);
@@ -6637,45 +6811,11 @@ function drawPix(pat, x, y, s, col) {
   pat.forEach((row, r) => [...row].forEach((ch, c) => { if (ch === '#') ctx.fillRect(x + c * s, y + r * s, s, s); }));
 }
 function drawCardIcon(u, cx, cy, sz) {
-  const ic = UPGRADE_ICONS[u.id];
-  if (ic && ic.complete) {                     // escala inteira: pixel art nítido, ícones menores ficam menores
-    const k = Math.max(2, Math.floor(sz / Math.max(11, ic.width, ic.height)));   // ícones pequenos (relógio, +) crescem um pouco
-    // selo (um pixel menor que o ícone): '+' sobrepõe o canto; relógio com '−' fica ao lado, sem tapar o desenho
-    const kb = Math.max(2, k - 1), B = ICON_BADGE_IMGS, badge = ICON_BADGE[u.id];
-    const cdW = badge === 'cd' ? (B.menos.width + 1 + B.relogio.width) * kb : 0;
-    const x = Math.round(cx - (ic.width * k + cdW) / 2), y = Math.round(cy - ic.height * k / 2);
-    ctx.drawImage(ic, x, y, ic.width * k, ic.height * k);
-    const put = (im2, lx, by) => im2.complete && ctx.drawImage(im2, Math.round(lx), Math.round(by - im2.height * kb), im2.width * kb, im2.height * kb);
-    const bottom = y + ic.height * k + 2 * kb;
-    if (badge === '+') put(B.mais, x + ic.width * k - 3 * kb, bottom);
-    else if (badge === 'cd') {
-      const lx = x + ic.width * k + kb;
-      put(B.menos, lx, bottom - (B.relogio.height - B.menos.height) * kb / 2);
-      put(B.relogio, lx + (B.menos.width + 1) * kb, bottom);
-    }
-    return;
-  }
-  const extra = { stamina: legImgs[0], teethMag: toothImg, ammoBox: AMMO_BOX_IMGS.ammo, thorns: FENCE_IMGS.rail, ammoDrop: ammoFullImg,
-    sExplode: CONS_IMGS.dynamite, sFortress: houseImg, sFury: gunSprite, sSpin: knifeIconImg, sGold: toothImg, sBelt: AMMO_BOX_IMGS.ammo, sLungs: legImgs[1] }[u.id];
-  if (u.id === 'sCrit') return drawPix(PIX.crit, cx - 3.5 * sz / 7, cy - 3.5 * sz / 7, sz / 7, '#ffd166');
-  if (extra && extra.complete !== false) {
-    const k = Math.max(1, Math.floor(sz / Math.max(extra.width, extra.height)));
-    const tint = u.id === 'sFury' ? tintOf(extra, '#ff5a4f') : u.id === 'sGold' ? tintOf(extra, '#ffd166') : extra;
-    ctx.drawImage(tint, Math.round(cx - extra.width * k / 2), Math.round(cy - extra.height * k / 2), extra.width * k, extra.height * k);
-    if (u.id === 'sSpin') { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, sz * 0.5, 0.3, Math.PI * 1.8); ctx.stroke(); }
-    return;
-  }
-  const img2 = { atkSpd: gunSprite, shotDmg: gunSprite, pellets: gunSprite, reload: ammoFullImg, bulletSz: null,
-    houseHp: houseImg, meleeCd: meleeImgs[0], meleeDmg: meleeImgs[0], meleeKb: meleeImgs[0], meleeRng: meleeImgs[0] }[u.id];
-  if (u.id === 'crit') return drawPix(PIX.crit, cx - 3.5 * sz / 7, cy - 3.5 * sz / 7, sz / 7, '#ffd166');
-  if (u.id === 'vamp') return drawPix(PIX.vamp, cx - 3.5 * sz / 7, cy - 3.5 * sz / 7, sz / 7, '#e63946');
-  if (u.id === 'bulletSz') {                         // bala branca grande
-    ctx.fillStyle = '#fff'; ctx.fillRect(cx - sz * 0.45, cy - sz * 0.15, sz * 0.9, sz * 0.3); return;
-  }
-  if (!img2 || !img2.complete) return;
-  const k = sz / Math.max(img2.width, img2.height);
-  ctx.drawImage(img2, Math.round(cx - img2.width * k / 2), Math.round(cy - img2.height * k / 2), img2.width * k, img2.height * k);
-  if (u.id === 'pellets') { ctx.fillStyle = '#fff'; for (let i = 0; i < 3; i++) ctx.fillRect(cx + sz * 0.55, cy - 10 + i * 9, 10, 4); }
+  const i = UPG_ICON_ORDER.indexOf(u.id);
+  if (i < 0 || !UPG_SHEET.complete || !UPG_SHEET.width) return;
+  const k = Math.max(2, Math.floor(sz / 32)), d = 32 * k;           // escala inteira: pixel art nítido
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(UPG_SHEET, (i % 3) * 32, Math.floor(i / 3) * 32, 32, 32, Math.round(cx - d / 2), Math.round(cy - d / 2), d, d);
 }
 
 function wrapText(text, maxW) {
@@ -6697,7 +6837,7 @@ function drawCards() {
   const titleA = Math.min(1, cards.t / 0.3);
   ctx.globalAlpha = titleA;
   ctx.font = 'bold 30px monospace';
-  const ttl = cards.super ? 'SUPER UPGRADE!' : 'ESCOLHA UM UPGRADE';
+  const ttl = cards.super ? 'SUPER UPGRADE!' : cards.rare ? 'UPGRADE RARO À VISTA!' : 'ESCOLHA UM UPGRADE';
   if (cards.super) { ctx.font = `bold ${Math.round(36 + Math.sin(clock * 6) * 2)}px monospace`; ctx.save(); ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 24; }
   ctx.fillStyle = '#000'; ctx.fillText(ttl, canvas.width / 2 + 3, rects[0].y - 26);
   ctx.fillStyle = cards.super ? `hsl(${45 + Math.sin(clock * 4) * 8},100%,${65 + Math.sin(clock * 8) * 8}%)` : '#e9c46a'; ctx.fillText(ttl, canvas.width / 2, rects[0].y - 29);
@@ -6720,31 +6860,34 @@ function drawCards() {
     ctx.globalAlpha = a;
     ctx.translate(r.x + r.w / 2, y + r.h / 2); ctx.scale(sc, sc); ctx.translate(-r.w / 2, -r.h / 2);
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(5, 6, r.w, r.h);                 // sombra
-    const sup = r.u.cat === 'super';
-    if (sup) { ctx.save(); ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 22 + Math.sin(clock * 5 + r.i) * 8; }
-    ctx.fillStyle = sup ? '#2a1d08' : '#18221a'; ctx.fillRect(0, 0, r.w, r.h);
-    if (sup) {
+    const sup = r.u.cat === 'super', rare = r.u.cat === 'raro', glow = sup ? '#ffd166' : rare ? '#c77dff' : null;
+    if (glow) { ctx.save(); ctx.shadowColor = glow; ctx.shadowBlur = 22 + Math.sin(clock * 5 + r.i) * 8; }
+    ctx.fillStyle = sup ? '#2a1d08' : rare ? '#1f1230' : '#18221a'; ctx.fillRect(0, 0, r.w, r.h);
+    if (glow) {
       ctx.restore();
-      const g = ctx.createLinearGradient(0, 0, 0, r.h); g.addColorStop(0, 'rgba(255,209,102,.22)'); g.addColorStop(1, 'rgba(120,60,0,.1)'); ctx.fillStyle = g; ctx.fillRect(0, 0, r.w, r.h);
-      const sx = ((clock * 220 + r.i * 90) % (r.w + 160)) - 80;          // brilho dourado passando
-      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, r.w, r.h); ctx.clip(); ctx.fillStyle = 'rgba(255,240,180,.16)';
+      const g = ctx.createLinearGradient(0, 0, 0, r.h);
+      if (sup) { g.addColorStop(0, 'rgba(255,209,102,.22)'); g.addColorStop(1, 'rgba(120,60,0,.1)'); } else { g.addColorStop(0, 'rgba(199,125,255,.24)'); g.addColorStop(1, 'rgba(60,20,90,.1)'); }
+      ctx.fillStyle = g; ctx.fillRect(0, 0, r.w, r.h);
+      const sx = ((clock * 220 + r.i * 90) % (r.w + 160)) - 80;          // brilho passando
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, r.w, r.h); ctx.clip(); ctx.fillStyle = sup ? 'rgba(255,240,180,.16)' : 'rgba(230,200,255,.14)';
       ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx + 50, 0); ctx.lineTo(sx + 10, r.h); ctx.lineTo(sx - 40, r.h); ctx.fill(); ctx.restore();
     }
-    ctx.fillStyle = col; ctx.fillRect(0, 0, r.w, 6);                                  // faixa da categoria
-    ctx.strokeStyle = on || chosen ? '#fff' : col; ctx.lineWidth = on || chosen ? 3 : 2;
-    ctx.strokeRect(1, 1, r.w - 2, r.h - 2);
-    // ícone
-    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(12, 18, r.w - 24, r.h * 0.34);
-    drawCardIcon(r.u, r.w / 2, 18 + r.h * 0.17, Math.min(96, r.w * 0.42));
+    ctx.fillStyle = col; ctx.fillRect(0, 0, r.w, 8);                                  // faixa da categoria
+    ctx.strokeStyle = on || chosen ? '#fff' : col; ctx.lineWidth = on || chosen ? 4 : 3;
+    ctx.strokeRect(1.5, 1.5, r.w - 3, r.h - 3);
+    // ícone grande (32 px da folha em escala inteira)
+    const isz = Math.min(r.w - 60, r.h * 0.36), iy = 24 + isz / 2;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(r.w / 2 - isz / 2 - 6, iy - isz / 2 - 6, isz + 12, isz + 12);
+    drawCardIcon(r.u, r.w / 2, iy + (on && cards.picked < 0 ? Math.sin(clock * 6) * 2 : 0), isz);
     // textos (crescem junto com a carta)
-    const fk = Math.max(0.8, Math.min(1.35, r.w / 190));
+    const fk = Math.max(0.85, Math.min(1.5, r.w / 200)), ty = iy + isz / 2 + 22;
     ctx.textAlign = 'center';
-    ctx.font = `bold ${Math.round(15 * fk)}px monospace`; ctx.fillStyle = '#f4f1de';
-    ctx.fillText(r.u.title, r.w / 2, r.h * 0.34 + 34 + 12 * fk);
-    ctx.font = `${Math.round(12 * fk)}px monospace`; ctx.fillStyle = '#c9d4c0';
-    wrapText(r.u.desc, r.w - 26).forEach((l, i) => ctx.fillText(l, r.w / 2, r.h * 0.34 + 50 + 26 * fk + i * 17 * fk));
-    ctx.font = `bold ${Math.round(11 * fk)}px monospace`; ctx.fillStyle = col;
-    ctx.fillText(sup ? '★ SUPER ★' : r.u.cat.toUpperCase() + '  ·  ' + (lv[r.u.id] ? `nível ${lv[r.u.id]} → ${lv[r.u.id] + 1}` : 'NOVO'), r.w / 2, r.h - 18 - 14 * fk);
+    ctx.font = `bold ${Math.round(17 * fk)}px monospace`; ctx.fillStyle = '#000'; ctx.fillText(r.u.title, r.w / 2 + 2, ty + 14 * fk + 2);
+    ctx.fillStyle = sup ? '#ffe8a8' : rare ? '#ecd2ff' : '#f4f1de'; ctx.fillText(r.u.title, r.w / 2, ty + 14 * fk);
+    ctx.font = `${Math.round(13 * fk)}px monospace`; ctx.fillStyle = '#c9d4c0';
+    wrapText(r.u.desc, r.w - 30).forEach((l, i) => ctx.fillText(l, r.w / 2, ty + 24 + 28 * fk + i * 18 * fk));
+    ctx.font = `bold ${Math.round(12 * fk)}px monospace`; ctx.fillStyle = col;
+    ctx.fillText(sup ? '★ SUPER ★' : rare ? '◆ RARO · 1 por partida ◆' : r.u.cat.toUpperCase() + '  ·  ' + (lv[r.u.id] ? `nível ${lv[r.u.id]} → ${lv[r.u.id] + 1}` : 'NOVO'), r.w / 2, r.h - 20 - 14 * fk);
     ctx.fillStyle = 'rgba(244,241,222,.55)'; ctx.fillText(`[${r.i + 1}]`, r.w / 2, r.h - 12);
     ctx.restore();
   }
@@ -6764,6 +6907,7 @@ function statLines() {
   return [
     ['crit',     'Crítico',        pct(critChance())],
     ['vamp',     'Vampirismo',     pct(vampirism())],
+    ['poison',   'Veneno',         `${Math.round(poisonPct() * 100)}%/s`],
     ['atkSpd',   'Vel. ataque',    `${(1 / shotCooldown()).toFixed(2)}/s`],
     ['shotDmg',  'Dano armas',     pct(dmgMul())],
     ['pellets',  'Projéteis',      `${pelletCount()}`],
@@ -6772,10 +6916,11 @@ function statLines() {
     ['houseHp',  'Vida da casa',   `${Math.round(houseMax())}`],
     ['meleeDmg', 'Dano faca',      `${meleeDamage()}`],
     ['meleeCd',  'Recarga faca',   `${meleeCooldown().toFixed(2)}s`],
-    ['meleeKb',  'Empurrão faca',  pct(1 + 0.15 * lv.meleeKb)],
+    ['meleeKb',  'Empurrão faca',  pct(1 + 0.1 * lv.meleeKb)],
     ['meleeRng', 'Alcance faca',   `${Math.round(meleeRange())}`],
     ['moveSpd',  'Velocidade',     pct(moveMul())],
-    ['teeth',    'Drop dentes',    `+${Math.round(teethBonus() * 100)}%`],
+    ['teeth',    'Drop dentes',    `+${Math.round((teethMul() - 1) * 100)}%`],
+    ['medic',    'Kit médico',     pct(healPct())],
   ];
 }
 function drawStats() {
@@ -7142,6 +7287,7 @@ function render() {
     if (mw > 0 && mh > 0) ctx.drawImage(map.canvas, mx, my, mw, mh, mx * SCALE, my * SCALE, mw * SCALE, mh * SCALE);
   }
   drawDecals();                          // sangue, pegadas, rastros, cauda e corpo do Açu no chão
+  drawPuddles();                         // poças de veneno (Sangue Tóxico)
   // fora da tela não desenha (margem para copas, sombras e sprites grandes)
   const inView = (x, y, mx, top, bot) => x > cam.x - mx && x < cam.x + vw + mx && y > cam.y - top && y < cam.y + vh + bot;
 
@@ -7218,6 +7364,7 @@ function render() {
     drawRain();                          // chuva por baixo do HUD
     drawLeaves();
     drawHouseAlert();                    // casa levando dano: bordas vermelhas piscando (por baixo do HUD)
+    drawQte();                           // preso na boca do Açu: aperte a tecla
     drawHouseMarker();
     drawAmmo();
     drawWeaponHud();
