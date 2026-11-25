@@ -239,8 +239,8 @@ const ROGUE = {
   enemySpeed: 70,        // lento (o jogador anda a 360 px/s)
   maxEnemies: 150,       // limite de jacarés vivos ao mesmo tempo
   firstBreak: 3,         // segundos antes da wave 1 (dá tempo do aviso DEFENDA SUA CASA)
-  breakTime: 1.5,        // pausa curta entre waves: escolheu a carta, 1,5 s e já vem a próxima
-  rewardAmmo: 4,         // caixa de munição ao fim de cada wave: 4 + 1,5 por wave (escassa de propósito)
+  breakTime: 3,          // pausa entre waves: escolheu a carta, 3 s e já vem a próxima
+  rewardAmmo: 6,         // caixa de munição ao fim de cada wave: 6 + 2 por wave
   rewardHeal: 0.2,       // curativo: recupera 20% da vida máxima da casa
 };
 // dificuldade de cada wave (n = 1, 2, 3...)
@@ -248,9 +248,9 @@ const ROGUE = {
 const enemySpeedMul = () => mode === 'rogue' ? 1 + 0.08 * Math.min(5, Math.floor(Math.max(0, run.wave - 1) / 5)) : 1;
 function waveConfig(n) {
   return {
-    count: 8 + (n - 1) * 5,                                   // 8, 13, 18, 23... (+5 por wave)
-    interval: Math.max(0.3, 1.0 * Math.pow(0.9, n - 1)),      // chegam cada vez mais seguidos (começa já em 1 s)
-    group: 1 + Math.floor(n / 2),                             // wave 2: duplas, 4: trios, 6: grupos de 4...
+    count: 8 + (n - 1) * 4,                                   // 8, 12, 16, 20... (+4 por wave)
+    interval: Math.max(0.3, 1.0 * Math.pow(0.93, n - 1)),     // chegam cada vez mais seguidos (começa em 1 s, -7% por wave)
+    group: Math.min(5, 1 + Math.floor(n / 2)),                // wave 2: duplas, 4: trios, 6: grupos de 4, 8+: grupos de 5 (teto)
     tanks: n >= 5 ? 1 + Math.floor((n - 5) / 2) : 0,          // wave 5-6: 1 tank, 7-8: 2, 9-10: 3...
     ranges: n >= 10 ? Math.min(RANGE.maxPerWave, 3 + (n - 10)) : 0,   // wave 10: 3, 11: 4, 12+: 5 (teto)
     rushers: n >= 15 ? Math.min(12, 4 + 2 * (n - 15)) : 0,           // wave 15: 4, 16: 6... (teto 12)
@@ -951,7 +951,7 @@ function drawBossBar() {
 const ENEMY_INTRO = { tank: 5, range: 10, rusher: 15, healer: 20 };
 // quantos degraus de 5 waves desde que o tipo apareceu (0 na wave de estreia)
 const growSteps = type => mode === 'rogue' ? Math.max(0, Math.floor((run.wave - ENEMY_INTRO[type]) / 5)) : 0;
-const GROW = { tankHp: 0.08, rusherSpeed: 0.08, healer: 0.08, rangeAim: 0.07, rangeSpread: 0.12 };
+const GROW = { tankHp: 0.05, rusherSpeed: 0.08, healer: 0.08, rangeAim: 0.07, rangeSpread: 0.12 };
 const tankHpMul = () => mode === 'rogue' ? 1 + GROW.tankHp * Math.max(0, run.wave - ENEMY_INTRO.tank) : 1;   // +8% de vida por wave
 const healerMul = () => 1 + GROW.healer * growSteps('healer');                                                 // cura e escudo +8% a cada 5 waves
 const ENEMY_BLINK = { every: [3, 8], dur: 0.12 };
@@ -1863,7 +1863,7 @@ const pickupCenterY = b => b.y - 14 + pickupFloat(b) - b.pop * 30;   // nasce co
 
 // recompensa de fim de wave (some em DROP_LIFE, como os outros drops)
 function spawnReward(kind, x, y) {
-  const amount = Math.round((kind === 'ammo' ? ROGUE.rewardAmmo + Math.round(1.5 * run.wave) : kind === 'ammo9' ? 16 + 2 * run.wave : 0) * (1 + 0.25 * lv.ammoBox));
+  const amount = Math.round((kind === 'ammo' ? ROGUE.rewardAmmo + 2 * run.wave : kind === 'ammo9' ? 16 + 2 * run.wave : 0) * (1 + 0.25 * lv.ammoBox));
   pickups.push({ kind, x, y, amount, scale: kind === 'heal' ? 3 : 4.2,
     t: rand(0, 6), age: 0, shine: 0, nextShine: 0.5, pop: 1, life: DROP_LIFE, reward: true });
   particles.push({ x, y: y - 20, vx: 0, vy: 0, life: 0.4, age: 0, size: 70, grow: -170, color: 'ring', drag: 0 });
@@ -2195,7 +2195,7 @@ function drawScare(e, ghost) {
 const headCache = new Map();
 function headOf(im) {
   if (headCache.has(im)) return headCache.get(im);
-  if (!im.complete || !im.width) return null;
+  if (im.complete === false || !im.width) return null;   // aceita imagem ou canvas (o corpo do jogador vem recortado da sprite sheet)
   const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
   const g = c.getContext('2d'); g.drawImage(im, 0, 0);
   const d = g.getImageData(0, 0, c.width, c.height).data;
@@ -2640,6 +2640,32 @@ function drawEnemyBullet(b) {
   }
 }
 
+// casa levando dano: as bordas da tela piscam em vermelho (atenção!). Pega qualquer dano (mordida, tiro, fogo, raio, chefão)
+const houseAlert = { k: 0, lastHp: null, cache: null, w: 0, h: 0 };
+function updateHouseAlert(dt) {
+  if (mode !== 'rogue' || !house.active) { houseAlert.k = 0; houseAlert.lastHp = null; return; }
+  if (houseAlert.lastHp !== null && house.hp < houseAlert.lastHp - 0.01) {
+    const dmg = houseAlert.lastHp - house.hp;
+    houseAlert.k = Math.min(1, Math.max(houseAlert.k, 0.55) + dmg / 25);
+  }
+  houseAlert.lastHp = house.hp;
+  houseAlert.k = Math.max(0, houseAlert.k - dt * 1.6);
+}
+function drawHouseAlert() {
+  if (houseAlert.k <= 0.01 || gameOver) return;
+  const W = canvas.width, H = canvas.height;
+  if (!houseAlert.cache || houseAlert.w !== W || houseAlert.h !== H) {      // vinheta vermelha nas bordas (feita uma vez por tamanho de tela)
+    const c = houseAlert.cache || document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d'), R = Math.hypot(W, H) / 2;
+    g.save(); g.translate(W / 2, H / 2); g.scale(W / Math.max(W, H), H / Math.max(W, H));
+    const gr = g.createRadialGradient(0, 0, R * 0.55, 0, 0, R * 1.05);
+    gr.addColorStop(0, 'rgba(230,30,30,0)'); gr.addColorStop(0.6, 'rgba(230,30,30,.35)'); gr.addColorStop(1, 'rgba(200,0,0,.85)');
+    g.fillStyle = gr; g.fillRect(-W, -H, W * 2, H * 2); g.restore();
+    Object.assign(houseAlert, { cache: c, w: W, h: H });
+  }
+  const blink = 0.65 + 0.35 * Math.sin(clock * 22);                  // pisca
+  ctx.save(); ctx.globalAlpha = Math.min(1, houseAlert.k) * blink; ctx.drawImage(houseAlert.cache, 0, 0); ctx.restore();
+}
 function damageHouse(e) {
   if (gameOver) return;
   const dmg = biteOf(e);                            // básico 5, tank 20 (lua cheia: rusher 3)
@@ -2722,7 +2748,7 @@ function startMode(m) {
   const startWaveParam = parseInt(new URLSearchParams(location.search).get('wave')) || 1;   // teste: ?wave=10
   Object.assign(run, { time: 0, kills: 0, spawnTimer: 0, wave: Math.max(0, startWaveParam - 1), phase: 'break', phaseT: ROGUE.firstBreak,
     toSpawn: 0, cfg: null, banner: null });
-  bullets.length = 0; particles.length = 0; shards.length = 0; decals.length = 0; restoreScenery(); supply.on = false; supply.cool = 0; enemies.length = 0; pickups.length = 0; enemyBullets.length = 0;
+  bullets.length = 0; particles.length = 0; shards.length = 0; decals.length = 0; houseAlert.k = 0; houseAlert.lastHp = null; restoreScenery(); supply.on = false; supply.cool = 0; enemies.length = 0; pickups.length = 0; enemyBullets.length = 0;
   ammoPop.fill(0); mouse.down = false;
   if (m === 'test') {
     for (const pos of ENEMY_POSITIONS)
@@ -3295,21 +3321,41 @@ function banner(text, sub, color = '#f4f1de', dur = 2.4, big = false) { run.bann
 
 const LAST = { count: 3, speed: 1.7 };   // os 3 últimos de cada wave ficam 70% mais rápidos e aparecem setas na borda
 // setas vermelhas na borda apontando para os últimos jacarés fora da tela
+// setas na borda da tela apontando para os jacarés fora da tela (de onde estão vindo).
+// Agrupa por direção: uma seta por grupo, maior e com o número quando são vários; os últimos da wave pulsam; o chefão tem uma seta grande
+const arrowImg = img('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAGCAYAAAARx7TFAAAAR0lEQVQImWNgwAT/0QWY0BV8a2zHqhCuoFNO+/8rI5v/3xrb/yMrZERSwJAoIgjXwePvzcBVX8nAwMDAyIhNAbpCRnz2wwAAc2kXIjTSvb8AAAAASUVORK5CYII=');   // sprites/interface/seta-inimigo.png (9x6, aponta para cima)
+const MARKERS = { sectors: 12, margin: 34, scale: 4 };   // 12 direções (uma seta por direção)
 function drawLastMarkers() {
-  if (mode !== 'rogue' || run.phase !== 'fight' || gameOver) return;
-  const W = canvas.width, H = canvas.height;
+  if (mode === 'menu' || gameOver || paused || cut.on || trip.on || !arrowImg.complete) return;
+  const W = canvas.width, H = canvas.height, cx = W / 2, cy = H / 2, groups = new Map();
   for (const e of enemies) {
-    if (!e.alive || !e.rush) continue;
+    if (!e.alive || e.scare) continue;
     const q = toScreen(e.x, e.y), sx = q.x * ZOOM, sy = q.y * ZOOM;
-    if (sx > 0 && sx < W && sy > 0 && sy < H) continue;
-    const cx = W / 2, cy = H / 2, a = Math.atan2(sy - cy, sx - cx);
-    const k = Math.min((W / 2 - 40) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - 40) / Math.abs(Math.sin(a) || 1e-6));
-    const x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k, pulse = 1 + Math.sin(clock * 8) * 0.15;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.scale(pulse, pulse);
-    ctx.fillStyle = '#140804'; ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-12, -14); ctx.lineTo(-12, 14); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#ff5a4f'; ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-8, -10); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
-    ctx.restore();
+    if (sx > -20 && sx < W + 20 && sy > -20 && sy < H + 20) continue;   // aparece na tela: sem seta
+    const a = Math.atan2(sy - cy, sx - cx), d = Math.hypot(sx - cx, sy - cy);
+    const key = e.T.boss ? 'boss' : Math.round((a + Math.PI) / (Math.PI * 2) * MARKERS.sectors) % MARKERS.sectors;
+    const g = groups.get(key) || { n: 0, sx: 0, sy: 0, d: 1e9, rush: false, boss: !!e.T.boss };
+    g.n++; g.sx += Math.cos(a); g.sy += Math.sin(a); g.d = Math.min(g.d, d); g.rush = g.rush || e.rush;
+    groups.set(key, g);
   }
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  for (const g of groups.values()) {
+    const a = Math.atan2(g.sy, g.sx), m = MARKERS.margin;
+    const k = Math.min((W / 2 - m) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - m) / Math.abs(Math.sin(a) || 1e-6));
+    const x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k;
+    const near = Math.max(0, Math.min(1, 1 - (g.d - Math.hypot(W, H) / 2) / 900));   // mais perto = mais forte
+    let s = MARKERS.scale * (g.boss ? 2 : 1 + Math.min(0.75, (g.n - 1) * 0.12));
+    if (g.rush || g.boss) s *= 1 + Math.sin(clock * 8) * 0.15;                       // últimos da wave / chefão: pulsando
+    ctx.globalAlpha = 0.45 + 0.55 * near;
+    ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(a + Math.PI / 2);
+    ctx.drawImage(arrowImg, -4.5 * s, -3 * s, 9 * s, 6 * s); ctx.restore();
+    if (g.n > 1) {                                                                       // quantos vêm daquele lado
+      const tx = x - Math.cos(a) * (6 * s + 10), ty = y - Math.sin(a) * (6 * s + 10) + 5;
+      ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#000';
+      ctx.strokeText(String(g.n), tx, ty); ctx.fillStyle = '#ffd1d4'; ctx.fillText(String(g.n), tx, ty);
+    }
+  }
+  ctx.restore(); ctx.textAlign = 'left'; ctx.globalAlpha = 1;
 }
 function startWave() {
   run.wave++;
@@ -3353,9 +3399,12 @@ function finishWave() {
   run.phase = 'cards';                 // jogo congela até escolher um upgrade
   run.phaseT = ROGUE.breakTime;
   openCards();
+  const restock = mode === 'rogue' && run.wave % 5 === 0;   // a cada 5 waves: munição toda cheia e casa 100%
+  if (restock) restockAll();
   const full = house.hp >= houseMax();
   vacuumTeeth();
   if (isBossWave(run.wave)) banner('JACARÉ AÇU DERROTADO', 'escolha um SUPER upgrade', '#ffd166', 3, true);
+  else if (restock) banner(`WAVE ${run.wave} COMPLETA`, 'munição cheia   ·   casa 100%', '#7bd04a', 2.6);
   else banner(`WAVE ${run.wave} COMPLETA`, full ? '+ munição' : '+ munição   + curativo da casa', '#7bd04a', 2.2);
   sfx.waveClear();
   // recompensas na frente da porta
@@ -3365,6 +3414,20 @@ function finishWave() {
   if (has9mm()) spawnReward('ammo9', house.x - 175, y);                    // 9 mm (uzi e revólveres), se tiver uma delas
 }
 
+// reabastecimento das waves 5, 10, 15...: enche todas as armas, as reservas e a casa
+function restockAll() {
+  player.ammo = ammoMax(); player.reserve = reserveMax();
+  if (has9mm()) {
+    player.reserve9 = AMMO9.max;
+    for (const id of ['uzi', 'revolvers']) if (shop.lv[id] > 0) player.mags[id] = magOf(id);
+  }
+  player.reloading = false; reservePop = 1;
+  house.hp = houseMax(); house.heal = 1;
+  sfx.heal(); sfx.reload();
+  const R = houseRect();
+  for (let i = 0; i < 18; i++) particles.push({ x: rand(R.l, R.r), y: rand(R.t, R.b), vx: rand(-20, 20), vy: rand(-120, -50), life: rand(0.6, 1), age: 0, size: rand(4, 7), color: '#7bd04a', drag: 1 });
+  particles.push({ x: player.x, y: player.y, vx: 0, vy: 0, life: 0.45, age: 0, size: 12, grow: 300, color: 'ring', drag: 0 });
+}
 // gaveta roxa embaixo da tela enquanto o Bill espera (depois de fechar a loja): lembra de entrar em casa com E
 const billDrawer = { k: 0 };
 const billDrawerOn = () => mode === 'rogue' && run.phase === 'shop' && shop.visited && !shop.open && !trip.on && bill.active && bill.state === 'idle' && !cut.on && !paused && !gameOver;
@@ -5536,6 +5599,7 @@ function update(dt) {
   updateTrees(dt);
   updateShards(dt);
   updateDecals(dt);
+  updateHouseAlert(dt);
   updateTrainingAmmo(dt);
   updateDev();
   reservePop *= Math.exp(-6 * dt);
@@ -7153,6 +7217,7 @@ function render() {
     drawEventFx();                       // eventos de wave (calor, lua, neblina)
     drawRain();                          // chuva por baixo do HUD
     drawLeaves();
+    drawHouseAlert();                    // casa levando dano: bordas vermelhas piscando (por baixo do HUD)
     drawHouseMarker();
     drawAmmo();
     drawWeaponHud();
