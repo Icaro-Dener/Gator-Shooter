@@ -10,11 +10,12 @@ Abra `index.html` no navegador.
 |---|---|
 | WASD | mover |
 | Shift (segurar) | correr (60% mais rápido) gastando **fôlego**: dá uns 3 s de corrida, a barra fica dentro do ícone da corrida (direita); se esgotar (barra vermelha piscando) só volta a correr com 30% de fôlego. No começo da partida aparece uma dica de SHIFT e BOTÃO DIREITO, e o HUD tem os ícones de corrida e faca com a tecla escrita |
-| Mouse | mirar |
+| Mouse | mirar (o jacaré vira para a mira: de lado, de frente quando mira para baixo e de costas quando mira para cima, com a arma atrás do corpo; as pernas continuam as antigas, de lado) |
 | Clique esquerdo | atirar (shotgun) |
 | Clique direito | faca (melee: dano 28, recarga de 0,85 s) |
 | R | recarregar até encher (atirar interrompe) |
-| 1 / 2 / 3 ou roda do mouse | trocar de arma (escopeta, uzi, revólveres — depois de comprar) |
+| 1 / 2 / 3 | trocar de arma (escopeta, uzi, revólveres — depois de comprar) |
+| Roda do mouse | zoom da câmera, suave (aproxima/afasta e para num passo que mantém o pixel art nítido; na loja rola os itens) |
 | Q / F / C | dinamite / pimenta / cubo de gelo (consumíveis da loja) |
 | M | liga/desliga o som |
 | Ctrl | mostra/esconde os stats |
@@ -28,7 +29,7 @@ Abra `index.html` no navegador.
 - Os chumbos da escopeta (e do Primo Antony) usam o sprite do tiro do revólver, um pouco maior e mais esbranquiçado; com a carta Calibre Maior a partir de +50% eles viram o tiro da uzi.
 - A escopeta tem 6 cartuchos, e a reserva começa com só 6 (máximo de 30; no modo horda começa em 24 e cresce +2 por wave, até 60). A munição é escassa de propósito: a faca é a arma para economizar cartuchos.
 - Cada cartucho leva 0,25 s para recarregar e sai da reserva.
-- Ao morrer, os inimigos raramente derrubam caixas de munição: 8 cartuchos (0,4%), 4 (1,5%) ou 2 (4,3%). Todos os drops somem depois de 5 s. A fonte principal de munição é a caixa do fim de cada wave.
+- Ao morrer, os inimigos raramente derrubam caixas de munição: 8 cartuchos (0,4%), 4 (1,5%) ou 2 (4,3%). Nas **waves 1 e 2** a chance de drop é 2,5x maior. Quando a munição aperta a sorte ajuda: com a **reserva vazia** a chance de drop dobra, e **sem nenhuma bala** (nem na arma) fica 3,5x maior; a munição que está faltando (12 ou 9 mm) cai com mais frequência. Todos os drops somem depois de 5 s. A fonte principal de munição é a caixa do fim de cada wave.
 
 ## Modos
 
@@ -58,10 +59,29 @@ Abra `index.html` no navegador.
   - Ao fim de cada wave aparecem na frente da porta uma caixa de munição pequena (4 + 1,5 por wave; 9 mm: 16 + 2 por wave) e um curativo que recupera 20% da vida da casa. Somem em 5 s; com a casa em 100%, o curativo some na hora.
   - Entre uma wave e outra há uma pausa de 4 s.
   - **Ritmo**: a wave 1 já vem com 8 jacarés chegando a cada 1 s (+5 jacarés por wave, cada vez mais seguidos e em grupos maiores); entre as waves a pausa é de só 1,5 s depois de escolher a carta; as caixas de recompensa voam sozinhas até o jogador. Quando sobram 3 ou menos jacarés na wave, eles ficam 70% mais rápidos (um "!" vermelho em cima) e setas vermelhas na borda da tela mostram onde estão.
-  - Na visita do Bill, depois de entrar e sair da loja, sobe uma **gaveta roxa** discreta em pixel art embaixo da tela: tecla ENTER + "prosseguir" (também dá para clicar nela).
+  - Na visita do Bill, depois de entrar e sair da loja, sobe uma **gaveta roxa** discreta em pixel art embaixo da tela lembrando: tecla E + "entrar em casa".
+  - **Virada do dia/noite entrando em casa**: depois de falar com o velho Bill (abrir a loja), vá até a porta e aperte **E** (aparece uma teclinha em cima da porta). O jacaré anda sozinho até a porta, entra de costas, a tela escurece (zzz), o cenário troca de dia para noite (ou o contrário) e ele sai pela porta de frente; aí começa a próxima wave. ENTER não segue mais o jogo. Se o tempo da visita acabar, ele vai para casa sozinho.
+  - Ao entrar em casa o jacaré aparece só dentro do vão da porta, sumindo no escuro (nada de sprite ou arma para fora), e a música da loja some: silêncio lá dentro, e a faixa do novo período começa quando ele sai.
+  - **Chefão: JACARÉ AÇU** (`sprites/boss/`, música `musica/jacare-acu.mp3`). Ao dormir depois da wave 10, no meio do sono escuro, um **rugido** acorda o jacaré ("!?" e "um rugido ecoa pelo pântano..."). A música da luta começa junto com esse rugido, ainda no escuro. De manhã, na **wave 11**, o Açu (enorme, 6x a escala do sprite) chega sozinho pela direita e o anúncio mostra o nome com a imagem dele grande rugindo. Ele ruge (empurra quem está perto) e passa a **correr em volta da casa, bem rápido**, numa pista oval. Barra de vida grande no topo com o retrato dele, marcas de 10%, a marca da metade (onde ele fica furioso) e a vida em números. Ataques:
+    - **Partes do corpo**: a **cabeça** leva 1,7x de dano e brilha forte quando acertada; o **tronco** leva só 45%; a **cauda** não leva dano de tiro (as balas ricocheteiam), só da faca.
+    - **Arrancar a cauda**: **5 facadas na cauda** (aparece "CAUDA 1/5"...) arrancam ela fora: a cauda voa girando e fica caída no chão, jorra sangue que **fica no cenário até o fim da partida**, o toco continua pingando sangue por um tempo e ele fica confuso. **Sem cauda ele não dá mais caudada** (nem deixa rastro); os sprites passam a ser os sem cauda.
+    - **Investida (só de lado)**: quando chega a hora, ele corre para um lado da casa, para na altura dela e se prepara (treme, faixa tracejada no chão mostrando por onde vai passar: **vermelha = vai acertar a casa**, **amarela = vai errar**). Durante a preparação dá para:
+      - **acertar com a faca** para interromper (um ícone da faca pisca em cima da cabeça dele enquanto dá tempo);
+      - **atrair a mira**: se o jogador estiver do lado dele, a mira segue a altura do jogador; leve-a para cima ou para baixo da casa e ele passa reto.
+      Errou ou foi interrompido: fica **confuso e atordoado** (estrelinhas na cabeça) e leva **2x de dano**. Quem for atropelado fica **atordoado** (1,5 s). Passando reto ele atravessa o mapa arrebentando cercas e caixas e bate nas árvores da borda. Se acertar a casa (**35 de dano**), bate a cabeça e logo depois...
+    - **Mordida que agarra**: crava os dentes na parede e vai **arrancando pedaços da casa** (5 de dano a cada 0,45 s, aumentando com o tempo; pedaços de parede voam). Aparece um alvo vermelho na boca com uma barrinha: **acerte a boca** para ele soltar (e ficar confuso). Se demorar, ele arranca um pedaço grande (40 de dano).
+    - **Bote que arremessa**: se o jogador passar na frente da boca, o Açu **agarra ele na boca**, sacode e **arremessa para o outro lado do mapa** (voa girando por cima de tudo) e ele cai **atordoado por 1,5 s**.
+    - **Caudada**: se o jogador ficar perto da cauda (ou houver cercas e minas por perto), ele gira a cauda e arrebenta tudo num raio grande: cercas quebram, tufos e árvores se desmontam, **minas e caixas de munição são espalhadas**, o Antony leva dano. Quem é atingido fica **atordoado por 1,5 s** (sem andar, atirar nem usar a faca, com o efeito de atordoado na cabeça).
+    - **Fase 2 — BERSERKER** (metade da vida): ruge e arrebenta o cenário em volta; brilho vermelho; corre mais rápido atropelando grama, cercas, minas e **esmagando as caixas de munição** do chão, **muito mais rápido** (corre a 760 e investe a 1450); **investidas consecutivas** (vira e investe de novo até 3 vezes), preparação mais curta, menos tempo entre ataques; quando erra fica confuso por mais tempo e leva **2,6x de dano**.
+    - **Visual**: sprites verdes normalmente e **roxos no Berserker**, com e sem cauda; na ponta direita da barra de vida fica o **ícone grande da cabeça dele** (verde / roxo, treme quando a cabeça leva tiro). Ele deixa **pegadas** de vez em quando e, enquanto tem cauda, o **rastro da cauda** arrastando (somem depois de uns segundos). Morto, o **corpo fica caído** no chão (com ou sem cauda).
+    - O cenário reage: grama perto dele deita de vez e árvores próximas chacoalham forte quando ele passa. A grama não quebra (só deita). Cercas e paredes se **desmontam em pedaços** do próprio sprite; árvores ou são **arrancadas inteiras e voam longe para cima girando**, ou se desmontam. Numa partida nova o cenário volta inteiro.
+    - **Munição acabou no meio da luta?** O velho Bill grita "TOMA, GAROTO!" e arremessa lá de fora da tela uma **caixa com 24 cartuchos de escopeta**, que cai girando perto do jogador (de novo, se precisar, 6 s depois de pegar).
+    - Vencendo, o **kit médico** que aparece na frente da porta **enche a casa 100%**.
+    - No modo horda o jogador não perde vida: os golpes empurram forte e deixam ele tonto (a caudada atordoa de vez). O Açu não congela. Tem **11000 de vida**; derrotado, explode, solta muitos dentes e caixas de munição, e as cartas seguintes são SUPER.
+  - Para testar: no painel dev (campo de treino) o botão **bossfight (Jacaré Açu)** começa uma partida já na manhã do chefão; ou abra o jogo com `?boss=1`.
   - Ao fim de cada wave o jogo congela e aparecem 3 cartas de upgrade; escolha 1 (clique ou teclas 1/2/3). Os upgrades acumulam durante a partida:
     - Cartas novas: **Fôlego de Jacaré** (+30% de fôlego), **Ímã de Dentes** (+35% de alcance), **Caixa Reforçada** (+25% de munição nas caixas da wave), **Farpas na Porta** (quem morde a casa leva 8 de dano) e **Catador de Cartuchos** (+30% de chance dos inimigos derrubarem munição).
-    - **SUPER UPGRADE** no fim das waves 5, 10, 15...: 3 cartas douradas, cada uma só uma vez: **Jacaré-Bomba** (todo jacaré explode ao morrer, 15 de dano em volta), **Fortaleza** (+30% de vida da casa e conserta tudo), **Fúria do Pântano** (+20% de dano, +12% de velocidade de ataque), **Faca Giratória** (a faca acerta em volta toda, +10% de alcance), **Mira Letal** (+10% de crítico e crítico 2,5x), **Boca de Ouro** (+50% de dentes), **Cinturão de Balas** (+12 de reserva e enche a munição) e **Pulmão de Aço** (correr cansa pela metade, +10% correndo).
+    - **SUPER UPGRADE** só depois de derrotar o chefão (Jacaré Açu, wave 11): 3 cartas douradas, cada uma só uma vez: **Jacaré-Bomba** (todo jacaré explode ao morrer, 15 de dano em volta), **Fortaleza** (+30% de vida da casa e conserta tudo), **Fúria do Pântano** (+20% de dano, +12% de velocidade de ataque), **Faca Giratória** (a faca acerta em volta toda, +10% de alcance), **Mira Letal** (+10% de crítico e crítico 2,5x), **Boca de Ouro** (+50% de dentes), **Cinturão de Balas** (+12 de reserva e enche a munição) e **Pulmão de Aço** (correr cansa pela metade, +10% correndo).
     crítico +5%, vampirismo +1% (o dano causado cura a casa; no máximo 5 níveis = 5%), velocidade de ataque +10%, dano +10%, velocidade de recarga +10% (estas três e Calibre Maior valem para todas as armas), vida máxima da casa +15%, recarga da faca −10%, dano da faca +10, balas 10% maiores, +2 projéteis, empurrão da faca +15%, alcance da faca +5%, Arrancador (+5% de chance dos inimigos dropar dentes) e Pernas Ligeiras (+5% de velocidade de movimento).
   - Os stats aparecem discretos à esquerda da tela e mudam em tempo real (Ctrl mostra/esconde).
 
@@ -92,7 +112,7 @@ A partida acontece numa clareira cercada de mata, num mapa maior que a tela: a c
 
 ## Música
 
-- **Gator Shooter Theme** toca no menu e no campo de treino; no modo horda (roguelike) a música segue o dia e a noite: de dia revezam **Swamp Attack** (a partida começa com ela) e **Morning Scale**; de noite revezam **Midnight Moss** e **River Wave**. Cada faixa toca até o fim e passa a vez para a outra, e cada dia ou noite novo começa pela faixa que não tocou por último; **Old Bill Shop** toca enquanto o velho Bill está na área com a loja (depois a horda volta de onde parou).
+- **Gator Shooter Theme** toca no menu e no campo de treino; no modo horda (roguelike) a música segue o dia e a noite: de dia revezam **Swamp Attack** (a partida começa com ela) e **Morning Scale**; de noite revezam **Midnight Moss** e **River Wave**. Cada faixa toca até o fim e passa a vez para a outra, e cada dia ou noite novo começa pela faixa que não tocou por último; **Jacaré Açu** toca na luta contra o chefão (o arquivo foi normalizado para o volume das outras faixas); **Old Bill Shop** toca enquanto o velho Bill está na área com a loja (depois a horda volta de onde parou).
 - O volume abaixa na pausa e na escolha de cartas. Os volumes de música e efeitos ficam em **Configurações**. M silencia música e efeitos.
 
 ## Arquivos
@@ -105,9 +125,10 @@ gator-shooter/
 ├── musica/         músicas (carregadas pelo index.html: precisa ir junto)
 ├── sons/           originais da coruja e do galo (já embutidos)
 └── sprites/        cópias originais dos sprites, só para referência e edição
-    ├── jogador/    corpo, pernas, escopeta, uzi, revólver, faca
+    ├── jogador/    corpo, pernas, escopeta, uzi, revólver, faca; jogador-direcoes.png/.gif = sprite sheet com 4 direções (o jogo usa os corpos; as pernas de cada direção estão guardadas)
     ├── inimigos/   basico/, tank/, range/, rusher/, healer/
     ├── velho-bill/ Bill e o carrinho
+    ├── boss/       Jacaré Açu: anim/ = uma animação por arquivo (verde e berserker, com e sem cauda: andar, mordida, batida, rugido, cauda; os -strip.png são os usados no jogo), corpo caído (acu-morto), cauda arrancada, pegada, rastro da cauda, ícones da vida e atordoado.gif; antigo/ = versões anteriores (sheets juntas)
     ├── itens/      itens da loja, caixas de munição, dentes, fogo
     ├── cenario/    casa, areia, grama, tufos, árvore
     ├── interface/  ícones das cartas, título, mira
